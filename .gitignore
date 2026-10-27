@@ -1,0 +1,27 @@
+# Secrets and local config — never commit credentials
+.env
+.env.*
+*.key
+*.pem
+secrets/
+local_config.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated media and caches
+*.mp4
+*.mov
+*.wav
+*.mp3
+cache/
+tmp/
+out/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
