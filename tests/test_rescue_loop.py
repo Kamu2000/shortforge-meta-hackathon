@@ -1,0 +1,420 @@
+"""Tests for rescue_loop: the bounded, menu-driven repair.
+
+Everything runs on fakes - a scripted Spark planner, a scripted
+verifier, a recording renderer - plus one real audio file for the
+TRIM_SILENCE executor (its gap detection is DSP, and the test proves
+it finds and cuts a real pause). The properties under test are the
+design's hard rules: the menu is enforced in code, ONE repair max,
+no SAM anywhere in the loop, and the chained receipt's shape.
+"""
+
+import json
+import sys
+import tempfile
+import unittest
+import wave
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from spatial_director.caption_align import CaptionCue  # noqa: E402
+from spatial_director.rescue_loop import (  # noqa: E402
+    REPAIR_MENU,
+    RenderArtifacts,
+    rescue,
+)
+from spatial_director.verifier import (  # noqa: E402
+    CheckResult,
+    HookSpec,
+    Receipt,
+)
+
+CANVAS = (1080, 1920)
+FPS = 4.0
+
+
+# ---------------------------------------------------------------- fakes
+
+
+class FakeChatResult:
+    def __init__(self, text, request_id="chatcmpl-fake"):
+        self.text = text
+        self.request_id = request_id
+        self._cost = 0.01
+
+    @property
+    def cost_usd(self):
+        return self._cost
+
+
+class FakeSpark:
+    """Scripted Spark: replies in order, records every call."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def chat(self, messages, *, max_tokens=1500, purpose="", ts=""):
+        self.calls.append({"messages": messages, "purpose": purpose})
+        if not self.replies:
+            raise AssertionError("FakeSpark: no scripted reply left")
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return FakeChatResult(reply, f"chatcmpl-fake-{len(self.calls)}")
+
+
+class FakeRenderer:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, frames, src_alphas, *, hook_rgba, hook_window,
+                 cues, caption_rect, audio_from, out_path, fps,
+                 canvas=CANVAS, speaker_scale=1.0):
+        self.calls.append({
+            "n_frames": len(frames), "hook_window": hook_window,
+            "cues": list(cues), "caption_rect": caption_rect,
+            "audio_from": str(audio_from), "speaker_scale": speaker_scale,
+        })
+        Path(out_path).write_bytes(b"fake-render")
+        return Path(out_path)
+
+
+class FakeVerify:
+    def __init__(self, receipts):
+        self.receipts = list(receipts)
+        self.executions = []
+
+    def __call__(self, execution):
+        self.executions.append(execution)
+        return self.receipts.pop(0)
+
+
+def make_receipt(failed=(), measured=None, draft=1):
+    measured = measured or {}
+    checks = []
+    for cid in ("F1", "F2", "F3", "F4", "F5", "F6", "F7"):
+        checks.append(CheckResult(
+            check_id=cid, name=cid, passed=cid not in failed,
+            measured=measured.get(cid, {}), threshold={}))
+    return Receipt(
+        artifact="draft1.mp4",
+        verdict="FAIL" if failed else "PASSED_FIRST_DRAFT",
+        checks=checks, draft=draft)
+
+
+def write_wav(path: Path, segments, sr=16000):
+    """segments: list of (duration_s, amplitude) - tone or silence."""
+    chunks = []
+    for dur, amp in segments:
+        n = int(dur * sr)
+        if amp > 0:
+            t = np.arange(n) / sr
+            chunks.append((amp * np.sin(2 * np.pi * 440 * t)).astype(np.float32))
+        else:
+            chunks.append(np.zeros(n, dtype=np.float32))
+    samples = np.concatenate(chunks)
+    pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2")
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(pcm.tobytes())
+    return path
+
+
+def canvas_with_speaker(n=24, rows=(1200, 1920), cols=(240, 840)):
+    out = []
+    for _ in range(n):
+        a = np.zeros((CANVAS[1], CANVAS[0]), dtype=np.float32)
+        a[rows[0]:rows[1], cols[0]:cols[1]] = 1.0
+        out.append(a)
+    return out
+
+
+def make_artifacts(work_dir: Path, *, window_clip="window.mp4",
+                   canvas=None, n_frames=12, fps=FPS, hook=None,
+                   cues=None):
+    canvas = canvas if canvas is not None else canvas_with_speaker(n_frames)
+    frames = [np.zeros((36, 64, 3), dtype=np.uint8)
+              for _ in range(n_frames)]
+    src_alphas = [np.zeros((36, 64), dtype=np.float64)
+                  for _ in range(n_frames)]
+    return RenderArtifacts(
+        window_clip=window_clip,
+        render_path=Path(work_dir) / "draft1.mp4",
+        frames=frames, src_alphas=src_alphas,
+        canvas_alphas=canvas,
+        make_canvas_alphas=lambda alphas: canvas[:len(alphas)],
+        fps=fps,
+        hook=hook or HookSpec("THE BAND NEVER REHEARSES", (0.0, 6.0),
+                              0.30, layout_rendered=True),
+        cues=cues if cues is not None else [
+            CaptionCue("First phrase here.", 0.2, 0.9),
+            CaptionCue("After the pause now.", 1.9, 2.6),
+        ],
+        caption_rect=(60, 1460, 980, 1600),
+        sam_response_path=None,
+        transcript_text="it's an 11 piece band and we never rehearse",
+        work_dir=work_dir,
+    )
+
+
+# ---------------------------------------------------------------- tests
+
+
+class ShortCircuitTests(unittest.TestCase):
+    def test_passing_receipt_never_enters_the_loop(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            spark = FakeSpark([])
+            verify = FakeVerify([])
+            chain = rescue(make_receipt(()), artifacts,
+                           spark=spark, verify_fn=verify,
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "PASSED_FIRST_DRAFT")
+            self.assertEqual(chain.repair.status, "not_needed")
+            self.assertEqual(len(chain.drafts), 1)
+            self.assertEqual(spark.calls, [])
+            self.assertEqual(verify.executions, [])
+
+
+class MenuEnforcementTests(unittest.TestCase):
+    def test_pick_outside_the_menu_is_discarded(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            spark = FakeSpark([
+                '{"repair": "DELETE_AND_RETRY", "reason": "trust me"}'])
+            verify = FakeVerify([])
+            chain = rescue(make_receipt(("F5",)), artifacts,
+                           spark=spark, verify_fn=verify,
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "FAIL")
+            self.assertEqual(chain.repair.status, "no_repair_available")
+            self.assertEqual(chain.repair.menu_id, "DELETE_AND_RETRY")
+            self.assertEqual(verify.executions, [])
+
+    def test_pick_for_a_passing_check_is_discarded(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            spark = FakeSpark([
+                '{"repair": "REPOSITION_HOOK", "reason": "move it"}'])
+            chain = rescue(make_receipt(("F5",)), artifacts,
+                           spark=spark, verify_fn=FakeVerify([]),
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            self.assertEqual(chain.repair.status, "no_repair_available")
+            self.assertIn("does not target", chain.repair.detail)
+
+    def test_unparseable_planner_reply_means_no_repair(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            spark = FakeSpark(["I think you should trim the silence."])
+            chain = rescue(make_receipt(("F5",)), artifacts,
+                           spark=spark, verify_fn=FakeVerify([]),
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "FAIL")
+            self.assertEqual(chain.repair.status, "no_repair_available")
+
+    def test_planner_call_failure_is_recorded(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            spark = FakeSpark([RuntimeError("HTTP 500")])
+            chain = rescue(make_receipt(("F5",)), artifacts,
+                           spark=spark, verify_fn=FakeVerify([]),
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            self.assertEqual(chain.repair.status, "planner_failed")
+            self.assertEqual(chain.final_verdict, "FAIL")
+
+    def test_menu_covers_the_designed_mapping(self):
+        self.assertEqual(REPAIR_MENU["TRIM_SILENCE"].target_checks, ("F5",))
+        self.assertEqual(REPAIR_MENU["REPOSITION_HOOK"].target_checks, ("F2",))
+        self.assertEqual(REPAIR_MENU["REFIT_HOOK_INK"].target_checks, ("F3",))
+        self.assertEqual(REPAIR_MENU["RESCALE_SPEAKER"].target_checks, ("F4",))
+        self.assertEqual(REPAIR_MENU["REGENERATE_HOOK_TEXT"].target_checks,
+                         ("F1", "F6", "F7"))
+
+
+class TrimSilenceTests(unittest.TestCase):
+    def _run(self, td, wav_segments, verify_receipts):
+        wav = write_wav(Path(td) / "window.wav", wav_segments)
+        artifacts = make_artifacts(Path(td), window_clip=wav)
+        spark = FakeSpark([
+            '{"repair": "TRIM_SILENCE", "reason": "gap 0.68 over cap"}'])
+        renderer = FakeRenderer()
+        verify = FakeVerify(verify_receipts)
+        chain = rescue(
+            make_receipt(("F5",), {"F5": {"max_silence_gap_s": 0.68}}),
+            artifacts, spark=spark, verify_fn=verify,
+            renderer=renderer, ts="2026-10-29")
+        return chain, renderer, verify, spark
+
+    def test_trim_executes_and_repair_passes(self):
+        with tempfile.TemporaryDirectory() as td:
+            chain, renderer, verify, spark = self._run(
+                td, [(1.0, 0.4), (0.8, 0.0), (1.2, 0.4)],
+                [make_receipt((), draft=2)])
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(chain.repair.status, "executed")
+            self.assertEqual(chain.repair.menu_id, "TRIM_SILENCE")
+            self.assertEqual(chain.repair.target_check, "F5")
+            self.assertEqual(len(chain.drafts), 2)
+            # The 0.8s gap loses 0.5s: frames at t=1.25 and t=1.50
+            # (fps=4) fall inside the (1.15, 1.65) removal.
+            self.assertEqual(renderer.calls[0]["n_frames"], 10)
+            retimed = {c.text: (c.start_s, c.end_s)
+                       for c in renderer.calls[0]["cues"]}
+            self.assertEqual(retimed["After the pause now."], (1.4, 2.1))
+            self.assertEqual(retimed["First phrase here."], (0.2, 0.9))
+            self.assertEqual(len(verify.executions), 1)
+            self.assertEqual(len(spark.calls), 1)
+
+    def test_one_repair_cap_second_failure_stands(self):
+        with tempfile.TemporaryDirectory() as td:
+            chain, renderer, verify, spark = self._run(
+                td, [(1.0, 0.4), (0.8, 0.0), (1.2, 0.4)],
+                [make_receipt(("F5",), draft=2)])
+            self.assertEqual(chain.final_verdict, "FAIL")
+            self.assertEqual(len(chain.drafts), 2)
+            self.assertEqual(len(verify.executions), 1)
+            self.assertEqual(len(spark.calls), 1)
+            self.assertEqual(len(renderer.calls), 1)
+
+    def test_trim_not_applicable_without_a_gap(self):
+        with tempfile.TemporaryDirectory() as td:
+            chain, renderer, verify, _ = self._run(
+                td, [(3.0, 0.4)], [make_receipt((), draft=2)])
+            self.assertEqual(chain.final_verdict, "FAIL")
+            self.assertEqual(chain.repair.status, "not_applicable")
+            self.assertEqual(renderer.calls, [])
+            self.assertEqual(verify.executions, [])
+
+
+class OtherExecutorTests(unittest.TestCase):
+    def test_reposition_hook_moves_the_band(self):
+        with tempfile.TemporaryDirectory() as td:
+            canvas = canvas_with_speaker(24, rows=(620, 1500))
+            hook = HookSpec("THE BAND NEVER REHEARSES", (0.0, 6.0),
+                            0.37, layout_rendered=True)
+            artifacts = make_artifacts(
+                Path(td), canvas=canvas, n_frames=24, hook=hook)
+            spark = FakeSpark([
+                '{"repair": "REPOSITION_HOOK", "reason": "occlusion"}'])
+            renderer = FakeRenderer()
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(
+                make_receipt(("F2",), {
+                    "F2": {"glyph_occlusion_mean": 0.41,
+                           "caption_face_overlap_max_px": 0}}),
+                artifacts, spark=spark, verify_fn=verify,
+                renderer=renderer, ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertNotEqual(
+                verify.executions[0].hook.y_center_frac, 0.37)
+            self.assertEqual(len(renderer.calls), 1)
+
+    def test_refit_hook_ink_uses_the_layout_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            hook = HookSpec("THE BAND NEVER REHEARSES", (0.0, 6.0),
+                            0.30, layout_rendered=False)
+            artifacts = make_artifacts(Path(td), hook=hook)
+            _g, bbox = hook.glyph()
+            self.assertTrue(bbox[0] < 60 or bbox[2] > 980)
+            spark = FakeSpark([
+                '{"repair": "REFIT_HOOK_INK", "reason": "ink overflow"}'])
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(make_receipt(("F3",)), artifacts,
+                           spark=spark, verify_fn=verify,
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            new_hook = verify.executions[0].hook
+            self.assertTrue(new_hook.layout_rendered)
+            _g, nb = new_hook.glyph()
+            self.assertTrue(60 <= nb[0] and nb[2] <= 980
+                            and 288 <= nb[1] and nb[3] <= 1440)
+
+    def test_regenerate_hook_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            spark = FakeSpark([
+                '{"repair": "REGENERATE_HOOK_TEXT", "reason": "no loop"}',
+                "HE QUIT THE BAND TODAY",
+            ])
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(make_receipt(("F6",)), artifacts,
+                           spark=spark, verify_fn=verify,
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(verify.executions[0].hook.text,
+                             "HE QUIT THE BAND TODAY")
+            self.assertEqual(len(spark.calls), 2)
+            self.assertEqual(len(chain.repair.extra_calls), 1)
+            self.assertEqual(
+                chain.repair.extra_calls[0]["purpose"],
+                "rescue-regenerate-hook")
+
+    def test_rescale_speaker_renders_smaller(self):
+        from spatial_director.layout_law import to_canvas_alpha
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            src = []
+            for _ in artifacts.src_alphas:
+                a = np.zeros((36, 64))
+                a[6:36, 10:54] = 1.0
+                src.append(a)
+            artifacts.src_alphas = src
+            artifacts.make_canvas_alphas = (
+                lambda alphas: [to_canvas_alpha(a) for a in alphas])
+            artifacts.canvas_alphas = artifacts.make_canvas_alphas(src)
+            spark = FakeSpark([
+                '{"repair": "RESCALE_SPEAKER", "reason": "head clipped"}'])
+            renderer = FakeRenderer()
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(make_receipt(("F4",)), artifacts,
+                           spark=spark, verify_fn=verify,
+                           renderer=renderer, ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            shrunk = verify.executions[0].canvas_alphas
+            area = float((shrunk[0] > 0.5).sum())
+            full = float((artifacts.canvas_alphas[0] > 0.5).sum())
+            self.assertLess(area, full)
+
+
+class ChainShapeTests(unittest.TestCase):
+    def test_chained_receipt_shape_and_no_sam(self):
+        with tempfile.TemporaryDirectory() as td:
+            wav = write_wav(Path(td) / "window.wav",
+                            [(1.0, 0.4), (0.8, 0.0), (1.2, 0.4)])
+            artifacts = make_artifacts(Path(td), window_clip=wav)
+            spark = FakeSpark([
+                '{"repair": "TRIM_SILENCE", "reason": "gap"}'])
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(make_receipt(("F5",)), artifacts,
+                           spark=spark, verify_fn=verify,
+                           renderer=FakeRenderer(), ts="2026-10-29")
+            data = json.loads(chain.to_json())
+            self.assertEqual(data["chain_version"], 1)
+            self.assertEqual(data["final_verdict"], "PASSED_AFTER_REPAIR")
+            self.assertEqual(len(data["drafts"]), 2)
+            for d in data["drafts"]:
+                self.assertEqual(d["receipt_version"], 1)
+                self.assertEqual(len(d["checks"]), 7)
+            rep = data["repair"]
+            self.assertEqual(rep["menu_id"], "TRIM_SILENCE")
+            self.assertEqual(rep["target_check"], "F5")
+            self.assertEqual(rep["spark_reason"], "gap")
+            self.assertEqual(rep["spark_call"]["cost_usd"], 0.01)
+            self.assertTrue(rep["spark_call"]["request_id"])
+            self.assertIn("trimmed", rep["detail"])
+
+    def test_module_has_no_sam_recourse(self):
+        import spatial_director.rescue_loop as rl
+        source = Path(rl.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("segment_video", source)
+        self.assertNotIn("SamClient", source)
+        self.assertNotIn("sam_client", source)
+
+
+if __name__ == "__main__":
+    unittest.main()
