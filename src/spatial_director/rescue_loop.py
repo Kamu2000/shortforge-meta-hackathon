@@ -30,8 +30,9 @@ module acts on exactly one such failure, exactly once:
 
 Repairs are expressed only through parameters the verifier itself
 re-measures from (``HookSpec`` text / band / renderer, caption cues
-and block, the frame set, the speaker scale) - never through pixels
-the receipt could not reproduce. A repair whose executor finds
+and block, the frame set, the speaker scale, the speaker's
+bottom-edge reframe) - never through pixels the receipt could not
+reproduce. A repair whose executor finds
 nothing to change raises :class:`RepairNotApplicable` and the draft-1
 FAIL stands, on the record.
 
@@ -62,11 +63,13 @@ from .layout_law import (
     SAFE_X1,
     SAFE_Y0,
     SAFE_Y1,
+    apply_speaker_reframe,
     caption_layer,
     hook_glyph_mask,
     occupancy_map,
     plan_captions,
     plan_hook,
+    plan_speaker_reframe,
     predict_occlusion,
 )
 from .spark_client import SparkClient
@@ -79,6 +82,7 @@ REPOSITION_HOOK = "REPOSITION_HOOK"
 REFIT_HOOK_INK = "REFIT_HOOK_INK"
 RESCALE_SPEAKER = "RESCALE_SPEAKER"
 REGENERATE_HOOK_TEXT = "REGENERATE_HOOK_TEXT"
+REFRAME_SPEAKER = "REFRAME_SPEAKER"
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,12 @@ REPAIR_MENU: dict[str, RepairSpec] = {
         "Replace the hook line with a new one for the same moment "
         "(more content words / an open-loop pattern / a stronger "
         "opening line)."),
+    REFRAME_SPEAKER: RepairSpec(
+        REFRAME_SPEAKER, ("F3",),
+        "Re-frame the speaker so the measured face centroid lands "
+        "inside the central band (bottom-edge pad/crop of the "
+        "source frame), then re-plan the hook and captions on the "
+        "new geometry."),
 }
 
 # Executor constants.
@@ -634,7 +644,8 @@ def _exec_refit_hook_ink(artifacts: RenderArtifacts, receipt: Receipt,
         raise RepairNotApplicable(
             "the hook ink is already inside the safe zone; the F3 "
             "failure is the caption block or the face centroid, "
-            "which re-rendering the hook cannot change")
+            "which re-rendering the hook cannot change (the "
+            "centroid case is REFRAME_SPEAKER's)")
     window = _hook_window_frames(artifacts)
     placement = plan_hook(spec.text, window, artifacts.canvas)
     candidate = HookSpec(spec.text, spec.window, placement.y_center_frac,
@@ -688,6 +699,68 @@ def _exec_rescale_speaker(artifacts: RenderArtifacts, receipt: Receipt,
         detail=f"speaker re-rendered at {RESCALE_FACTOR} scale "
                "(inputs pre-shrunk; placement unchanged)",
         renderer=renderer, speaker_scale=1.0)
+
+
+def _exec_reframe_speaker(artifacts: RenderArtifacts, receipt: Receipt,
+                          renderer, **_) -> RepairExecution:
+    """Closed-loop speaker reframe for an F3 face-centroid failure.
+
+    The pipeline reframes by construction; this repair exists for
+    the windows where construction still misses - it starts from
+    the RECEIPT's measured centroid (the verifier's own number, not
+    the planner's prediction) and re-plans with the stronger repair
+    settings (band-centre target, head-top planning floor just
+    above F4's 90px), through the same layout_law transform the
+    pipeline uses. Hook and captions are re-planned on the reframed
+    geometry, exactly as in construction.
+    """
+    f3 = next((c for c in receipt.checks if c.check_id == "F3"), None)
+    violations = (f3.measured.get("violations", {}) if f3 else {}) or {}
+    centroid = violations.get("face_centroid_median")
+    if not centroid:
+        raise RepairNotApplicable(
+            "F3 failed without a measured face centroid in the "
+            "receipt; reframing has nothing to aim at")
+    cy = float(centroid[1])
+    if SAFE_Y0 <= cy <= SAFE_Y1:
+        raise RepairNotApplicable(
+            "the measured face centroid is already inside the "
+            "central band; this F3 failure is hook ink or the "
+            "caption block, which reframing the speaker cannot "
+            "change")
+    plan = plan_speaker_reframe(
+        artifacts.src_alphas, artifacts.canvas,
+        target_frac=0.5, head_top_plan_min=100)
+    if plan.identity or plan.pad_bottom_px == 0:
+        raise RepairNotApplicable(
+            "reframing from the decoded geometry lands on the "
+            f"current placement ({plan.note}); the miss is not a "
+            "placement this repair can change")
+    frames, src_alphas = apply_speaker_reframe(
+        artifacts.frames, artifacts.src_alphas, plan.pad_bottom_px)
+    canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+    f0 = max(0, int(round(artifacts.hook.window[0] * artifacts.fps)))
+    f1 = min(len(canvas_alphas),
+             max(f0 + 1, int(round(artifacts.hook.window[1]
+                                   * artifacts.fps))))
+    window = [canvas_alphas[i] for i in range(f0, f1)]
+    placement = plan_hook(artifacts.hook.text, window, artifacts.canvas)
+    hook = HookSpec(artifacts.hook.text, artifacts.hook.window,
+                    placement.y_center_frac, layout_rendered=True)
+    layout = plan_captions(
+        [(c.start_s, c.end_s) for c in artifacts.cues], canvas_alphas,
+        fps=artifacts.fps, canvas=artifacts.canvas)
+    return _render_execution(
+        artifacts, frames=frames, src_alphas=src_alphas,
+        canvas_alphas=canvas_alphas, hook=hook, cues=artifacts.cues,
+        caption_rect=layout.rect, audio_from=artifacts.window_clip,
+        out_name="draft2-reframe-speaker.mp4",
+        detail=f"speaker reframed from the receipt's measured "
+               f"centroid y={cy:.0f}: {plan.note} (feasible "
+               f"{plan.feasible}); hook re-planned at band "
+               f"{placement.y_center_frac:.2f}; caption rect "
+               f"{layout.rect}",
+        renderer=renderer)
 
 
 def _exec_regenerate_hook(artifacts: RenderArtifacts, receipt: Receipt,
@@ -749,6 +822,7 @@ _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {
     REFIT_HOOK_INK: _exec_refit_hook_ink,
     RESCALE_SPEAKER: _exec_rescale_speaker,
     REGENERATE_HOOK_TEXT: _exec_regenerate_hook,
+    REFRAME_SPEAKER: _exec_reframe_speaker,
 }
 
 

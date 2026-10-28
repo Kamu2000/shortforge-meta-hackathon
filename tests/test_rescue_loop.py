@@ -20,7 +20,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from spatial_director.caption_align import CaptionCue  # noqa: E402
+from spatial_director.layout_law import (  # noqa: E402
+    frame_geometry,
+    to_canvas_alpha,
+)
 from spatial_director.rescue_loop import (  # noqa: E402
+    REFRAME_SPEAKER,
     REPAIR_MENU,
     RenderArtifacts,
     rescue,
@@ -414,6 +419,91 @@ class ChainShapeTests(unittest.TestCase):
         self.assertNotIn("segment_video", source)
         self.assertNotIn("SamClient", source)
         self.assertNotIn("sam_client", source)
+
+
+def low_face_artifacts(work_dir: Path, n_frames: int = 12):
+    """Artifacts whose speaker sits low (the Holmes F3 anatomy):
+    source 64x36, mask rows 10-36 - the placed face centroid lands
+    below the central band under the real canvas transform."""
+    artifacts = make_artifacts(work_dir, n_frames=n_frames)
+    src = []
+    for _ in range(n_frames):
+        a = np.zeros((36, 64), dtype=np.float64)
+        a[10:36, 20:44] = 1.0
+        src.append(a)
+    artifacts.src_alphas = src
+    artifacts.frames = [np.zeros((36, 64, 3), dtype=np.uint8)
+                        for _ in range(n_frames)]
+    artifacts.canvas_alphas = [to_canvas_alpha(a) for a in src]
+    artifacts.make_canvas_alphas = (
+        lambda alphas: [to_canvas_alpha(a) for a in alphas])
+    return artifacts
+
+
+def f3_receipt_for(artifacts, centroid_y=None):
+    if centroid_y is None:
+        cents = [frame_geometry(a).face_centroid
+                 for a in artifacts.canvas_alphas]
+        cx = float(np.median([c[0] for c in cents]))
+        centroid_y = float(np.median([c[1] for c in cents]))
+    else:
+        cx = 531.6
+    measured = {"F3": {
+        "violations": {
+            "hook_px_outside_central_band": {
+                "left": 0, "top": 0, "right": 0, "bottom": 0},
+            "caption_px_outside_lower_zone": {
+                "left": 0, "right": 0, "top": 0, "bottom": 0},
+            "face_centroid_median": [cx, centroid_y]},
+        "face_centroid_in_central_band": False}}
+    return make_receipt(("F3",), measured=measured)
+
+
+class ReframeSpeakerRepairTests(unittest.TestCase):
+    def test_menu_targets_f3(self):
+        self.assertEqual(REPAIR_MENU[REFRAME_SPEAKER].target_checks,
+                         ("F3",))
+
+    def test_reframe_moves_centroid_into_band(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = low_face_artifacts(Path(td))
+            receipt = f3_receipt_for(artifacts)
+            cy = receipt.checks[2].measured["violations"][
+                "face_centroid_median"][1]
+            self.assertGreater(cy, 1440)  # the failure is real
+            spark = FakeSpark([
+                '{"repair": "REFRAME_SPEAKER", "reason": '
+                '"centroid below the band"}'])
+            verify = FakeVerify([make_receipt((), draft=2)])
+            renderer = FakeRenderer()
+            chain = rescue(receipt, artifacts, spark=spark,
+                           verify_fn=verify, renderer=renderer,
+                           ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(chain.repair.menu_id, REFRAME_SPEAKER)
+            self.assertEqual(chain.repair.target_check, "F3")
+            self.assertEqual(len(renderer.calls), 1)
+            execution = verify.executions[0]
+            cents = [frame_geometry(a).face_centroid
+                     for a in execution.canvas_alphas]
+            new_cy = float(np.median([c[1] for c in cents]))
+            self.assertGreaterEqual(new_cy, 288)
+            self.assertLessEqual(new_cy, 1440)
+            self.assertIn("reframed", chain.repair.detail)
+
+    def test_reframe_refused_when_centroid_already_in_band(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = low_face_artifacts(Path(td))
+            receipt = f3_receipt_for(artifacts, centroid_y=1200.0)
+            spark = FakeSpark([
+                '{"repair": "REFRAME_SPEAKER", "reason": "try it"}'])
+            verify = FakeVerify([])
+            chain = rescue(receipt, artifacts, spark=spark,
+                           verify_fn=verify, renderer=FakeRenderer(),
+                           ts="2026-10-29")
+            self.assertEqual(chain.final_verdict, "FAIL")
+            self.assertEqual(chain.repair.status, "not_applicable")
+            self.assertEqual(verify.executions, [])
 
 
 if __name__ == "__main__":
