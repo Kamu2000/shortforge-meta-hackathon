@@ -473,8 +473,12 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--hook", default="")
         p.add_argument("--hook-y-frac", type=float, default=0.30,
                        help="hook band centre as a fraction of canvas "
-                            "height (the layout step sets this from "
-                            "head geometry; default 0.30)")
+                            "height (manual placement; default 0.30)")
+        if name == "composite":
+            p.add_argument("--hook-auto-layout", action="store_true",
+                           help="compute the hook band from the decoded "
+                                "head geometry via layout_law.plan_hook "
+                                "(overrides --hook-y-frac)")
         p.add_argument("--out", required=True, type=Path)
         if name == "composite":
             p.add_argument("--hook-start", type=float, default=0.0)
@@ -492,10 +496,32 @@ def main(argv: list[str] | None = None) -> int:
         max_frames = int(args.seconds * fps)
     frames, alphas = _load_pipeline(
         args.clip, args.sam_response, max_frames=max_frames)
-    hook_rgba = (
-        hook_layer(args.hook.upper(), y_center_frac=args.hook_y_frac)
-        if args.hook else None
-    )
+    hook_y_frac = args.hook_y_frac
+    hook_rgba = None
+    if args.cmd == "composite" and args.hook_auto_layout and args.hook:
+        # Layout law replaces the manual knob: plan the band from the
+        # decoded geometry of the hook window itself, and render the
+        # layer through layout_law so the shipped pixels are exactly
+        # the planned ones (safe-width budget included).
+        from .layout_law import plan_hook, render_hook_layer, to_canvas_alpha
+
+        f0 = max(0, int(args.hook_start * fps))
+        f1 = min(len(alphas), int(args.hook_end * fps))
+        placement = plan_hook(
+            args.hook.upper(),
+            [to_canvas_alpha(a) for a in alphas[f0:max(f1, f0 + 1)]],
+        )
+        hook_y_frac = placement.y_center_frac
+        hook_rgba = render_hook_layer(
+            args.hook.upper(), y_center_frac=hook_y_frac)
+        print(
+            f"layout_law: hook y-frac {hook_y_frac:.2f}, predicted "
+            f"glyph occlusion {placement.predicted_occlusion:.3f} "
+            f"(cap 0.25), safe zone {placement.within_safe_zone}, "
+            f"ok {placement.ok}"
+        )
+    if hook_rgba is None and args.hook:
+        hook_rgba = hook_layer(args.hook.upper(), y_center_frac=hook_y_frac)
 
     if args.cmd == "composite":
         render_composite_video(
