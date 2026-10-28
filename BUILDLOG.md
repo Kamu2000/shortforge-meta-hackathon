@@ -38,3 +38,10 @@ Dated record of the work in this repository, written as it happens during the ev
 - First live SAM 3.1 call on clip A: file upload HTTP 200, Responses HTTP 200 in 36s. usage.video_frames_processed = 480 (exactly the clip's 480 frames); billed $0.096, recorded in spend-ledger.jsonl (cumulative $0.968 of the $145 cap).
 - Wire format reconciled on first contact: output_text carries one record per frame (`<Nf>` markers 0-479, all frames present), exactly ONE object (id 0) in every frame - the single speaker, tracked. Box + base85 mask tokens as documented. A trimmed real response (first 3 frame records) is committed at tests/fixtures/sam_response_clipA_trimmed.json as the canonical fixture for the mask decoder.
 - Remaining spike work: decode masks, run clips B + C, head-geometry bake-off, GREEN/YELLOW/RED verdict.
+
+## 2026-10-28 (night) - clip A masks decoded and verified
+
+- All 480 masks from the first SAM response decoded with Meta's official `meta-sam-parser` library (the lossless payload is a context-coded arithmetic stream with a custom base85 alphabet - not plain base85 raster bytes; the scaffold's A2 assumption is falsified by live data and the official parser is the correct decoder; it will be declared as a dependency and labeled in the README helpers table).
+- Measured on clip A: mask coverage 0.62-0.65 of the box raster across all frames; frame-to-frame mask IoU mean 0.997, min 0.981 - raw SAM output is already highly stable on clean talking-head footage. Visual overlay check (frames 0/105/479): the silhouette follows cap brim, face and shoulders with no background spill.
+- Note: mask raster dimensions vary slightly per frame (the raster is box-sized and the box jitters by a few px) - compositing must place each raster at its box origin, not assume a fixed grid.
+- Remaining spike work: clips B + C calls + decode, head-geometry bake-off, GREEN/YELLOW/RED verdict.
