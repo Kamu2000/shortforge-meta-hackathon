@@ -7,7 +7,15 @@ Team **ShortForge**'s entry to the **Meta Global AI Developer Hackathon** (Meta 
 
 ## What this is
 
-An autonomous AI director that turns long-form video into publish-ready short-form clips, built on Meta's models — Muse Spark, Muse Wonder, SAM 3.1, Muse Voice Transcribe, and Muse Spark Open (served via Baseten). The director transcribes a source video, scores and selects the strongest moments, segments the speaker, composites graphics in depth behind the subject, and critiques the edit before rendering.
+The **Verifiable Spatial Director**: give it a long talking-head video and it returns Shorts where the speaker stands *in front of* the hook text — and every Short ships with a measured PASS/FAIL receipt proving it was checked.
+
+How it works: the source is transcribed and its strongest moments are scored and selected; SAM 3.1 segments the speaker per frame; a 3-layer composite (blurred background / hook text / speaker cutout in front) is rendered; a post-render verifier then checks the *actual rendered file* — deterministic geometry checks first, then one Muse Wonder pass over the opening seconds of the render — and on a FAIL it attempts one repair and re-verifies. The receipt records every check, its measurement against its threshold, the repair (if any), every Meta model call, and the run's cost.
+
+Meta models claimed for this entry (each must have a logged call in the shipped pipeline before it is claimed — see `spend-ledger.jsonl`):
+
+- **SAM 3.1** (Meta Model API) — per-frame speaker segmentation
+- **Muse Wonder** (Meta Model API) — post-render verification of the real render
+- **Muse Spark Open** (open weights, served via Baseten) — transcript moment scoring
 
 This README is updated as the build lands during the event; BUILDLOG.md carries the dated record.
 
@@ -19,7 +27,17 @@ This README is updated as the build lands during the event; BUILDLOG.md carries 
 
 ## Running and verifying
 
-Setup and demo instructions are added alongside the code as it lands during the event. Current state: see BUILDLOG.md.
+The event component in this repository runs standalone; it does not require the pre-existing ShortForge product. Setup and full demo instructions are added alongside the pipeline code as it lands during the event. Current state: see BUILDLOG.md.
+
+What can be verified today (offline, no API key needed):
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
+
+This exercises the cumulative spend ledger (including its hard cap) and the SAM client's request construction, one-concept validation, frame-limit and ledger gating with a fake transport.
+
+Spend accountability: `spend-ledger.jsonl` at the repository root is the cumulative, append-only record of every paid Meta API call made for this entry, with the cap enforced in code (`src/spatial_director/spend_ledger.py`).
 
 ## Credentials
 
