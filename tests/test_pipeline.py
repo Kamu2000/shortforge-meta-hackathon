@@ -198,6 +198,19 @@ class FakeWonder:
             request_id="resp-fake-judge")
 
 
+class FakeSAMShortByOne(FakeSAM):
+    """SAM returns one frame fewer than the container decodes - the
+    660-vs-659 tail-artifact case from the first Holmes run."""
+
+    def segment_video(self, *, file_id=None, video_url=None, concept="person",
+                      n_frames, purpose="", ts=""):
+        self.calls += 1
+        return SegmentationResult(
+            raw=sam_payload(n_frames - 1),
+            billed_frames=max(50, n_frames - 1),
+            request_id="resp-fake-short-one")
+
+
 class EndToEndSmokeTests(unittest.TestCase):
     def test_full_run_with_fakes(self):
         with tempfile.TemporaryDirectory() as td:
@@ -235,6 +248,31 @@ class EndToEndSmokeTests(unittest.TestCase):
             # measured as ledger deltas, so it is exactly zero here.
             self.assertEqual(summary["total_cost_usd"], 0.0)
             self.assertTrue((td / "out" / "run-summary.json").exists())
+
+    def test_sam_one_frame_short_aligns(self):
+        # Regression for the first Holmes run stop: ffmpeg decoded 660
+        # frames, SAM returned 659 (22.0s at 29.97fps = 659.34). The
+        # pipeline must truncate the tail guide frame and complete,
+        # not raise MaskDecodeError.
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            source = td / "source.mp4"
+            make_source(source)
+            ledger = SpendLedger(td / "ledger.jsonl")
+            sam = FakeSAMShortByOne()
+            logs: list[str] = []
+            summary = run_pipeline(
+                source, td / "out",
+                sam=sam, spark_open=FakeSweep(), spark=FakeSpark(),
+                vt=FakeVT(), wonder=FakeWonder(), ledger=ledger,
+                upload_file=lambda p: "file-fake",
+                ts="2026-10-29", max_shorts=3,
+                log=logs.append)
+            self.assertNotIn("error", summary)
+            self.assertEqual(len(summary["shorts"]), 1)
+            self.assertEqual(sam.calls, 1)
+            self.assertTrue(any("aligning guides" in line
+                                for line in logs))
 
 
 if __name__ == "__main__":

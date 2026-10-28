@@ -401,6 +401,19 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         log(f"short {index}: SAM segmented "
             f"({seg.billed_frames} frames billed)")
     parsed = parse_sam_response(raw_sam)
+    # Alignment policy: SAM may return one frame fewer than the container
+    # decodes (a sub-frame tail artifact: a 22.0s window at 29.97fps is
+    # 659.34 frames - ffmpeg yields 660, SAM returns 659). Both sequences
+    # decode from frame 0 in order, so a surplus of DECODED frames is the
+    # tail: truncate the guides to the parsed count and log it. The reverse
+    # (SAM returning MORE frames than decoded) is a real misalignment and
+    # still raises in finished_alpha's strict guard.
+    n_parsed = len(parsed)
+    if len(frames) > n_parsed:
+        log(f"short {index}: aligning guides - {len(frames)} decoded "
+            f"frames vs {n_parsed} SAM frames; truncating "
+            f"{len(frames) - n_parsed} tail frame(s)")
+        frames = frames[:n_parsed]
     guides = [f.astype(np.float64).mean(axis=2) / 255.0 for f in frames]
     _indices, src_alphas = finished_alpha(parsed, guides)
     del guides
