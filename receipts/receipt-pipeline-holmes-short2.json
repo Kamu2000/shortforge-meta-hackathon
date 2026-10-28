@@ -1,0 +1,391 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-1/short-2/draft2-trim-silence.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "FAIL",
+  "repair": {
+    "status": "executed",
+    "menu_id": "TRIM_SILENCE",
+    "target_check": "F5",
+    "spark_reason": "reduces max_silence_gap_s from 0.74s to <=0.45s by cutting the over-long pause and retiming captions",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0107,
+      "request_id": "chatcmpl-01a18499-ab43-739d-92fa-4fff230400a6"
+    },
+    "extra_calls": [],
+    "detail": "trimmed 0.44s at 7.45s; 420 -> 407 frames"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-1/short-2/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F1",
+        "F3",
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": false,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -35.58,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": false,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                417.6,
+                1551.8
+              ]
+            },
+            "face_centroid_in_central_band": false
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1415,
+            "frames_with_speaker": 420,
+            "frames_total": 420
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 0.74,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.953,
+            "wonder_can_summarize_muted_hook": false,
+            "wonder_summary": ""
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "LESS THAN TWO WEEKS AWAY?"
+              },
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "LESS THAN TWO WEEKS AWAY? [two]"
+              },
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "Have you seen him or his representation?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.1476,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9906
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0295,
+          "request_id": "resp_6ae2751ec418b71973b94dcd"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "c00eeffbf0fb8c90680f6cefe91d3784d7fa85d07f6ab5181ec0e8f9176e053e",
+        "sam_response": "7bf883a5cd0ae30f090a9b1a0b4d30ddf2a940b6f668383bb8fb647955d3679d",
+        "captions": "5cd214d026d3e0e69ec78a33392a44df70ae3b28d6bed772d4314335fc214ac5"
+      },
+      "notes": []
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-1/short-2/draft2-trim-silence.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F1",
+        "F3"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": false,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -35.59,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": false,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                418.7,
+                1551.7
+              ]
+            },
+            "face_centroid_in_central_band": false
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1415,
+            "frames_with_speaker": 407,
+            "frames_total": 407
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.4,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.914,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A podcast speaker says he has no updates on an unnamed man with the season starting soon, and asks if anyone has seen him or his representation. The hook is \"LESS THAN TWO WEEKS AWAY?\" implying the season begins in under two weeks while his status remains unresolved."
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "LESS THAN TWO WEEKS AWAY?"
+              },
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "LESS THAN TWO WEEKS AWAY? [two]"
+              },
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "Have you seen him or his representation?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.1476,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9906
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0284,
+          "request_id": "resp_6ae2765f985ad7cbd7af4063"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "db0b56b1b8b055e9a6b83312dbff5f5b4902ac29a919b2fc743cebdf55d3ae84",
+        "sam_response": "7bf883a5cd0ae30f090a9b1a0b4d30ddf2a940b6f668383bb8fb647955d3679d",
+        "captions": "c9111b879c93d6141e32256d27bbc071878592471cb8f044be61c44061d82ade"
+      },
+      "notes": []
+    }
+  ]
+}
