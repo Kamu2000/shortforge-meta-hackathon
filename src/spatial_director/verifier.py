@@ -300,9 +300,15 @@ def verify(inputs: VerifyInputs, *,
     """
     cw, ch = inputs.canvas
     fps = inputs.fps
-    alphas = list(inputs.canvas_alphas)
+    # Never materialise the alpha sequence: a 20 s clip at 24 fps is
+    # 480 canvas frames (~4 GB as float32) - list()ing them OOM-killed
+    # the first real proof run (2026-10-29). Sized/indexable sequences
+    # (lists, lazy loaders) are indexed and streamed in place.
+    alphas = inputs.canvas_alphas
+    if not (hasattr(alphas, "__len__") and hasattr(alphas, "__getitem__")):
+        alphas = list(alphas)
     n_frames = len(alphas)
-    geos = [frame_geometry(a) for a in alphas]
+    geos = [frame_geometry(alphas[i]) for i in range(n_frames)]
     checks: list[CheckResult] = []
     meta_calls: list[dict[str, Any]] = []
     notes: list[str] = []
@@ -401,7 +407,7 @@ def verify(inputs: VerifyInputs, *,
             "caption_face_overlap_max_px": caption_overlap,
         },
         threshold={
-            "glyph_occlusion_max": GLYPH_OCCLUSION_CAP,
+            "glyph_occlusion_mean_max": GLYPH_OCCLUSION_CAP,
             "caption_face_overlap_max_px": CAPTION_FACE_OVERLAP_MAX_PX,
         },
         note=f2_note,

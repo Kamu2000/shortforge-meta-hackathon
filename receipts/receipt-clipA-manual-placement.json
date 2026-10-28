@@ -1,0 +1,168 @@
+{
+  "receipt_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/composite-clipA-test.mp4",
+  "created": "2026-10-29",
+  "draft": 1,
+  "verdict": "FAIL",
+  "failed_checks": [
+    "F3",
+    "F5"
+  ],
+  "checks": [
+    {
+      "id": "F1",
+      "name": "hook in frame 1",
+      "pass": true,
+      "measured": {
+        "hook_present_at_frame_0": true,
+        "hook_present_by_1s": true,
+        "hook_opacity": 1.0,
+        "content_words": 3,
+        "audio_rms_db_0_2s": -25.48,
+        "first_speech_onset_s": 0.0
+      },
+      "threshold": {
+        "opacity_min": 0.9,
+        "content_words_min": 3,
+        "audio_rms_db_min": -32.0,
+        "first_speech_onset_max_s": 2.0
+      },
+      "note": ""
+    },
+    {
+      "id": "F2",
+      "name": "face/mouth obstruction",
+      "pass": true,
+      "measured": {
+        "glyph_occlusion_mean": 0.228,
+        "glyph_occlusion_max": 0.2875,
+        "glyph_occlusion_alpha_weighted_mean": 0.2168,
+        "caption_face_overlap_max_px": 0
+      },
+      "threshold": {
+        "glyph_occlusion_max": 0.25,
+        "caption_face_overlap_max_px": 0
+      },
+      "note": "no captions rendered on this artifact; caption-face overlap is vacuously 0 - caption presence is F5's check."
+    },
+    {
+      "id": "F3",
+      "name": "safe zone",
+      "pass": false,
+      "measured": {
+        "violations": {
+          "hook_px_outside_central_band": {
+            "left": 14,
+            "top": 0,
+            "right": 52,
+            "bottom": 0
+          },
+          "face_centroid_median": [
+            381.4,
+            884.4
+          ]
+        },
+        "face_centroid_in_central_band": true
+      },
+      "threshold": {
+        "central_band": [
+          60,
+          288,
+          980,
+          1440
+        ],
+        "caption_bottom_max": 1600
+      },
+      "note": ""
+    },
+    {
+      "id": "F4",
+      "name": "subject containment",
+      "pass": true,
+      "measured": {
+        "frames_contained_frac": 1.0,
+        "head_margin_min_px": 634,
+        "frames_with_speaker": 480,
+        "frames_total": 480
+      },
+      "threshold": {
+        "frames_contained_min_frac": 0.98,
+        "head_margin_min_px": 90
+      },
+      "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+    },
+    {
+      "id": "F5",
+      "name": "dead air / mute comprehension",
+      "pass": false,
+      "measured": {
+        "max_silence_gap_s": 0.68,
+        "first_speech_onset_s": 0.0,
+        "captions_present": false,
+        "caption_coverage_of_speech": 0.0,
+        "wonder_can_summarize_muted_hook": true,
+        "wonder_summary": "A man speaks to the camera about his band, with the hook being the on-screen text premise \"THE BAND NEVER REHEARSES.\""
+      },
+      "threshold": {
+        "max_silence_gap_max_s": 0.45,
+        "first_speech_onset_max_s": 2.0,
+        "caption_coverage_min": 0.5,
+        "wonder_must_summarize": true
+      },
+      "note": ""
+    },
+    {
+      "id": "F6",
+      "name": "open loop by 3s",
+      "pass": true,
+      "measured": {
+        "patterns_fired": [
+          {
+            "pattern": "conflict",
+            "source": "hook",
+            "evidence": "THE BAND NEVER REHEARSES [never]"
+          }
+        ]
+      },
+      "threshold": {
+        "any_of": [
+          "conflict",
+          "number",
+          "question"
+        ],
+        "by_s": 3.0
+      },
+      "note": ""
+    },
+    {
+      "id": "F7",
+      "name": "static opening",
+      "pass": true,
+      "measured": {
+        "speaker_scale_change_0_1p5s": -0.0024,
+        "hook_slide_px_s": 0.0,
+        "mean_mask_iou_0_3s": 0.9972
+      },
+      "threshold": {
+        "zoom_min_frac": 0.06,
+        "slide_min_px_s": 120.0,
+        "motion_iou_ceiling": 0.999
+      },
+      "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+    }
+  ],
+  "meta_calls": [
+    {
+      "model": "muse-wonder-1.0",
+      "purpose": "verifier-f5-muted-hook",
+      "cost_usd": 0.0157,
+      "request_id": "resp_6ae26026da586f7bdd3a4c00"
+    }
+  ],
+  "inputs_sha256": {
+    "video": "65ef12018df43f8f9f265cfaa066d14d1969a0119202c95196f69b9fe1fe9c99",
+    "sam_response": "eb9947312676c3e264f99eb21c014f4e2c01bf4fb9af95794df0aaf70834e6e0",
+    "captions": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "notes": []
+}

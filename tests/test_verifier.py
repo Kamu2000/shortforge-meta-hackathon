@@ -268,6 +268,35 @@ class WonderClientTests(unittest.TestCase):
             self.assertEqual(parts[1]["type"], "input_video")
             self.assertEqual(parts[1]["file_id"], "file-123")
 
+    def test_default_upload_transport_accepts_upload_shape(self):
+        # Regression: the DEFAULT upload transport must match the
+        # (url, headers, body) UploadTransport shape - wiring the
+        # 4-arg Responses transport in crashed the first live proof.
+        import io
+        from unittest import mock
+
+        class Resp(io.BytesIO):
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        payload = json.dumps({"id": "file-default"}).encode()
+        with tempfile.TemporaryDirectory() as td:
+            clip = Path(td) / "m.mp4"
+            clip.write_bytes(b"x")
+            client = WonderClient(api_key="k")
+            with mock.patch(
+                    "spatial_director.wonder_client.urllib.request.urlopen",
+                    return_value=Resp(payload)) as m:
+                self.assertEqual(client.upload_file(clip), "file-default")
+                req = m.call_args[0][0]
+                self.assertEqual(req.method, "POST")
+                self.assertIn("/files", req.full_url)
+
     def test_empty_reply_raises(self):
         raw = {"id": "r", "output": [{"content": [
             {"type": "output_text", "text": ""}]}],

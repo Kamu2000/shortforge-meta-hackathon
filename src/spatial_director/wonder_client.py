@@ -127,6 +127,13 @@ def _urllib_transport(method: str, url: str, headers: dict, body: bytes):
         raise WonderClientError(f"Wonder API HTTP {exc.code}: {detail}") from exc
 
 
+def _urllib_upload_transport(url: str, headers: dict, body: bytes):
+    """Default UploadTransport: a plain POST (the upload call shape
+    is (url, headers, body) - wiring the 4-arg Responses transport
+    in here crashed the first live verifier proof, 2026-10-29)."""
+    return _urllib_transport("POST", url, headers, body)
+
+
 def extract_output_text(raw: dict[str, Any]) -> str:
     """Pull the output_text string out of a Responses payload."""
     for item in raw.get("output", []):
@@ -172,7 +179,7 @@ class WonderClient:
         self._api_key_provider = api_key_provider
         self.ledger = ledger
         self._transport = transport or _urllib_transport
-        self._upload_transport = upload_transport or _urllib_transport
+        self._upload_transport = upload_transport or _urllib_upload_transport
 
     def _key(self) -> str:
         if self._api_key_provider is not None:
