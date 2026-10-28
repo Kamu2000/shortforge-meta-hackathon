@@ -10,6 +10,10 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy",
     "Pillow",
+    # Meta's official parser library for the SAM segmentation
+    # protocol: decodes SAM 3.1 mask payloads (custom-base85 over a
+    # context-coded arithmetic stream) into rasters. See README.
+    "meta-sam-parser>=0.1.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -23,7 +23,13 @@ This README is updated as the build lands during the event; BUILDLOG.md carries 
 
 - **Pre-existing:** ShortForge is an existing private product (an AI short-form video studio) operated as a hosted service. Its codebase is **not** in this repository, and no part of it was copied, imported, or adapted here.
 - **Built during the event:** everything in this repository was written from scratch between October 26 and November 4, 2026, for this hackathon. The dated commit history and BUILDLOG.md are the record of that work.
-- **Open-source resources used (labeled):** Python standard library, NumPy, Pillow, and FFmpeg (invoked as a subprocess). No other third-party code is vendored into this repo.
+- **Open-source resources used (labeled):** Python standard library and FFmpeg (invoked as a subprocess), plus the declared dependencies below. No other third-party code is vendored into this repo.
+
+| Dependency | What it is | Used for |
+|---|---|---|
+| NumPy | Array library | Mask math, matte finishing, temporal smoothing, compositing |
+| Pillow | Imaging library | Hook-text rendering and frame handling |
+| meta-sam-parser | **Meta's official parser library** for the SAM segmentation protocol (PyPI) | Decoding SAM 3.1 mask payloads into rasters — the payload is a custom-base85 token over a context-coded arithmetic stream, and the library's lossless path thresholds coverage internally; our `mask_decode` module wraps it and never re-thresholds |
 
 ## Running and verifying
 
@@ -35,7 +41,7 @@ What can be verified today (offline, no API key needed):
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-This exercises the cumulative spend ledger (including its hard cap) and the SAM client's request construction, one-concept validation, frame-limit and ledger gating with a fake transport.
+This exercises the cumulative spend ledger (including its hard cap); the SAM and Voice Transcribe clients' request construction and ledger gating with fake transports; mask decoding, canvas placement, and primary-speaker selection against a trimmed real SAM response fixture plus synthetic multi-object payloads; and the finish stack and compositor layer order on synthetic frames.
 
 Spend accountability: `spend-ledger.jsonl` at the repository root is the cumulative, append-only record of every paid Meta API call made for this entry, with the cap enforced in code (`src/spatial_director/spend_ledger.py`).
 
