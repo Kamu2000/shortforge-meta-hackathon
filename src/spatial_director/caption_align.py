@@ -43,8 +43,36 @@ import numpy as np
 
 from .spark_client import SparkClient
 
-SILENCE_DB = -45.0       # below this a 20ms frame counts as silence
+SILENCE_DB = -45.0       # historical absolute floor; fallback only (below)
 MIN_SILENCE_S = 0.15     # a gap must last this long to be a boundary
+
+# Silence detection is RELATIVE to the clip's own speech level, not
+# an absolute dBFS floor. The reason is the render path's loudness
+# normalisation (see plan_audio_normalisation): a static gain of +G
+# dB shifts every hop by G, so an absolute floor would reclassify
+# room tone as speech and erase real pauses from the measurement -
+# the verifier would stop measuring the shipped artifact truthfully.
+# A threshold anchored to the speech level shifts 1:1 with any static
+# gain, leaving the segmentation (and therefore every gap/onset
+# measurement) exactly invariant. Calibration on the first Holmes
+# run's windows: the rule below lands within 0.06s of the old -45 dB
+# absolute segmentation on all three windows (gaps 1.46/0.74/1.00
+# vs 1.46/0.74/1.06 measured absolutely), and is exactly invariant
+# under +6/+12 dB shifts, both verified numerically before shipping.
+SPEECH_SELECT_DEPTH_DB = 35.0  # hops within this of p99 = speech reference
+GAP_DEPTH_DB = 20.0            # silence threshold = speech RMS - this
+
+# Loudness normalisation (render path): one STATIC gain per window,
+# sized from the window's speech RMS, capped, with a true-peak
+# ceiling applied as a limiter. The gain makes quiet openings clear
+# F1's absolute -32 dBFS 0-2s floor with margin on the measured
+# Holmes windows (worst case: speech RMS -28.5, opening -34.0 ->
+# +8.5 dB gain -> opening at -25.5). Because gap detection is
+# relative (above), the gain cannot launder pauses: F5 measures the
+# same gaps before and after.
+TARGET_SPEECH_RMS_DB = -20.0
+MAX_GAIN_DB = 12.0
+PEAK_CEILING_DBFS = -0.5
 MAX_WORDS_PER_PHRASE = 8
 SNAP_TOLERANCE_S = 0.35  # boundaries snap to silence within this
 HOP_S = 0.02
@@ -146,16 +174,100 @@ def load_energy(audio_path: str | Path, hop_s: float = HOP_S) -> EnergyProfile:
     return energy_from_samples(samples, SAMPLE_RATE, hop_s)
 
 
+def speech_reference_rms_db(profile: EnergyProfile, t0: float,
+                            t1: float) -> float | None:
+    """Robust speech level of a span: RMS over its loudest hops.
+
+    The reference set is the hops within SPEECH_SELECT_DEPTH_DB of
+    the span's 99th-percentile hop - in any span containing speech,
+    the top of the distribution is speech, whatever the duty cycle.
+    Every statistic here is a pure function of the profile, so the
+    result shifts exactly 1:1 under a static gain. None when the
+    span selects no hops.
+    """
+    sel = (profile.times >= t0) & (profile.times < t1)
+    db = profile.db[sel]
+    if db.size == 0:
+        return None
+    top = float(np.percentile(db, 99))
+    loud = db[db > top - SPEECH_SELECT_DEPTH_DB]
+    if loud.size == 0:
+        return None
+    return float(10.0 * np.log10(np.mean(10.0 ** (loud / 10.0))))
+
+
+def silence_threshold_db(profile: EnergyProfile, t0: float,
+                         t1: float) -> float:
+    """The silence threshold for a span: speech RMS - GAP_DEPTH_DB.
+
+    Falls back to the historical absolute SILENCE_DB when the span
+    is degenerate for a relative rule (flat dynamics - a constant
+    tone, digital silence - where "relative to speech" has no
+    meaning and the absolute floor classifies correctly anyway).
+    """
+    sel = (profile.times >= t0) & (profile.times < t1)
+    db = profile.db[sel]
+    if db.size == 0:
+        return SILENCE_DB
+    spread = float(np.percentile(db, 99) - np.percentile(db, 10))
+    if spread < GAP_DEPTH_DB:
+        return SILENCE_DB
+    ref = speech_reference_rms_db(profile, t0, t1)
+    if ref is None:
+        return SILENCE_DB
+    return ref - GAP_DEPTH_DB
+
+
+@dataclass
+class NormalisationPlan:
+    """One window's loudness plan: a static gain and its evidence."""
+
+    gain_db: float
+    speech_rms_db: float | None
+    peak_dbfs: float
+    target_db: float = TARGET_SPEECH_RMS_DB
+
+
+def plan_audio_normalisation(
+    profile: EnergyProfile,
+    peak_dbfs: float,
+    *,
+    target_db: float = TARGET_SPEECH_RMS_DB,
+    max_gain_db: float = MAX_GAIN_DB,
+) -> NormalisationPlan:
+    """Size a static gain bringing the speech RMS to ``target_db``.
+
+    Gain only ever goes UP (a loud window is already fine; the plan
+    is 0 dB, never attenuation) and never past ``max_gain_db``.
+    ``peak_dbfs`` is measured by the caller on the samples the gain
+    will be applied to; the caller pairs the gain with a limiter at
+    PEAK_CEILING_DBFS, which on the measured Holmes windows touches
+    ~1 ms of transient peaks per window.
+    """
+    ref = speech_reference_rms_db(
+        profile, float(profile.times[0]),
+        float(profile.times[-1]) + profile.hop_s)
+    if ref is None:
+        return NormalisationPlan(0.0, None, peak_dbfs, target_db)
+    gain = min(max(target_db - ref, 0.0), max_gain_db)
+    return NormalisationPlan(round(gain, 2), round(ref, 2),
+                             round(float(peak_dbfs), 2), target_db)
+
+
 def active_segments(profile: EnergyProfile, t0: float, t1: float,
-                    *, thresh_db: float = SILENCE_DB,
+                    *, thresh_db: float | None = None,
                     min_silence_s: float = MIN_SILENCE_S
                     ) -> list[tuple[float, float]]:
     """Speech-active [start, end) segments inside [t0, t1].
 
     A frame is active when its RMS is above the silence threshold;
     active runs separated by less than ``min_silence_s`` of silence
-    merge (a breath is not a boundary).
+    merge (a breath is not a boundary). The threshold defaults to
+    the span's RELATIVE threshold (``silence_threshold_db``); pass
+    an explicit dB value to pin it.
     """
+    if thresh_db is None:
+        thresh_db = silence_threshold_db(profile, t0, t1)
     sel = (profile.times >= t0) & (profile.times < t1)
     times = profile.times[sel]
     active = profile.db[sel] > thresh_db
@@ -263,7 +375,7 @@ def _active_to_wall(segments: list[tuple[float, float]], offset: float,
 
 def align_turn(phrases: list[str], t0: float, t1: float,
                profile: EnergyProfile | None, *,
-               thresh_db: float = SILENCE_DB) -> list[CaptionCue]:
+               thresh_db: float | None = None) -> list[CaptionCue]:
     """Time one turn's phrases over its speech-active spans.
 
     Words are laid uniformly over active time, so a phrase spanning

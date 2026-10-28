@@ -24,6 +24,8 @@ from spatial_director.caption_align import (  # noqa: E402
     build_captions,
     cues_to_srt,
     energy_from_samples,
+    plan_audio_normalisation,
+    silence_threshold_db,
     split_phrases,
     words_unchanged,
 )
@@ -218,6 +220,76 @@ class BuildCaptionsTests(unittest.TestCase):
         srt = cues_to_srt(cues)
         self.assertIn(" --> ", srt)
         self.assertIn("the the interesting", srt)
+
+
+class RelativeThresholdTests(unittest.TestCase):
+    """The silence threshold is relative to the clip's speech level
+    so the render path's static gain cannot launder pauses: the
+    segmentation must be invariant under a constant dB shift, and
+    on reference-level material it must reproduce the historical
+    absolute -45 dB segmentation."""
+
+    def test_relative_matches_absolute_on_reference_material(self):
+        prof = profile_from_spans([(1.0, 3.0), (3.1, 5.0), (8.0, 9.0)])
+        rel = active_segments(prof, 0.0, 20.0)
+        abs45 = active_segments(prof, 0.0, 20.0, thresh_db=-45.0)
+        self.assertEqual(len(rel), len(abs45))
+        for (a0, a1), (b0, b1) in zip(rel, abs45):
+            self.assertAlmostEqual(a0, b0, delta=0.03)
+            self.assertAlmostEqual(a1, b1, delta=0.03)
+
+    def test_segmentation_invariant_under_static_gain(self):
+        # Holmes-like levels: speech -26 dB, room tone -55 dB, one
+        # real 1.4s pause - the case the normalisation must not
+        # be able to wash out of F5's measurement.
+        prof = profile_from_spans(
+            [(0.0, 4.0), (5.4, 9.0)], total_s=10.0,
+            speech_db=-26.0, silence_db=-55.0)
+        base = active_segments(prof, 0.0, 10.0, min_silence_s=0.0)
+        gained = EnergyProfile(
+            times=prof.times, db=prof.db + 8.0, hop_s=prof.hop_s)
+        after = active_segments(gained, 0.0, 10.0, min_silence_s=0.0)
+        self.assertEqual(len(base), len(after))
+        gaps_base = [base[i + 1][0] - base[i][1]
+                     for i in range(len(base) - 1)]
+        gaps_after = [after[i + 1][0] - after[i][1]
+                      for i in range(len(after) - 1)]
+        self.assertEqual(len(gaps_base), 1)
+        self.assertAlmostEqual(gaps_base[0], 1.4, delta=0.03)
+        self.assertAlmostEqual(gaps_after[0], gaps_base[0], delta=0.03)
+        self.assertAlmostEqual(
+            silence_threshold_db(gained, 0.0, 10.0)
+            - silence_threshold_db(prof, 0.0, 10.0), 8.0, delta=0.2)
+
+    def test_flat_profile_falls_back_to_absolute(self):
+        # A constant tone has no bimodal structure: relative has no
+        # meaning, the absolute floor classifies it as speech.
+        prof = profile_from_spans([(0.0, 10.0)], total_s=10.0,
+                                  speech_db=-20.0, silence_db=-20.0)
+        self.assertEqual(silence_threshold_db(prof, 0.0, 10.0), -45.0)
+        segs = active_segments(prof, 0.0, 10.0)
+        self.assertEqual(len(segs), 1)
+
+
+class NormalisationPlanTests(unittest.TestCase):
+    def test_quiet_window_gets_gain_to_target(self):
+        prof = profile_from_spans([(1.0, 9.0)], total_s=10.0,
+                                  speech_db=-30.0, silence_db=-70.0)
+        plan = plan_audio_normalisation(prof, peak_dbfs=-6.0)
+        self.assertAlmostEqual(plan.speech_rms_db, -30.0, delta=0.6)
+        self.assertAlmostEqual(plan.gain_db, 10.0, delta=0.6)
+
+    def test_loud_window_gets_no_gain(self):
+        prof = profile_from_spans([(1.0, 9.0)], total_s=10.0,
+                                  speech_db=-14.0, silence_db=-70.0)
+        plan = plan_audio_normalisation(prof, peak_dbfs=-1.0)
+        self.assertEqual(plan.gain_db, 0.0)
+
+    def test_gain_is_capped(self):
+        prof = profile_from_spans([(1.0, 9.0)], total_s=10.0,
+                                  speech_db=-45.0, silence_db=-85.0)
+        plan = plan_audio_normalisation(prof, peak_dbfs=-20.0)
+        self.assertEqual(plan.gain_db, 12.0)
 
 
 if __name__ == "__main__":
