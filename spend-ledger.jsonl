@@ -3,3 +3,5 @@
 {"ts": "2026-10-28", "model": "muse-wonder-1.0", "cost_usd": 0.372, "purpose": "Wonder full-context concept run (overnight decision campaign)", "request_id": null}
 {"ts": "2026-10-28", "model": "muse-wonder-1.0", "cost_usd": 0.245, "purpose": "Wonder counter-round on the concept decision", "request_id": null}
 {"ts": "2026-10-28", "model": "sam-3.1", "cost_usd": 0.096, "purpose": "sam-spike-clipA-first-live-call", "request_id": "resp_6ae2373e72f120e3154f4caf"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.12, "purpose": "sam-spike-clipB-holmes-occlusion", "request_id": "resp_6ae2490f513d4c4daa384f18"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.1198, "purpose": "sam-spike-clipC-holmes-occlusion", "request_id": "resp_6ae24943eea8d3d4f9e34635"}
