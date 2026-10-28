@@ -254,37 +254,43 @@ def xray_frame(
 
     d = int(130 * separation * (cw / CANVAS_W))
     ground = Image.new("RGB", (cw, ch), XRAY_GROUND)
+    draw = ImageDraw.Draw(ground, "RGBA")
 
-    def paste_card(rgb: np.ndarray, alpha_f: np.ndarray, dx: int, dy: int,
-                   label: str) -> None:
+    def paste_card(rgb: np.ndarray, alpha_f: np.ndarray, dx: int, dy: int
+                   ) -> None:
         card = Image.fromarray(rgb)
         mask = Image.fromarray(
             (np.clip(alpha_f, 0.0, 1.0) * 255).astype(np.uint8)
         )
         ground.paste(card, (dx, dy), mask)
-        draw = ImageDraw.Draw(ground)
         draw.rectangle(
             [dx, dy, dx + cw - 1, dy + ch - 1],
             outline=(190, 195, 205),
             width=max(2, cw // 360),
         )
-        # The back card is offset up-left, so its natural label spot
-        # is off-canvas; clamp the label into the visible area.
-        font = _load_font(max(20, cw // 28))
-        draw.text(
-            (max(dx, 0) + 14, max(dy, 0) + 10), label, font=font,
-            fill=(255, 255, 255), stroke_width=3,
-            stroke_fill=(0, 0, 0),
-        )
 
     ones = np.ones((ch, cw), dtype=np.float64)
-    paste_card(bg, ones, -d, -d, "1 · BACK — blurred source")
+    paste_card(bg, ones, -d, -d)
+    labels = ["1 · BACK — blurred source"]
     if hook_rgba is not None:
-        paste_card(
-            hook_rgba[..., :3], hook_rgba[..., 3] / 255.0, 0, 0,
-            "2 · MIDDLE — hook text",
-        )
-    paste_card(fg, a, d, d, "3 · FRONT — speaker cutout")
+        paste_card(hook_rgba[..., :3], hook_rgba[..., 3] / 255.0, 0, 0)
+        labels.append("2 · MIDDLE — hook text")
+    paste_card(fg, a, d, d)
+    labels.append("3 · FRONT — speaker cutout")
+
+    # Labels are a legend, not per-card tags: the back card sits at a
+    # negative offset and the middle card is transparent, so per-card
+    # anchors collide at the same clamped corner and overprint (seen
+    # in the first xray still). A stacked legend on dark chips, in
+    # stack order, cannot collide.
+    font = _load_font(max(20, cw // 28))
+    y = 12
+    for label in labels:
+        w = draw.textlength(label, font=font)
+        draw.rectangle([8, y - 4, 16 + w, y + font.size + 8],
+                       fill=(0, 0, 0, 150))
+        draw.text((14, y), label, font=font, fill=(255, 255, 255))
+        y += font.size + 16
     return np.asarray(ground)
 
 
