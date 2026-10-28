@@ -31,3 +31,10 @@ Dated record of the work in this repository, written as it happens during the ev
 ## 2026-10-28 (night) - finish stack built ahead of the spike
 
 - `src/spatial_director/matte_finish.py` and `src/spatial_director/temporal_smooth.py` written fresh: guided-filter matte refinement + choke + feather, and EMA temporal smoothing with a scene-cut reset (IoU guard). Pure NumPy - these modules consume decoded mask arrays, so they do not depend on the SAM wire format and could be built and unit-tested on synthetic masks tonight (23/23 tests) while the spike waits on footage. When the spike lands, they take real masks unchanged.
+
+## 2026-10-28 (night) - FIRST LIVE SAM CALL: the spike is unblocked
+
+- Footage problem solved without waiting: two Creative Commons (CC BY) sources were verified in YouTube's license metadata and logged in the team's rights log - an Adrian Belew interview (Ultimate Guitar) and a Mark Holmes commentary. Three 20s spike clips were cut: A (Belew, talking head with a head tilt, t=100-120s), B (Holmes, hand gestures crossing the chest, t=168-188s), C (Holmes, hand-over-mouth/chin occlusion, t=726-746s - substituted for the held-object case, which neither CC source contains; the substitution is declared in the rights log).
+- First live SAM 3.1 call on clip A: file upload HTTP 200, Responses HTTP 200 in 36s. usage.video_frames_processed = 480 (exactly the clip's 480 frames); billed $0.096, recorded in spend-ledger.jsonl (cumulative $0.968 of the $145 cap).
+- Wire format reconciled on first contact: output_text carries one record per frame (`<Nf>` markers 0-479, all frames present), exactly ONE object (id 0) in every frame - the single speaker, tracked. Box + base85 mask tokens as documented. A trimmed real response (first 3 frame records) is committed at tests/fixtures/sam_response_clipA_trimmed.json as the canonical fixture for the mask decoder.
+- Remaining spike work: decode masks, run clips B + C, head-geometry bake-off, GREEN/YELLOW/RED verdict.
