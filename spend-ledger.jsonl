@@ -12,3 +12,6 @@
 {"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.0157, "purpose": "verifier-f5-muted-hook", "request_id": "resp_6ae26026da586f7bdd3a4c00"}
 {"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.013, "purpose": "verifier-f5-muted-hook", "request_id": "resp_6ae260a3134fd0e656a64e77"}
 {"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.0188, "purpose": "RECONCILED: duplicate proof-A judge call from a parallel execution of the proof script (environment executed the backgrounded command twice); its receipt was superseded by receipts/receipt-clipA-manual-placement.json - this entry exists so the ledger accounts for every observed call against the credits", "request_id": "resp_6ae271116a414f8190b47f612"}
+{"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.027, "purpose": "pipeline-voice-transcribe", "request_id": "voyager/transcribe/A000464A25B644B0BCDDFFACD5AB8CB0"}
+{"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.0243, "purpose": "pipeline-voice-transcribe", "request_id": "voyager/transcribe/0355C257E8EC4D83ACC98C427B4A5337"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.1318, "purpose": "pipeline-sam-short1", "request_id": "resp_6ae26a0f75eb9411c2aa43ab"}
