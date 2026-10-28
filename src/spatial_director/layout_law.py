@@ -227,10 +227,25 @@ def render_hook_layer(
     spans 97..982 and breaks the right rail by 2px. The layer is
     therefore shifted onto the safe zone's centre.
     """
+    # The compositor's renderer shrinks for LINE COUNT, not width:
+    # a single long word ("REHEARSES" at the default size) renders
+    # ~1000px wide inside an 888px budget. The layout path therefore
+    # steps the start size down until the INK fits the safe width -
+    # placement law, enforced on pixels, not on the renderer's say-so.
+    size = 170
     layer = hook_layer(
         text, canvas, y_center_frac=y_center_frac,
-        max_width_frac=HOOK_MAX_WIDTH_FRAC,
+        max_width_frac=HOOK_MAX_WIDTH_FRAC, start_size=size,
     )
+    while size > 40:
+        bbox = _bbox_of(layer[..., 3] > 0)
+        if bbox is None or bbox[2] - bbox[0] <= SAFE_X1 - SAFE_X0 - 32:
+            break
+        size = int(size * 0.9)
+        layer = hook_layer(
+            text, canvas, y_center_frac=y_center_frac,
+            max_width_frac=HOOK_MAX_WIDTH_FRAC, start_size=size,
+        )
     dx = (SAFE_X0 + SAFE_X1) // 2 - canvas[0] // 2
     if dx == 0:
         return layer

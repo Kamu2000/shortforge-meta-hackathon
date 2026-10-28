@@ -50,6 +50,12 @@ SNAP_TOLERANCE_S = 0.35  # boundaries snap to silence within this
 HOP_S = 0.02
 SAMPLE_RATE = 16000
 
+# Spark is a reasoning model: the sibling clients' live lesson is
+# that a tight max_tokens is consumed by reasoning and returns an
+# empty reply. The restored text is short, but the budget must carry
+# the reasoning too - 2,500 is the floor that worked for Spark Open.
+PUNCTUATION_MAX_TOKENS = 2500
+
 PUNCTUATION_SYSTEM_PROMPT = (
     "You restore punctuation and capitalisation in raw speech "
     "transcripts. Rules: add punctuation marks and capital letters "
@@ -354,7 +360,7 @@ def build_captions(turns: Sequence[Any],
                          "content": PUNCTUATION_SYSTEM_PROMPT},
                         {"role": "user", "content": text},
                     ],
-                    max_tokens=max(300, len(text) * 2),
+                    max_tokens=PUNCTUATION_MAX_TOKENS,
                     purpose=purpose,
                     ts=ts,
                 )
