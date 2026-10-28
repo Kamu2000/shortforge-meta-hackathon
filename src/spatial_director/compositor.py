@@ -268,9 +268,11 @@ def xray_frame(
             outline=(190, 195, 205),
             width=max(2, cw // 360),
         )
+        # The back card is offset up-left, so its natural label spot
+        # is off-canvas; clamp the label into the visible area.
         font = _load_font(max(20, cw // 28))
         draw.text(
-            (dx + 14, dy + 10), label, font=font,
+            (max(dx, 0) + 14, max(dy, 0) + 10), label, font=font,
             fill=(255, 255, 255), stroke_width=3,
             stroke_fill=(0, 0, 0),
         )
@@ -425,8 +427,14 @@ def video_fps(path: str | Path) -> float:
     return float(num) / float(den or 1)
 
 
-def _load_pipeline(clip: Path, sam_response: Path):
-    """Shared CLI wiring: frames, guides, finished alphas."""
+def _load_pipeline(clip: Path, sam_response: Path,
+                   max_frames: int | None = None):
+    """Shared CLI wiring: frames, guides, finished alphas.
+
+    ``max_frames`` trims the clip AND the SAM frames before the
+    finish pass, so a short diagnostic render does not pay for
+    finishing frames it will never show.
+    """
     import json
 
     from .mask_decode import finished_alpha, parse_sam_response
@@ -434,6 +442,11 @@ def _load_pipeline(clip: Path, sam_response: Path):
     frames = read_video_frames(clip)
     raw = json.loads(Path(sam_response).read_text(encoding="utf-8"))
     parsed = parse_sam_response(raw)
+    if max_frames is not None:
+        frames = frames[:max_frames]
+        keep = {f.index for f in sorted(parsed, key=lambda f: f.index)
+                [:max_frames]}
+        parsed = [f for f in parsed if f.index in keep]
     guides = [
         f.astype(np.float64).mean(axis=2) / 255.0 for f in frames
     ]
@@ -452,6 +465,10 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--clip", required=True, type=Path)
         p.add_argument("--sam-response", required=True, type=Path)
         p.add_argument("--hook", default="")
+        p.add_argument("--hook-y-frac", type=float, default=0.30,
+                       help="hook band centre as a fraction of canvas "
+                            "height (the layout step sets this from "
+                            "head geometry; default 0.30)")
         p.add_argument("--out", required=True, type=Path)
         if name == "composite":
             p.add_argument("--hook-start", type=float, default=0.0)
@@ -463,9 +480,16 @@ def main(argv: list[str] | None = None) -> int:
                            help="render only the first N seconds")
 
     args = parser.parse_args(argv)
-    frames, alphas = _load_pipeline(args.clip, args.sam_response)
     fps = video_fps(args.clip)
-    hook_rgba = hook_layer(args.hook.upper()) if args.hook else None
+    max_frames = None
+    if args.cmd == "xray" and args.seconds is not None:
+        max_frames = int(args.seconds * fps)
+    frames, alphas = _load_pipeline(
+        args.clip, args.sam_response, max_frames=max_frames)
+    hook_rgba = (
+        hook_layer(args.hook.upper(), y_center_frac=args.hook_y_frac)
+        if args.hook else None
+    )
 
     if args.cmd == "composite":
         render_composite_video(
@@ -474,9 +498,6 @@ def main(argv: list[str] | None = None) -> int:
             audio_from=args.clip if args.audio else None,
         )
     else:
-        if args.seconds is not None:
-            keep = int(args.seconds * fps)
-            frames, alphas = frames[:keep], alphas[:keep]
         export_xray_mp4(frames, alphas, args.out, fps=fps,
                         hook_rgba=hook_rgba)
     print(f"wrote {args.out}")

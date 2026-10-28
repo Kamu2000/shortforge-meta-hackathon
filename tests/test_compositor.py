@@ -109,6 +109,15 @@ class HookLayerTests(unittest.TestCase):
         self.assertGreater(ys.min(), 40)
         self.assertLess(ys.max(), 260)
 
+    def test_hook_band_moves_with_y_frac(self):
+        def centroid_y(layer):
+            ys = np.nonzero((layer[..., 3] > 0).any(axis=1))[0]
+            return ys.mean()
+
+        high = hook_layer("HOOK", CANVAS, start_size=60, y_center_frac=0.2)
+        low = hook_layer("HOOK", CANVAS, start_size=60, y_center_frac=0.5)
+        self.assertLess(centroid_y(high), centroid_y(low))
+
     def test_window_logic(self):
         self.assertTrue(hook_visible_at(0.0, (0.0, 6.0)))
         self.assertTrue(hook_visible_at(5.99, (0.0, 6.0)))
