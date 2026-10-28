@@ -1,0 +1,4 @@
+{"ts": "2026-10-28", "model": "muse-wonder-1.0", "cost_usd": 0.245, "purpose": "Wonder calibration call - failed (output cap burned on reasoning); lesson banked in the decision record", "request_id": null}
+{"ts": "2026-10-28", "model": "muse-image-1.0", "cost_usd": 0.01, "purpose": "Muse Image availability probe - succeeded (WebP 1152x2048) despite the Geographic Use Policy listing; disclosed in the submission", "request_id": null}
+{"ts": "2026-10-28", "model": "muse-wonder-1.0", "cost_usd": 0.372, "purpose": "Wonder full-context concept run (overnight decision campaign)", "request_id": null}
+{"ts": "2026-10-28", "model": "muse-wonder-1.0", "cost_usd": 0.245, "purpose": "Wonder counter-round on the concept decision", "request_id": null}

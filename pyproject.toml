@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spatial-director"
+version = "0.1.0"
+description = "Verifiable Spatial Director - Meta Global AI Developer Hackathon entry (Team ShortForge, Startup Track, Build for Your World)"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "Pillow",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
