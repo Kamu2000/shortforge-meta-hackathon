@@ -49,6 +49,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+import wave
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,9 +57,21 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from .caption_align import build_captions, load_energy
+from .caption_align import (
+    PEAK_CEILING_DBFS,
+    build_captions,
+    load_energy,
+    plan_audio_normalisation,
+)
 from .compositor import DEFAULT_CANVAS, read_video_frames, video_fps
-from .layout_law import plan_captions, plan_hook, render_hook_layer, to_canvas_alpha
+from .layout_law import (
+    apply_speaker_reframe,
+    plan_captions,
+    plan_hook,
+    plan_speaker_reframe,
+    render_hook_layer,
+    to_canvas_alpha,
+)
 from .mask_decode import finished_alpha, parse_sam_response
 from .rescue_loop import RenderArtifacts, render_composite_with_captions, rescue
 from .sam_client import API_BASE as META_API_BASE
@@ -130,6 +143,110 @@ def _extract_wav_chunk(source: str | Path, start_s: float,
          "-t", f"{length_s:.3f}", "-ac", "1", "-ar", "16000",
          "-c:a", "pcm_s16le", str(out)],
         f"extract WAV chunk at {start_s:.1f}s")
+
+
+SAM_CACHE_TOLERANCE_S = 0.05
+
+
+def _sam_cache_hit(short_dir: Path, w0: float, w1: float) -> bool:
+    """True only when the cached SAM response is FOR THIS WINDOW.
+
+    The cache lives in the per-Short directory (keyed by index), so
+    a sidecar records the window the response was bought for; a
+    response whose sidecar is missing or names a different window
+    is never re-used - a re-run whose sweep picks different windows
+    must not silently inherit another moment's masks.
+    """
+    resp = short_dir / "sam-response.json"
+    side = short_dir / "sam-window.json"
+    if not resp.exists() or not side.exists():
+        return False
+    try:
+        meta = json.loads(side.read_text(encoding="utf-8"))
+        return (
+            abs(float(meta["start_s"]) - w0) <= SAM_CACHE_TOLERANCE_S
+            and abs(float(meta["end_s"]) - w1) <= SAM_CACHE_TOLERANCE_S
+        )
+    except Exception:
+        return False
+
+
+def _sam_cache_store(short_dir: Path, raw: Any, w0: float,
+                     w1: float) -> None:
+    (short_dir / "sam-response.json").write_text(
+        json.dumps(raw), encoding="utf-8")
+    (short_dir / "sam-window.json").write_text(
+        json.dumps({"start_s": w0, "end_s": w1}), encoding="utf-8")
+
+
+def _decode_native_audio(path: Path) -> tuple[np.ndarray, int, int]:
+    """Decode a media file's audio at its native rate and channels.
+
+    Returns (samples float32 shaped (n, channels), sample_rate,
+    channels).
+    """
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=sample_rate,channels",
+         "-of", "json", str(path)],
+        capture_output=True, text=True, check=True)
+    stream = json.loads(probe.stdout)["streams"][0]
+    sample_rate, channels = int(stream["sample_rate"]), int(stream["channels"])
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path),
+         "-ac", str(channels), "-ar", str(sample_rate),
+         "-f", "f32le", "pipe:1"],
+        capture_output=True)
+    if proc.returncode != 0:
+        raise PipelineError(f"could not decode audio from {path}")
+    samples = np.frombuffer(proc.stdout, dtype=np.float32)
+    return samples.reshape(-1, channels), sample_rate, channels
+
+
+def _normalise_window_clip(raw_clip: Path, out_clip: Path,
+                           work_dir: Path) -> dict[str, Any]:
+    """Apply the window's loudness plan; the video stream is copied.
+
+    One static gain (``plan_audio_normalisation``) plus a true-peak
+    limiter at PEAK_CEILING_DBFS - on the measured Holmes windows
+    the limiter touches ~1 ms of transient peaks per window. When
+    the planned gain is negligible the raw cut is copied through
+    untouched. The plan (with its evidence) is returned for the run
+    summary.
+    """
+    profile = load_energy(raw_clip)
+    samples, sample_rate, channels = _decode_native_audio(raw_clip)
+    peak_dbfs = float(20.0 * np.log10(max(np.abs(samples).max(), 1e-9)))
+    plan = plan_audio_normalisation(profile, peak_dbfs)
+    record: dict[str, Any] = {
+        "gain_db": plan.gain_db,
+        "speech_rms_db": plan.speech_rms_db,
+        "peak_dbfs": plan.peak_dbfs,
+        "target_db": plan.target_db,
+        "applied": False,
+        "clipped_samples": 0,
+    }
+    if plan.gain_db < 0.25:
+        shutil.copyfile(raw_clip, out_clip)
+        return record
+    gained = samples * float(10.0 ** (plan.gain_db / 20.0))
+    ceiling = float(10.0 ** (PEAK_CEILING_DBFS / 20.0))
+    record["clipped_samples"] = int((np.abs(gained) > ceiling).sum())
+    gained = np.clip(gained, -ceiling, ceiling)
+    wav_path = work_dir / "normalised-audio.wav"
+    pcm = (np.clip(gained, -1.0, 1.0) * 32767).astype("<i2")
+    with wave.open(str(wav_path), "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        w.writeframes(pcm.tobytes())
+    _run_ffmpeg(
+        ["-i", str(raw_clip), "-i", str(wav_path),
+         "-map", "0:v:0", "-map", "1:a:0",
+         "-c:v", "copy", "-c:a", "aac", "-shortest", str(out_clip)],
+        "mux normalised window audio")
+    record["applied"] = True
+    return record
 
 
 class LazyCanvasAlphas:
@@ -380,24 +497,40 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     log(f"short {index}: window {w0:.1f}-{w1:.1f}s "
         f"(candidate score {cand.score:.2f}: {cand.reason})")
 
+    raw_clip = short_dir / "window-raw.mp4"
+    _cut_window(video, w0, length, raw_clip)
+    # Loudness normalisation (static gain + peak limiter; the DSP's
+    # relative silence threshold keeps F5's gap measurement honest
+    # under the gain - see caption_align). The normalised cut is the
+    # window everything downstream renders and measures.
     window_clip = short_dir / "window.mp4"
-    _cut_window(video, w0, length, window_clip)
+    norm = _normalise_window_clip(raw_clip, window_clip, short_dir)
+    log(f"short {index}: audio normalisation gain "
+        f"{norm['gain_db']:+.2f} dB (speech RMS "
+        f"{norm['speech_rms_db']}, peak {norm['peak_dbfs']} dBFS, "
+        f"applied {norm['applied']}, limiter touched "
+        f"{norm['clipped_samples']} samples)")
     fps = video_fps(window_clip)
     frames = read_video_frames(window_clip)
     log(f"short {index}: cut {len(frames)} frames @ {fps:.2f} fps")
 
-    # SAM, cached per window: a saved response is re-used verbatim.
+    # SAM, cached per window: a saved response is re-used only when
+    # its sidecar proves it was bought for THIS window.
     sam_path = short_dir / "sam-response.json"
-    if sam_path.exists():
+    if _sam_cache_hit(short_dir, w0, w1):
         raw_sam = json.loads(sam_path.read_text(encoding="utf-8"))
-        log(f"short {index}: SAM response from cache")
+        log(f"short {index}: SAM response from cache "
+            f"(window verified against sidecar)")
     else:
+        if sam_path.exists():
+            log(f"short {index}: cached SAM response is not for "
+                f"this window; buying segmentation")
         file_id = clients.upload_file(window_clip)
         seg = clients.sam.segment_video(
             file_id=file_id, n_frames=len(frames),
             purpose=f"pipeline-sam-short{index}", ts=ts)
         raw_sam = seg.raw
-        sam_path.write_text(json.dumps(raw_sam), encoding="utf-8")
+        _sam_cache_store(short_dir, raw_sam, w0, w1)
         log(f"short {index}: SAM segmented "
             f"({seg.billed_frames} frames billed)")
     parsed = parse_sam_response(raw_sam)
@@ -417,6 +550,19 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     guides = [f.astype(np.float64).mean(axis=2) / 255.0 for f in frames]
     _indices, src_alphas = finished_alpha(parsed, guides)
     del guides
+
+    # Speaker reframing by construction (F3): place the FACE, not
+    # just the text around it. The transform rewrites the
+    # source-space inputs, so layout, render and verifier all work
+    # from the reframed geometry - and text is planned after this,
+    # from the reframed alphas.
+    reframe = plan_speaker_reframe(src_alphas, canvas)
+    if not reframe.identity:
+        frames, src_alphas = apply_speaker_reframe(
+            frames, src_alphas, reframe.pad_bottom_px)
+    log(f"short {index}: speaker reframe "
+        f"{'identity' if reframe.identity else reframe.note} "
+        f"(feasible {reframe.feasible})")
     canvas_alphas = LazyCanvasAlphas(src_alphas, canvas)
 
     def make_canvas(alphas: list[np.ndarray]) -> LazyCanvasAlphas:
@@ -519,6 +665,15 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             "predicted_occlusion": round(placement.predicted_occlusion, 4),
             "caption_rect": list(cap_layout.rect),
             "caption_feasible": cap_layout.feasible,
+        },
+        "audio_normalisation": norm,
+        "speaker_reframe": {
+            "pad_bottom_px": reframe.pad_bottom_px,
+            "placed_centroid": reframe.placed_centroid,
+            "placed_head_top_min": reframe.placed_head_top_min,
+            "feasible": reframe.feasible,
+            "identity": reframe.identity,
+            "note": reframe.note,
         },
         "draft_1": {"verdict": receipt1.verdict,
                     "failed_checks": receipt1.failed},

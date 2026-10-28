@@ -29,6 +29,8 @@ from meta_sam_parser._mask_codec import _encode_raster  # noqa: E402
 from spatial_director.caption_align import CaptionCue  # noqa: E402
 from spatial_director.pipeline import (  # noqa: E402
     LazyCanvasAlphas,
+    _sam_cache_hit,
+    _sam_cache_store,
     normalize_window,
     run_pipeline,
     select_windows,
@@ -209,6 +211,31 @@ class FakeSAMShortByOne(FakeSAM):
             raw=sam_payload(n_frames - 1),
             billed_frames=max(50, n_frames - 1),
             request_id="resp-fake-short-one")
+
+
+class SamCacheTests(unittest.TestCase):
+    """The SAM cache is keyed by directory (short index) but only
+    VALID for the window recorded in its sidecar: a re-run whose
+    sweep selects different windows must never inherit another
+    moment's masks."""
+
+    def test_hit_only_for_the_recorded_window(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            self.assertFalse(_sam_cache_hit(d, 100.0, 120.0))
+            _sam_cache_store(d, {"id": "resp-x"}, 100.0, 120.0)
+            self.assertTrue(_sam_cache_hit(d, 100.0, 120.0))
+            self.assertTrue(_sam_cache_hit(d, 100.02, 119.98))
+            self.assertFalse(_sam_cache_hit(d, 100.5, 120.0))
+            self.assertFalse(_sam_cache_hit(d, 200.0, 220.0))
+
+    def test_missing_or_corrupt_sidecar_is_a_miss(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "sam-response.json").write_text("{}")
+            self.assertFalse(_sam_cache_hit(d, 100.0, 120.0))
+            (d / "sam-window.json").write_text("not json")
+            self.assertFalse(_sam_cache_hit(d, 100.0, 120.0))
 
 
 class EndToEndSmokeTests(unittest.TestCase):

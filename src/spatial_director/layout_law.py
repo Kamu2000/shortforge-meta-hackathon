@@ -518,6 +518,189 @@ def plan_captions(
     )
 
 
+# ---------------------------------------------------------------- speaker reframe
+#
+# The first full Holmes run failed F3 on all three Shorts with zero
+# hook/caption pixel violations: the median face centroid sat at
+# y = 1541-1554, below the central band's 1440 edge. Holmes's desk
+# framing puts his face low in the source, and the compositor's
+# fit-width + bottom-anchor placement preserves that faithfully -
+# layout planned the TEXT around the face, but nothing placed the
+# FACE. This section plans the speaker's own placement.
+#
+# The mechanism is the one RESCALE_SPEAKER already proved for the
+# verifier's geometry: transform the SOURCE-space inputs (frames +
+# alphas) and let the standard placement render them, so the
+# geometry the layout predicts, the pixels the compositor draws and
+# the alphas the verifier measures are the same numbers by
+# construction. Under a bottom anchor, the face's canvas height is
+# set by its distance from the frame's BOTTOM edge - so the
+# transform is a bottom-edge adjustment of the source frame: PAD
+# rows below the speaker (edge-replicated RGB, zero alpha) to lift
+# the face, or CROP bottom rows to lower it. Nothing else about the
+# frame changes; the head band (upper 32% of the mask) is untouched
+# by a bottom pad, so predicted face geometry is exact there, and a
+# small approximation for crops (the mask extent shrinks) is
+# declared where it is used.
+
+REFRAME_TARGET_FRAC = 0.78     # of the central band: aim low-centre
+REFRAME_HEAD_TOP_PLAN_MIN = 150  # planning floor (verifier F4: 90)
+REFRAME_IDENTITY_TOL_PX = 60   # centroid this deep in-band: no move
+_F4_HEAD_MARGIN_PX = 90        # verifier F4's floor (duplicated to
+#                                avoid an import cycle; verifier.py
+#                                owns the constant)
+
+
+@dataclass
+class SpeakerReframe:
+    """A planned bottom-edge transform of the source frame."""
+
+    pad_bottom_px: int            # source rows added (<0: cropped)
+    scale: float                  # resulting speaker_layer scale
+    placed_centroid: tuple[float, float] | None
+    placed_head_top_min: int | None
+    feasible: bool                # centroid in band AND F4 margin ok
+    identity: bool = False
+    note: str = ""
+
+
+def _placed_y(canvas: tuple[int, int], sw: int, height: float,
+              y: float) -> tuple[float, float]:
+    """(canvas y, scale) of source row ``y`` under speaker placement
+    for a (possibly transformed) source frame of height ``height``."""
+    cw, ch = canvas
+    scale = min(cw / sw, ch / height)
+    return ch - height * scale + y * scale, scale
+
+
+def plan_speaker_reframe(
+    src_alphas: Sequence[np.ndarray],
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    target_frac: float = REFRAME_TARGET_FRAC,
+    head_top_plan_min: int = REFRAME_HEAD_TOP_PLAN_MIN,
+) -> SpeakerReframe:
+    """Plan the bottom-edge transform placing the face in the band.
+
+    Statistics mirror the verifier's F3/F4 exactly: the median of
+    per-frame face centroids, and the MINIMUM per-frame head top.
+    The transform is solved against those statistics, then clamped:
+    the placed head top may not fall below ``head_top_plan_min``
+    (planning margin above F4's 90px floor), and a crop may not eat
+    into the face (the new bottom edge stays below every frame's
+    face box, plus clearance). If the clamps bind before the
+    centroid reaches the band, the best clamped transform is
+    returned with ``feasible=False`` - reported, never hidden.
+    """
+    geos = [frame_geometry(a) for a in src_alphas]
+    present = [g for g in geos if g.present
+               and g.face_centroid is not None]
+    if not present or not src_alphas:
+        return SpeakerReframe(
+            0, 0.0, None, None, feasible=False, identity=True,
+            note="no speaker geometry in the window; nothing to place")
+    sh, sw = src_alphas[0].shape
+    cw, ch = canvas
+    cx = float(np.median([g.face_centroid[0] for g in present]))
+    cy = float(np.median([g.face_centroid[1] for g in present]))
+    ht_min = min(g.head_top for g in present
+                 if g.head_top is not None)
+    face_bottom_max = max(g.face_box[3] for g in present
+                          if g.face_box is not None)
+
+    def evaluate(height: float) -> tuple[float, float, float]:
+        placed_cy, scale = _placed_y(canvas, sw, height, cy)
+        placed_ht, _ = _placed_y(canvas, sw, height, float(ht_min))
+        return placed_cy, placed_ht, scale
+
+    cur_cy, cur_ht, cur_scale = evaluate(float(sh))
+    if SAFE_Y0 + REFRAME_IDENTITY_TOL_PX <= cur_cy \
+            <= SAFE_Y1 - REFRAME_IDENTITY_TOL_PX:
+        return SpeakerReframe(
+            0, cur_scale,
+            (round((cw - sw * cur_scale) / 2.0 + cx * cur_scale, 1),
+             round(cur_cy, 1)),
+            int(round(cur_ht)), feasible=True, identity=True,
+            note="median face centroid already inside the central band")
+
+    target_cy = SAFE_Y0 + target_frac * (SAFE_Y1 - SAFE_Y0)
+    # Solve the frame height for the target centroid (monotone in
+    # height; a few secant steps converge in either scale regime).
+    height = cy + (ch - target_cy) / max(cur_scale, 1e-9)
+    for _ in range(10):
+        placed_cy, _ht, scale = evaluate(height)
+        err = placed_cy - target_cy
+        if abs(err) < 0.5:
+            break
+        height += err / max(scale, 1e-9)
+    # Clamp: head-top planning floor (growing the frame lifts the
+    # head toward the canvas top; shrink height until it clears).
+    for _ in range(200):
+        _cy_e, placed_ht, _s = evaluate(height)
+        if placed_ht >= head_top_plan_min or height <= 1.0:
+            break
+        height -= 1.0
+    # Clamp: never crop into the face; never pad absurdly.
+    height = max(height, float(face_bottom_max + 4))
+    height = min(height, float(4 * sh))
+    pad = int(round(height - sh))
+    height = float(sh + pad)
+    placed_cy, placed_ht, scale = evaluate(height)
+    placed_cx = (cw - sw * scale) / 2.0 + cx * scale
+    feasible = bool(SAFE_Y0 <= placed_cy <= SAFE_Y1
+                    and placed_ht >= _F4_HEAD_MARGIN_PX)
+    note = ""
+    if pad == 0:
+        identity = True
+        note = ("clamps left no transform; centroid stays at "
+                f"y={placed_cy:.0f}")
+    else:
+        identity = False
+        note = (f"bottom {'pad' if pad > 0 else 'crop'} {abs(pad)} "
+                f"source rows; centroid y {cur_cy:.0f} -> "
+                f"{placed_cy:.0f} (target {target_cy:.0f}), head-top "
+                f"min {cur_ht:.0f} -> {placed_ht:.0f}")
+    if not feasible:
+        note += "; INFEASIBLE within the head-top/crop clamps"
+    return SpeakerReframe(
+        pad, scale, (round(placed_cx, 1), round(placed_cy, 1)),
+        int(round(placed_ht)), feasible=feasible, identity=identity,
+        note=note)
+
+
+def apply_speaker_reframe(
+    frames: list[np.ndarray],
+    alphas: list[np.ndarray],
+    pad_bottom_px: int,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Apply a planned bottom-edge transform to frames + alphas.
+
+    Pad: RGB rows are edge-replicated (they feed only the blurred
+    backdrop under a zero alpha), alpha rows are zero. Crop: rows
+    are sliced off the bottom. Frame/alpha alignment is preserved
+    1:1, and ``to_canvas_alpha`` of a transformed alpha is exactly
+    the geometry the compositor renders.
+    """
+    if pad_bottom_px == 0:
+        return frames, alphas
+    if pad_bottom_px > 0:
+        p = pad_bottom_px
+        new_frames = [
+            np.pad(f, ((0, p), (0, 0), (0, 0)), mode="edge")
+            for f in frames
+        ]
+        new_alphas = [
+            np.pad(a, ((0, p), (0, 0)), mode="constant")
+            for a in alphas
+        ]
+        return new_frames, new_alphas
+    keep = frames[0].shape[0] + pad_bottom_px
+    if keep <= 0:
+        raise ValueError("reframe crop would remove the whole frame")
+    return ([f[:keep] for f in frames],
+            [a[:keep] for a in alphas])
+
+
 def caption_layer(
     text: str,
     rect: tuple[int, int, int, int],
