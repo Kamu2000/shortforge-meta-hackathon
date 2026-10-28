@@ -187,28 +187,46 @@ class SparkOpenClient:
             "temperature": 0.2,
             "max_tokens": max_tokens,
         }
-        started = time.monotonic()
-        status, raw = self._transport(
-            "POST",
-            f"{API_BASE}/chat/completions",
-            {
-                "Authorization": f"Bearer {self._key()}",
-                "Content-Type": "application/json",
-            },
-            json.dumps(payload).encode("utf-8"),
-        )
-        latency = round(time.monotonic() - started, 3)
-        if status != 200:
-            raise SparkOpenError(f"Baseten returned HTTP {status}: {raw}")
-        try:
-            text = raw["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise SparkOpenError(f"unexpected chat response shape: {raw!r}") from exc
+        # Verified live 2026-10-28, and again on a full Holmes sweep
+        # 2026-10-29: Spark Open spends completion tokens on reasoning
+        # first, and the reasoning length is stochastic - a budget that
+        # sufficed for the same transcript yesterday can return HTTP
+        # 200 with null content today. One bounded retry with a
+        # doubled budget (cap 16000) absorbs that variance; a second
+        # empty reply still fails loud - an empty sweep must never
+        # silently degrade into "no candidates".
+        budgets = [max_tokens]
+        if max_tokens * 2 <= 16000:
+            budgets.append(max_tokens * 2)
+        text = None
+        raw: dict[str, Any] = {}
+        latency = 0.0
+        first_empty_request_id: Any = None
+        for attempt, budget in enumerate(budgets):
+            payload["max_tokens"] = budget
+            started = time.monotonic()
+            status, raw = self._transport(
+                "POST",
+                f"{API_BASE}/chat/completions",
+                {
+                    "Authorization": f"Bearer {self._key()}",
+                    "Content-Type": "application/json",
+                },
+                json.dumps(payload).encode("utf-8"),
+            )
+            latency = round(time.monotonic() - started, 3)
+            if status != 200:
+                raise SparkOpenError(f"Baseten returned HTTP {status}: {raw}")
+            try:
+                text = raw["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise SparkOpenError(
+                    f"unexpected chat response shape: {raw!r}") from exc
+            if text:
+                break
+            if attempt == 0:
+                first_empty_request_id = raw.get("id")
         if not text:
-            # Verified live 2026-10-28: Spark Open spends completion
-            # tokens on reasoning first; a tight max_tokens returns
-            # HTTP 200 with null content. Fail loud so the caller
-            # raises the budget instead of reading "no candidates".
             raise SparkOpenError(
                 "empty sweep reply: the token budget was consumed by "
                 "reasoning; raise max_tokens"
@@ -222,17 +240,22 @@ class SparkOpenClient:
             latency_s=latency,
             request_id=raw.get("id"),
         )
-        self._log_call(
-            {
-                "ts": ts,
-                "provider": "baseten",
-                "model": MODEL_ID,
-                "purpose": purpose,
-                "prompt_tokens": result.prompt_tokens,
-                "completion_tokens": result.completion_tokens,
-                "latency_s": latency,
-                "request_id": result.request_id,
-                "candidates": len(candidates),
-            }
-        )
+        log_entry = {
+            "ts": ts,
+            "provider": "baseten",
+            "model": MODEL_ID,
+            "purpose": purpose,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
+            "latency_s": latency,
+            "request_id": result.request_id,
+            "candidates": len(candidates),
+        }
+        if first_empty_request_id is not None:
+            # The successful call was the doubled-budget retry; the
+            # empty first attempt is on the record, not hidden.
+            log_entry["empty_first_attempt_request_id"] = (
+                first_empty_request_id)
+            log_entry["max_tokens_final"] = budgets[-1]
+        self._log_call(log_entry)
         return result

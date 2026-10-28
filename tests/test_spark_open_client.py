@@ -84,6 +84,54 @@ class SweepTests(unittest.TestCase):
         with self.assertRaises(SparkOpenError):
             client.sweep(TURNS)
 
+    def test_empty_reply_retried_with_doubled_budget(self):
+        # Live failure 2026-10-29: a full-transcript sweep at the
+        # default 4000-token budget returned null content (reasoning
+        # variance); the same call succeeds at a doubled budget.
+        reply = json.dumps(
+            [{"start_s": 6.0, "end_s": 15.0, "score": 0.9, "reason": "r"}]
+        )
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append(json.loads(body.decode("utf-8")))
+            if len(calls) == 1:
+                return 200, {
+                    "id": "chatcmpl-empty",
+                    "choices": [{"message": {"content": None}}],
+                    "usage": {"prompt_tokens": 279,
+                              "completion_tokens": 4000},
+                }
+            return 200, {
+                "id": "chatcmpl-retry",
+                "choices": [{"message": {"content": reply}}],
+                "usage": {"prompt_tokens": 279, "completion_tokens": 64},
+            }
+
+        client = SparkOpenClient(api_key="k", transport=transport)
+        result = client.sweep(TURNS)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0]["max_tokens"], 4000)
+        self.assertEqual(calls[1]["max_tokens"], 8000)
+        self.assertEqual(len(result.candidates), 1)
+        self.assertEqual(result.request_id, "chatcmpl-retry")
+
+    def test_empty_reply_twice_still_fails_loud(self):
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append(1)
+            return 200, {
+                "id": "chatcmpl-null",
+                "choices": [{"message": {"content": None}}],
+                "usage": {"prompt_tokens": 279, "completion_tokens": 8000},
+            }
+
+        client = SparkOpenClient(api_key="k", transport=transport)
+        with self.assertRaises(SparkOpenError):
+            client.sweep(TURNS)
+        self.assertEqual(len(calls), 2)  # one retry, never a loop
+
     def test_non_json_reply_fails_loud(self):
         transport, _ = fake_transport_factory("Here are some moments...")
         client = SparkOpenClient(api_key="k", transport=transport)
