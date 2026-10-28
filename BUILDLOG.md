@@ -21,3 +21,9 @@ Dated record of the work in this repository, written as it happens during the ev
 - README rewritten to the converged design: claimed Meta stack is SAM 3.1 + Muse Wonder + Muse Spark Open (Baseten) only; a model is claimed only once it has a logged call in the shipped pipeline.
 - Honest status: the Day-1 SAM spike (planned for today) has **not** run yet — it is waiting on test footage. The slip is declared here rather than back-filled; the spike runs as soon as footage lands.
 - Staff runtime-model guidance tightened again this evening (a third strict statement named Whisper as not allowed at runtime); the strict-fallback decision point is Oct 29, 12:00 IST, scoped in the team's plan.
+
+## 2026-10-28 (late evening) - Spark Open client + first live sweep
+
+- `src/spatial_director/spark_open_client.py` written fresh: Baseten chat-completions client for the candidate-moment sweep (Spark Open proposes, Spark 1.3 final-picks - the split is declared in the README). Model id is a constant: the partner credit covers Spark Open only. Every call appends to `partner-usage-log.jsonl` (separate from the Meta spend ledger; this is partner credit, not the $150).
+- First live verification, 2026-10-28: call 1 returned HTTP 200 with null content - Spark Open spent all 400 completion tokens on reasoning (the same failure class as the first Wonder calibration call). Call 2 at a 2,500-token budget returned 3 parsed candidates, top score 0.96 on the stat hook, 4.8s latency. Client hardened accordingly: default max_tokens 4,000 and an empty reply raises instead of reading as "no candidates". 18/18 tests pass.
+- Both verification calls are recorded in `partner-usage-log.jsonl` with request ids - this log is the evidence trail for partner verification of the Open Weights entry.
