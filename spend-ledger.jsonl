@@ -67,3 +67,17 @@
 {"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.1312, "purpose": "pipeline-sam-short2", "request_id": "resp_6ae288987e77239fd0d44363"}
 {"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0063, "purpose": "pipeline-caption-punctuation-short2", "request_id": "chatcmpl-01a184eb-aa69-75ea-9911-66d7fd4f51f8"}
 {"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0055, "purpose": "pipeline-hook-line", "request_id": "chatcmpl-01a184eb-bbc3-7340-a917-2ce4d37e71ef"}
+{"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.027, "purpose": "pipeline-voice-transcribe", "request_id": "voyager/transcribe/2166F9050BA741CD875CB6F715CC51F2"}
+{"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.0243, "purpose": "pipeline-voice-transcribe", "request_id": "voyager/transcribe/2401F256590640D89403A1D805AB092A"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.1318, "purpose": "pipeline-sam-short1", "request_id": "resp_6ae29e9fd11190c5d13b4ba4"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0095, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-43a7-777b-89e3-752780f5613c"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0023, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-55c8-7786-89ec-fb718148411c"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0025, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-67e0-72b9-abf0-a6b3179879e9"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0015, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-6f94-74c5-9deb-2a130b1c1e7f"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0021, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-82e6-7400-9556-2250896ef468"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0022, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-8dbc-760e-a49a-b50ef691081e"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0017, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-9914-747f-9539-cefef7592a0d"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0016, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-a1b6-70b9-81c6-59b01e8108ac"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0032, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-ad39-704a-8ed4-4b1d9ac38048"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0076, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a18541-c7a6-717b-b008-683e1a1a5564"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0081, "purpose": "pipeline-hook-line", "request_id": "chatcmpl-01a18541-e658-75b6-8b2f-316945ba0cc4"}
