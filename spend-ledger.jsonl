@@ -140,3 +140,17 @@
 {"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.002, "purpose": "pipeline-caption-punctuation-short3", "request_id": "chatcmpl-01a18740-712b-70fe-96de-a40a57c4e784"}
 {"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0073, "purpose": "pipeline-hook-line", "request_id": "chatcmpl-01a18740-b86b-748d-8c58-b64eaf9f479c"}
 {"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.0184, "purpose": "verifier-f5-muted-hook", "request_id": "resp_6ae32432258de3b6ce09414d"}
+{"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.027, "purpose": "pipeline-voice-transcribe", "request_id": "voyager/transcribe/04737C0033964690B91C0E54C6170041"}
+{"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.027, "purpose": "pipeline-voice-transcribe", "request_id": "voyager/transcribe/692086715366438CB011323B70D0EC3F"}
+{"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.007, "purpose": "pipeline-voice-transcribe", "request_id": "voyager/transcribe/D8091517F2A34867A756C817DE0B918B"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.0936, "purpose": "pipeline-sam-short1", "request_id": "resp_6ae329d6c6c9951430104132"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0077, "purpose": "pipeline-caption-punctuation-short1", "request_id": "chatcmpl-01a1875f-2354-7480-92aa-f2c7fd4d602b"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0096, "purpose": "pipeline-hook-line", "request_id": "chatcmpl-01a1875f-7726-712c-a4e1-52f2c005cbbe"}
+{"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.02, "purpose": "verifier-f5-muted-hook", "request_id": "resp_6ae32c706861131b1cb14499"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0029, "purpose": "rescue-repair-planner", "request_id": "chatcmpl-01a18765-b162-72c0-bc7d-8bc35c977d0c"}
+{"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.0229, "purpose": "verifier-f5-muted-hook", "request_id": "resp_6ae32dde56669a583e95479c"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.1056, "purpose": "pipeline-sam-short2", "request_id": "resp_6ae32dffbb557535f21645f8"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0083, "purpose": "pipeline-hook-line", "request_id": "chatcmpl-01a18770-31b4-70bf-afa9-9645957f4fb7"}
+{"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.0446, "purpose": "verifier-f5-muted-hook-empty-attempt", "request_id": "resp_6ae330fc68a4547b660a4f51"}
+{"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.0245, "purpose": "verifier-f5-muted-hook", "request_id": "resp_6ae331093e5ede43d40445f0"}
+{"ts": "2026-10-29", "model": "muse-spark-1.3", "cost_usd": 0.0035, "purpose": "rescue-repair-planner", "request_id": "chatcmpl-01a18777-a5ad-763a-bf3f-943d8141f2e6"}
