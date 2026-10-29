@@ -98,10 +98,17 @@ EFFECT_OCCLUSION_TARGET = 0.14  # band centre: aim, don't hug edges
 # composite): at the cap brim the feathered matte edge lets hook
 # letters GHOST THROUGH at partial opacity instead of occluding
 # cleanly - the brim zone is exactly where placement decisions bite.
-# Placement therefore treats a HEAD_GUARD_PX halo around the head
-# band as solid speaker, even though the geometric occupancy there
-# is fractional. (Tightening the choke itself is finish-stack work,
-# declared as a follow-up in the BUILDLOG - not done here.)
+# Placement therefore treated a HEAD_GUARD_PX halo around the head
+# band as solid speaker (``guarded_occupancy``). RETIRED from
+# plan_hook's scoring by the refinement calibration (2026-10-29):
+# the retuned matte cut the bleed the guard compensated for
+# (541.7 -> 41.7 alpha units on the reference frame), and the
+# guard made the planner predict a quantity the verifier does not
+# measure - on the first refined render it predicted 0.133 where
+# F2 measured 0.065, a 2x overshoot concentrated exactly at the
+# grazing placements the effect band targets. The planner now
+# predicts the verifier's own quantity (binary occupancy); the
+# guarded map remains available for diagnostics.
 HEAD_GUARD_PX = 12
 
 # The hook renderer must fit its text INSIDE the safe zone: the
@@ -269,9 +276,9 @@ def effect_note(
         return (
             f"effect: measured hook occlusion {occlusion:.3f} is "
             f"BELOW the {band[0]:.2f}-{band[1]:.2f} depth-effect "
-            "band - EFFECT ABSENT: the speaker does not visibly "
-            "cross the hook text on this draft, whatever the "
-            "checks say.")
+            "band - EFFECT BELOW TARGET: the speaker's crossing "
+            "of the hook text is marginal on this draft, whatever "
+            "the checks say.")
     return (
         f"effect: measured hook occlusion {occlusion:.3f} is "
         f"ABOVE the {band[0]:.2f}-{band[1]:.2f} depth-effect band "
@@ -399,16 +406,17 @@ def plan_hook(
     preferred_frac: float = DEFAULT_HOOK_FRAC,
     cap: float = GLYPH_OCCLUSION_CAP,
     fracs: Sequence[float] | None = None,
-    head_guard_px: int = HEAD_GUARD_PX,
     occlusion_band: tuple[float, float] | None = EFFECT_OCCLUSION_BAND,
 ) -> HookPlacement:
     """Choose the hook band centre from the window's speaker geometry.
 
     Candidates are scored by (predicted occlusion, safe-zone
-    membership) against the GUARDED occupancy map (see
-    ``guarded_occupancy``). Preference order (deterministic
-    tie-breaks throughout, so the same geometry always plans the
-    same layout):
+    membership) against the window's binary occupancy map - the
+    same quantity the verifier's F2 measures, so a prediction is a
+    calibrated estimate of the receipt's number (see the
+    HEAD_GUARD_PX note for why the guarded map was retired from
+    scoring). Preference order (deterministic tie-breaks
+    throughout, so the same geometry always plans the same layout):
 
     1. safe + under the cap + occlusion INSIDE the depth-effect
        band, nearest the band's centre, then nearest the preferred
@@ -430,7 +438,7 @@ def plan_hook(
         # last candidate).
         fracs = [round(0.14 + 0.01 * i, 2) for i in range(55)]
     alphas = list(window_alphas)
-    occ_map = guarded_occupancy(alphas, head_guard_px)
+    occ_map = occupancy_map(alphas)
     band = occlusion_band if occlusion_band is not None \
         else EFFECT_OCCLUSION_BAND
     scored: list[HookPlacement] = []

@@ -32,7 +32,6 @@ from spatial_director.layout_law import (  # noqa: E402
     effect_status,
     face_pixels,
     frame_geometry,
-    guarded_occupancy,
     hook_glyph_mask,
     initial_caption_rect,
     occupancy_map,
@@ -139,7 +138,7 @@ class EffectBandTests(unittest.TestCase):
         self.assertEqual(effect_status(lo), "in_band")
         self.assertEqual(effect_status(hi), "in_band")
         self.assertEqual(effect_status(0.24), "above_band")
-        self.assertIn("EFFECT ABSENT", effect_note(0.0))
+        self.assertIn("EFFECT BELOW TARGET", effect_note(0.0))
         self.assertIn("inside", effect_note(0.14))
 
     def test_planner_targets_the_band_when_reachable(self):
@@ -147,7 +146,7 @@ class EffectBandTests(unittest.TestCase):
         # lands in the band, the planner must return an in-band one.
         alphas = [speaker_alpha(1100, x0=300, x1=800)
                   for _ in range(4)]
-        occ_map = guarded_occupancy(alphas)
+        occ_map = occupancy_map(alphas)
         reachable = False
         for i in range(55):
             frac = round(0.14 + 0.01 * i, 2)
