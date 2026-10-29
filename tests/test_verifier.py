@@ -308,6 +308,78 @@ class WonderClientTests(unittest.TestCase):
             with self.assertRaises(WonderClientError):
                 client.judge_muted_hook(clip)
 
+    # The live failure of 2026-10-29: the response carries reasoning
+    # output only - no output_text item at all - because the token
+    # budget was consumed before the answer. Reasoning length is
+    # stochastic, so one bounded retry at a doubled budget absorbs
+    # it; both attempts are billed, so both hit the ledger.
+    _EMPTY_RAW = {
+        "id": "resp-wonder-empty",
+        "output": [{"type": "reasoning", "content": []}],
+        "usage": {"input_tokens": 4000, "output_tokens": 2000},
+    }
+    _GOOD_RAW = {
+        "id": "resp-wonder-1",
+        "output": [{"content": [{
+            "type": "output_text",
+            "text": "SUMMARY: A musician's hook about rehearsals.",
+        }]}],
+        "usage": {"input_tokens": 5000, "output_tokens": 60},
+    }
+
+    def _client_sequence(self, raws, ledger=None):
+        calls = []
+        queue = list(raws)
+
+        def upload(url, headers, body):
+            calls.append(("upload", url))
+            return 200, {"id": "file-123"}
+
+        def transport(method, url, headers, body):
+            calls.append(("responses", url, body))
+            return 200, queue.pop(0)
+
+        client = WonderClient(api_key="k", ledger=ledger,
+                              transport=transport, upload_transport=upload)
+        return client, calls
+
+    def test_empty_first_attempt_retries_at_doubled_budget(self):
+        with tempfile.TemporaryDirectory() as td:
+            ledger = SpendLedger(Path(td) / "l.jsonl", cap_usd=145.0)
+            client, calls = self._client_sequence(
+                [self._EMPTY_RAW, self._GOOD_RAW], ledger)
+            clip = Path(td) / "muted.mp4"
+            clip.write_bytes(b"fake")
+            j = client.judge_muted_hook(clip, ts="2026-10-29")
+            self.assertTrue(j.can_summarize)
+            responses = [c for c in calls if c[0] == "responses"]
+            self.assertEqual(len(responses), 2)
+            budgets = [json.loads(c[2])["max_output_tokens"]
+                       for c in responses]
+            self.assertEqual(budgets, [2000, 4000])
+            self.assertEqual(j.extra["empty_first_attempt_request_id"],
+                             "resp-wonder-empty")
+            self.assertEqual(j.extra["max_output_tokens_final"], 4000)
+            entries = ledger.entries()
+            self.assertEqual(len(entries), 2)
+            self.assertTrue(
+                entries[0].purpose.endswith("-empty-attempt"))
+            self.assertEqual(entries[0].request_id, "resp-wonder-empty")
+
+    def test_second_empty_reply_still_raises_and_is_recorded(self):
+        with tempfile.TemporaryDirectory() as td:
+            ledger = SpendLedger(Path(td) / "l.jsonl", cap_usd=145.0)
+            client, _ = self._client_sequence(
+                [self._EMPTY_RAW, self._EMPTY_RAW], ledger)
+            clip = Path(td) / "m.mp4"
+            clip.write_bytes(b"x")
+            with self.assertRaises(WonderClientError):
+                client.judge_muted_hook(clip)
+            entries = ledger.entries()
+            self.assertEqual(len(entries), 2)
+            self.assertTrue(all(
+                e.purpose.endswith("-empty-attempt") for e in entries))
+
 
 if __name__ == "__main__":
     unittest.main()

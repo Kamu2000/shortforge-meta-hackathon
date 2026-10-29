@@ -23,9 +23,10 @@ Verified facts this client is built on (dev.meta.ai docs, read
 - Reasoning models burn output budget on reasoning first (this
   team's first Wonder calibration call returned nothing at a tight
   cap, $0.245 of smoke), so the judge asks for a strict two-part
-  reply format and an empty/unparseable reply RAISES instead of
-  reading as "cannot summarise" - a transport failure must never
-  masquerade as a verdict.
+  reply format and an empty reply gets ONE bounded retry at a
+  doubled budget before it RAISES instead of reading as "cannot
+  summarise" - a transport failure must never masquerade as a
+  verdict.
 
 The reply contract is exact: ``SUMMARY: <text>`` on one line, or
 ``SUMMARY: CANNOT_DETERMINE`` when the premise cannot be determined
@@ -220,6 +221,34 @@ class WonderClient:
                 f"Wonder file upload failed (HTTP {status}): {raw}")
         return str(raw["id"])
 
+    def _record_attempt(self, raw: dict[str, Any], *, ts: str,
+                        purpose: str) -> None:
+        """Ledger-record one billed Wonder attempt from its usage.
+
+        Falls back to the pre-flight estimate when the response
+        carries no usage block - an unrecorded charge is worse for
+        cap integrity than a conservative estimate on the record.
+        """
+        if self.ledger is None:
+            return
+        usage = raw.get("usage") or {}
+        input_tokens = usage.get("input_tokens",
+                                 usage.get("prompt_tokens"))
+        output_tokens = usage.get("output_tokens",
+                                  usage.get("completion_tokens"))
+        if input_tokens is None or output_tokens is None:
+            cost = ESTIMATE_USD
+        else:
+            details = usage.get("input_tokens_details") or {}
+            cost = cost_from_usage(
+                int(input_tokens), int(output_tokens),
+                int(details.get("cached_tokens") or 0),
+            )
+        self.ledger.record(
+            ts=ts, model=MODEL_ID, cost_usd=cost, purpose=purpose,
+            request_id=raw.get("id"),
+        )
+
     def judge_muted_hook(
         self,
         video_path: str | Path,
@@ -238,60 +267,84 @@ class WonderClient:
             # cumulative cap would be exceeded.
             self.ledger.check_can_afford(ESTIMATE_USD)
         file_id = self.upload_file(video_path)
-        payload = {
-            "model": MODEL_ID,
-            "input": [
+        # Wonder reasons before it answers, and the reasoning length
+        # is stochastic: a budget that sufficed for the same clip
+        # yesterday can return a response with NO output_text today
+        # (verified live 2026-10-29 - a full pipeline run died at
+        # short 1's draft-1 verify on exactly this, after clearing
+        # every earlier stage). One bounded retry at a doubled budget
+        # (cap 8000) absorbs the variance, mirroring the Spark Open
+        # sweep fix; a second empty reply still raises, because a
+        # transport failure must never masquerade as a verdict. Every
+        # attempt is ledger-recorded: the pre-fix code recorded only
+        # after a successful parse, so a billed-but-empty call left
+        # no trace in the ledger.
+        budgets = [max_output_tokens]
+        if max_output_tokens * 2 <= 8000:
+            budgets.append(max_output_tokens * 2)
+        first_empty_request_id: Any = None
+        last_empty_error: WonderClientError | None = None
+        for attempt, budget in enumerate(budgets):
+            payload = {
+                "model": MODEL_ID,
+                "input": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": JUDGE_PROMPT},
+                            {"type": "input_video", "file_id": file_id},
+                        ],
+                    }
+                ],
+                "max_output_tokens": budget,
+            }
+            status, raw = self._transport(
+                "POST",
+                f"{API_BASE}/responses",
                 {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": JUDGE_PROMPT},
-                        {"type": "input_video", "file_id": file_id},
-                    ],
-                }
-            ],
-            "max_output_tokens": max_output_tokens,
-        }
-        status, raw = self._transport(
-            "POST",
-            f"{API_BASE}/responses",
-            {
-                "Authorization": f"Bearer {self._key()}",
-                "Content-Type": "application/json",
-            },
-            json.dumps(payload).encode("utf-8"),
-        )
-        if status != 200:
-            raise WonderClientError(
-                f"Wonder API returned HTTP {status}: {raw}")
-        text = extract_output_text(raw)
-        if not text.strip():
-            raise WonderClientError(
-                "empty Wonder reply: the token budget was consumed "
-                "by reasoning; raise max_output_tokens")
-        summary, can = parse_judgment(text)
-        usage = raw.get("usage") or {}
-        details = usage.get("input_tokens_details") or {}
-        judgment = WonderJudgment(
-            raw=raw,
-            summary=summary,
-            can_summarize=can,
-            input_tokens=usage.get("input_tokens",
-                                   usage.get("prompt_tokens")),
-            output_tokens=usage.get("output_tokens",
-                                    usage.get("completion_tokens")),
-            request_id=raw.get("id"),
-            file_id=file_id,
-            extra={"cached_tokens": int(details.get("cached_tokens") or 0)},
-        )
-        if self.ledger is not None:
-            cost = judgment.cost_usd
-            if cost is None:
-                cost = ESTIMATE_USD
-            self.ledger.record(
-                ts=ts,
-                model=MODEL_ID,
-                cost_usd=cost,
-                purpose=purpose,
-                request_id=judgment.request_id,
+                    "Authorization": f"Bearer {self._key()}",
+                    "Content-Type": "application/json",
+                },
+                json.dumps(payload).encode("utf-8"),
             )
-        return judgment
+            if status != 200:
+                raise WonderClientError(
+                    f"Wonder API returned HTTP {status}: {raw}")
+            try:
+                text = extract_output_text(raw)
+                if not text.strip():
+                    raise WonderClientError(
+                        "empty Wonder reply: the token budget was "
+                        "consumed by reasoning; raise max_output_tokens")
+            except WonderClientError as exc:
+                self._record_attempt(
+                    raw, ts=ts, purpose=f"{purpose}-empty-attempt")
+                if attempt == 0:
+                    first_empty_request_id = raw.get("id")
+                last_empty_error = exc
+                continue
+            summary, can = parse_judgment(text)
+            usage = raw.get("usage") or {}
+            details = usage.get("input_tokens_details") or {}
+            judgment = WonderJudgment(
+                raw=raw,
+                summary=summary,
+                can_summarize=can,
+                input_tokens=usage.get("input_tokens",
+                                       usage.get("prompt_tokens")),
+                output_tokens=usage.get("output_tokens",
+                                        usage.get("completion_tokens")),
+                request_id=raw.get("id"),
+                file_id=file_id,
+                extra={"cached_tokens": int(details.get("cached_tokens") or 0)},
+            )
+            if first_empty_request_id is not None:
+                # The verdict came from the doubled-budget retry; the
+                # empty first attempt stays on the record, not hidden.
+                judgment.extra["empty_first_attempt_request_id"] = (
+                    first_empty_request_id)
+                judgment.extra["max_output_tokens_final"] = budget
+            self._record_attempt(raw, ts=ts, purpose=purpose)
+            return judgment
+        assert last_empty_error is not None  # budgets is never empty
+        raise last_empty_error
