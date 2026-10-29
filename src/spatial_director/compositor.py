@@ -453,9 +453,9 @@ def _load_pipeline(clip: Path, sam_response: Path,
         keep = {f.index for f in sorted(parsed, key=lambda f: f.index)
                 [:max_frames]}
         parsed = [f for f in parsed if f.index in keep]
-    guides = [
+    guides = (
         f.astype(np.float64).mean(axis=2) / 255.0 for f in frames
-    ]
+    )
     _, alphas = finished_alpha(parsed, guides)
     return frames, alphas
 

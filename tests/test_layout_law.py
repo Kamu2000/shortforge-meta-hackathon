@@ -16,6 +16,9 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from spatial_director.layout_law import (  # noqa: E402
+    _band_overlap_px,
+    _face_band,
+    _face_top,
     CAPTION_BOTTOM_MARGIN,
     GLYPH_OCCLUSION_CAP,
     SAFE_X0,
@@ -148,6 +151,43 @@ class CaptionPlanningTests(unittest.TestCase):
         layout = plan_captions([(0.0, 1.0)], alphas, fps=24)
         self.assertFalse(layout.feasible)
         self.assertGreater(layout.per_cue_overlap_px[0], 0)
+
+
+class FaceBandEquivalenceTests(unittest.TestCase):
+    """plan_captions stores head-band rows instead of full-canvas
+    face arrays (2026-10-29 OOM fix). The band helpers must reproduce
+    the full-canvas measurements EXACTLY - the planner's decisions
+    (and therefore F2's inputs) may not drift by a single pixel."""
+
+    def test_band_overlap_and_top_match_full_canvas(self):
+        rng = np.random.default_rng(7)
+        rects = [
+            (60, 1300, 980, 1600), (0, 0, 1080, 1920),
+            (60, 1150, 980, 1290), (300, 400, 700, 900),
+            (60, 1700, 980, 1920),
+        ]
+        for trial in range(6):
+            top = int(rng.integers(300, 1500))
+            bottom = min(1920, top + int(rng.integers(200, 700)))
+            a = speaker_alpha(top, bottom,
+                              x0=int(rng.integers(0, 400)),
+                              x1=int(rng.integers(600, 1080)))
+            if trial % 2:
+                a = a * rng.random(a.shape)  # feathered alpha values
+            full = face_pixels(a)
+            band = _face_band(a)
+            for r in rects:
+                self.assertEqual(
+                    _band_overlap_px(band, r),
+                    int(full[r[1]:r[3], r[0]:r[2]].sum()))
+            rows = np.nonzero(full.any(axis=1))[0]
+            self.assertEqual(_face_top(band),
+                             int(rows.min()) if rows.size else None)
+
+    def test_empty_frame_band_is_none(self):
+        self.assertIsNone(_face_band(np.zeros((1920, 1080))))
+        self.assertEqual(_band_overlap_px(None, (0, 0, 1080, 1920)), 0)
+        self.assertIsNone(_face_top(None))
 
 
 class CaptionRenderTests(unittest.TestCase):

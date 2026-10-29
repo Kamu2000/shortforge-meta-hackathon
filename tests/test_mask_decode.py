@@ -21,6 +21,7 @@ from meta_sam_parser._mask_codec import _encode_raster  # noqa: E402
 
 from spatial_director.mask_decode import (  # noqa: E402
     FrameMasks,
+    MaskDecodeError,
     ObjectMask,
     decode_object_canvas,
     decode_object_raster,
@@ -192,6 +193,34 @@ class SyntheticEndToEndTests(unittest.TestCase):
         # Speaker interior is solid; TV corner stays empty.
         self.assertGreater(alphas[1][17, 13], 0.8)
         self.assertLess(alphas[1][5, 32], 0.05)
+
+    def test_generator_guides_bit_identical_to_list(self):
+        # The 2026-10-29 OOM fix streams the finish pass: guides may
+        # arrive as a one-shot generator and canvases are decoded one
+        # at a time into the EMA. The math order is unchanged, so the
+        # output must be BIT-identical to the list form, not merely
+        # close.
+        frames = parse_sam_response(synthetic_payload())
+        canvases = primary_canvases(frames)
+        guides = [
+            0.15 + 0.7 * canvases[i].astype(float) for i in range(3)
+        ]
+        _, from_list = finished_alpha(frames, guides)
+        _, from_gen = finished_alpha(frames, (g for g in guides))
+        self.assertEqual(len(from_list), len(from_gen))
+        for a, b in zip(from_list, from_gen):
+            self.assertTrue(np.array_equal(a, b))
+
+    def test_iterator_guide_count_mismatch_still_raises(self):
+        frames = parse_sam_response(synthetic_payload())
+        canvases = primary_canvases(frames)
+        guides = [
+            0.15 + 0.7 * canvases[i].astype(float) for i in range(3)
+        ]
+        with self.assertRaises(MaskDecodeError):
+            finished_alpha(frames, iter(guides[:2]))
+        with self.assertRaises(MaskDecodeError):
+            finished_alpha(frames, iter(guides + guides[:1]))
 
 
 if __name__ == "__main__":

@@ -278,12 +278,25 @@ def finished_alpha(
 
     Returns (frame_indices, alphas): float alpha in [0, 1] per frame,
     temporally smoothed then matte-refined - the compositor's input.
+
+    Memory layout (2026-10-29 OOM fix): the finish runs as a single
+    streaming pass. Canvases are decoded one at a time and fed to the
+    EMA as a generator (the bool canvas list and its float64 copy
+    never materialise), and each smoothed frame is refined IN PLACE
+    in the output list as its guide arrives (``guides`` may be any
+    iterable, including a one-shot generator - it is consumed exactly
+    once). The previous implementation held the guides, the EMA input
+    copies, the EMA output and the refined output as four coexisting
+    float64 lists: at 660 frames of 640x360 that peaked at ~4.1 GB
+    and the kernel OOM-killed two production runs mid-render. The
+    math is untouched - the EMA is causal, refinement is per-frame,
+    and both consume the identical values in the identical order, so
+    the output is bit-identical to the materialised version.
     """
     ordered = sorted(frames, key=lambda f: f.index)
-    guide_list = list(guides)
-    if len(guide_list) != len(ordered):
+    if hasattr(guides, "__len__") and len(guides) != len(ordered):  # type: ignore[arg-type]
         raise MaskDecodeError(
-            f"guide count {len(guide_list)} != frame count {len(ordered)}; "
+            f"guide count {len(guides)} != frame count {len(ordered)}; "  # type: ignore[arg-type]
             "guides must align 1:1 with the sorted frames"
         )
     if primary_id is None:
@@ -299,19 +312,27 @@ def finished_alpha(
             break
     if frame_shape is None:
         raise MaskDecodeError("no objects in any frame; frame size unknown")
-    canvases: list[np.ndarray] = []
-    for frame in ordered:
-        canvas = None
-        for obj in frame.objects:
-            if obj.object_id == primary_id:
-                canvas = decode_object_canvas(obj)
-                break
-        if canvas is None:
-            canvas = np.zeros(frame_shape, dtype=bool)
-        canvases.append(canvas)
-    smoothed = ema_smooth([c.astype(np.float64) for c in canvases])
-    alphas = [
-        refine_matte(alpha, guide)
-        for alpha, guide in zip(smoothed, guide_list)
-    ]
+
+    def _canvases() -> Iterable[np.ndarray]:
+        for frame in ordered:
+            canvas = None
+            for obj in frame.objects:
+                if obj.object_id == primary_id:
+                    canvas = decode_object_canvas(obj)
+                    break
+            if canvas is None:
+                canvas = np.zeros(frame_shape, dtype=bool)
+            yield canvas
+
+    alphas = ema_smooth(_canvases())
+    n_guides = 0
+    for i, guide in enumerate(guides):
+        n_guides = i + 1
+        if i < len(alphas):
+            alphas[i] = refine_matte(alphas[i], guide)
+    if n_guides != len(ordered):
+        raise MaskDecodeError(
+            f"guide count {n_guides} != frame count {len(ordered)}; "
+            "guides must align 1:1 with the sorted frames"
+        )
     return [f.index for f in ordered], alphas

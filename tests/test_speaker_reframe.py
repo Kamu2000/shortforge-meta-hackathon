@@ -137,6 +137,28 @@ class ReframeApplyTests(unittest.TestCase):
         self.assertEqual(nf[0].shape[0], 4)
         self.assertEqual(na[0].shape[0], 4)
 
+    def test_crop_releases_original_buffers(self):
+        # The in-place transform must COPY crop slices: a view would
+        # pin the untransformed buffer (and its memory) for the rest
+        # of the run - the 2026-10-29 OOM fix depends on the release.
+        frame = np.arange(6 * 3 * 3, dtype=np.uint8).reshape(6, 3, 3)
+        alpha = np.ones((6, 3))
+        nf, na = apply_speaker_reframe([frame], [alpha], -2)
+        self.assertFalse(np.shares_memory(nf[0], frame))
+        self.assertFalse(np.shares_memory(na[0], alpha))
+        self.assertTrue(np.array_equal(nf[0], frame[:4]))
+        self.assertTrue(np.array_equal(na[0], alpha[:4]))
+
+    def test_pad_values_match_np_pad_reference(self):
+        frame = np.arange(2 * 3 * 3, dtype=np.uint8).reshape(2, 3, 3)
+        alpha = np.array([[0.0, 0.5, 1.0], [1.0, 0.5, 0.0]])
+        nf, na = apply_speaker_reframe(
+            [frame.copy()], [alpha.copy()], 3)
+        self.assertTrue(np.array_equal(
+            nf[0], np.pad(frame, ((0, 3), (0, 0), (0, 0)), mode="edge")))
+        self.assertTrue(np.array_equal(
+            na[0], np.pad(alpha, ((0, 3), (0, 0)), mode="constant")))
+
     def test_zero_pad_is_identity_objects(self):
         frame = np.zeros((6, 3, 3), dtype=np.uint8)
         alpha = np.ones((6, 3))

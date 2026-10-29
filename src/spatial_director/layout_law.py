@@ -441,6 +441,47 @@ def rect_overlap_px(region: np.ndarray, rect: tuple[int, int, int, int]) -> int:
     return int(region[y0:y1, x0:x1].sum())
 
 
+def _face_band(alpha: np.ndarray) -> tuple[int, np.ndarray] | None:
+    """The face region of one frame, cropped to its head-band rows.
+
+    ``face_pixels`` is zero outside the head band by construction,
+    so (band_top, band_rows) carries the identical pixel set at a
+    fraction of the memory. None when the frame has no speaker.
+    """
+    rows = head_band_rows(alpha)
+    if rows is None:
+        return None
+    top, bottom = rows
+    return top, alpha[top:bottom] > ALPHA_THRESH
+
+
+def _band_overlap_px(
+    band: tuple[int, np.ndarray] | None,
+    rect: tuple[int, int, int, int],
+) -> int:
+    """``rect_overlap_px(face_pixels(frame), rect)`` from the band."""
+    if band is None:
+        return 0
+    top, rows = band
+    x0, y0, x1, y1 = rect
+    lo = max(y0, top) - top
+    hi = min(y1, top + rows.shape[0]) - top
+    if hi <= lo:
+        return 0
+    return int(rows[lo:hi, x0:x1].sum())
+
+
+def _face_top(band: tuple[int, np.ndarray] | None) -> int | None:
+    """First canvas row containing a face pixel, or None."""
+    if band is None:
+        return None
+    top, rows = band
+    any_row = rows.any(axis=1)
+    if not any_row.any():
+        return None
+    return top + int(np.nonzero(any_row)[0].min())
+
+
 def plan_captions(
     cue_spans: Sequence[tuple[float, float]],
     alphas: Sequence[np.ndarray],
@@ -461,7 +502,13 @@ def plan_captions(
     measured overlap rather than the planner hiding it.
     """
     rect = initial_caption_rect(canvas, font_size=font_size)
-    faces = [face_pixels(a) for a in alphas]
+    # Face pixels live only inside the head band (``face_pixels``
+    # zeroes everything outside it), so store just the band rows:
+    # (top, bool rows) per frame. A full-canvas bool per frame cost
+    # ~1.36 GB at 660 frames - one of the allocations behind the
+    # 2026-10-29 OOM kills. The overlap counts and face tops computed
+    # from the bands are exactly the full-canvas values.
+    faces = [_face_band(a) for a in alphas]
     block_h = rect[3] - rect[1]
 
     def cue_frames(i: int) -> range:
@@ -473,7 +520,7 @@ def plan_captions(
     def overlaps(r: tuple[int, int, int, int]) -> dict[int, int]:
         return {
             i: max(
-                (rect_overlap_px(faces[f], r) for f in cue_frames(i)),
+                (_band_overlap_px(faces[f], r) for f in cue_frames(i)),
                 default=0,
             )
             for i in range(len(cue_spans))
@@ -490,10 +537,10 @@ def plan_captions(
         if not bad:
             break
         face_tops = [
-            int(np.nonzero(faces[f].any(axis=1))[0].min())
+            top
             for i in bad
             for f in cue_frames(i)
-            if faces[f].any()
+            if (top := _face_top(faces[f])) is not None
         ]
         if not face_tops:
             break
@@ -680,25 +727,36 @@ def apply_speaker_reframe(
     are sliced off the bottom. Frame/alpha alignment is preserved
     1:1, and ``to_canvas_alpha`` of a transformed alpha is exactly
     the geometry the compositor renders.
+
+    The transform is applied IN PLACE, slot by slot, and the same
+    list objects are returned: building fresh lists made the old and
+    padded sequences coexist (~2.6 GB at a 210-row pad on 660
+    frames), the largest single allocation spike left after the
+    finish-stack streaming fix (2026-10-29 OOM). Callers must treat
+    the inputs as consumed - both call sites (pipeline construction,
+    the REFRAME_SPEAKER executor) plan from the pre-transform
+    geometry first and use only the returned lists afterwards. The
+    per-frame values are exactly ``np.pad`` / slice-copy of the old
+    ones; crop slices are copied so the original buffers are
+    released rather than pinned by views.
     """
     if pad_bottom_px == 0:
         return frames, alphas
     if pad_bottom_px > 0:
         p = pad_bottom_px
-        new_frames = [
-            np.pad(f, ((0, p), (0, 0), (0, 0)), mode="edge")
-            for f in frames
-        ]
-        new_alphas = [
-            np.pad(a, ((0, p), (0, 0)), mode="constant")
-            for a in alphas
-        ]
-        return new_frames, new_alphas
+        for i, f in enumerate(frames):
+            frames[i] = np.pad(f, ((0, p), (0, 0), (0, 0)), mode="edge")
+        for i, a in enumerate(alphas):
+            alphas[i] = np.pad(a, ((0, p), (0, 0)), mode="constant")
+        return frames, alphas
     keep = frames[0].shape[0] + pad_bottom_px
     if keep <= 0:
         raise ValueError("reframe crop would remove the whole frame")
-    return ([f[:keep] for f in frames],
-            [a[:keep] for a in alphas])
+    for i, f in enumerate(frames):
+        frames[i] = f[:keep].copy()
+    for i, a in enumerate(alphas):
+        alphas[i] = a[:keep].copy()
+    return frames, alphas
 
 
 def caption_layer(

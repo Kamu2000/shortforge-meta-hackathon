@@ -259,7 +259,7 @@ class LazyCanvasAlphas:
     """
 
     def __init__(self, src_alphas: list[np.ndarray],
-                 canvas: tuple[int, int] = DEFAULT_CANVAS, cap: int = 64):
+                 canvas: tuple[int, int] = DEFAULT_CANVAS, cap: int = 32):
         self.src = src_alphas
         self.canvas = canvas
         self.cache: OrderedDict[int, np.ndarray] = OrderedDict()
@@ -547,9 +547,12 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             f"frames vs {n_parsed} SAM frames; truncating "
             f"{len(frames) - n_parsed} tail frame(s)")
         frames = frames[:n_parsed]
-    guides = [f.astype(np.float64).mean(axis=2) / 255.0 for f in frames]
+    # Guides stream into the finish pass as a generator: the list
+    # form cost a full float64 copy of the window (~1.2 GB at 660
+    # frames) that then coexisted with the finish stack's own lists
+    # (the 2026-10-29 OOM - see mask_decode.finished_alpha).
+    guides = (f.astype(np.float64).mean(axis=2) / 255.0 for f in frames)
     _indices, src_alphas = finished_alpha(parsed, guides)
-    del guides
 
     # Speaker reframing by construction (F3): place the FACE, not
     # just the text around it. The transform rewrites the
