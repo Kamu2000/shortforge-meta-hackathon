@@ -1,0 +1,2759 @@
+{
+  "generated": "2026-10-29",
+  "runner": "tools/proof_pack.py",
+  "judge": "FakeWonder (deterministic, no network, zero paid calls)",
+  "case_count": 26,
+  "fault_cases": 22,
+  "control_cases": 4,
+  "scores": {
+    "per_check": {
+      "F1": {
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "tn": 22,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "F2": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0,
+        "tn": 23,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "F3": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0,
+        "tn": 23,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "F4": {
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "tn": 22,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "F5": {
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "tn": 22,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "F6": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0,
+        "tn": 23,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "F7": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0,
+        "tn": 23,
+        "precision": 1.0,
+        "recall": 1.0
+      }
+    },
+    "agreement": {
+      "exact_set_matches": 26,
+      "total_cases": 26
+    },
+    "findings": []
+  },
+  "cases": [
+    {
+      "id": "control-baseline",
+      "target": "control",
+      "description": "The suite's all-pass fixture, unmodified.",
+      "coupling": "",
+      "expected_failed": [],
+      "wonder_can_summarize": true,
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "control-question-hook",
+      "target": "control",
+      "description": "Question hook ('WHY DID HE QUIT?') and faster speaker drift (6px/frame). F6 fires via the question pattern.",
+      "coupling": "",
+      "expected_failed": [],
+      "wonder_can_summarize": true,
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 4,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                584.5,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "WHY DID HE QUIT?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "WHY DID HE QUIT? [quit]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9802
+          }
+        }
+      }
+    },
+    {
+      "id": "control-slide-only-motion",
+      "target": "control",
+      "description": "Frozen speaker (no drift, no zoom) but the hook card slides at 200px/s: F7 must pass on the slide signal alone.",
+      "coupling": "",
+      "expected_failed": [],
+      "wonder_can_summarize": true,
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                539.5,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 200.0,
+            "mean_mask_iou_0_3s": 1.0
+          }
+        }
+      }
+    },
+    {
+      "id": "control-numeric-hook-breath-gap",
+      "target": "control",
+      "description": "Numeric hook ('3 SONGS HE NEVER SANG'), speaker top=900, hook lower (y=0.35), and a 0.2s breath gap in the audio at 0.8-1.0s (inside the 0.45s F5 allowance).",
+      "coupling": "",
+      "expected_failed": [],
+      "wonder_can_summarize": true,
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -20.46,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1062.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 900,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.2,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "3 SONGS HE NEVER SANG"
+              },
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "3 SONGS HE NEVER SANG [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f1-late-hook",
+      "target": "F1",
+      "description": "Hook window starts at 1.5s instead of frame 0: not present at frame 0 and not present by 1s. (F6 still sees the hook text - its window opens at 1.5s < 3s - so F6 passes.)",
+      "coupling": "",
+      "expected_failed": [
+        "F1"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F1"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": false,
+          "measured": {
+            "hook_present_at_frame_0": false,
+            "hook_present_by_1s": false,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f1-short-hook-text",
+      "target": "F1",
+      "description": "Hook text is a single content word ('STOP', 1 < 3 minimum). Captions still carry the F6 conflict word, isolating F1.",
+      "coupling": "",
+      "expected_failed": [
+        "F1"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F1"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": false,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 1,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f1-quiet-opening",
+      "target": "F1",
+      "description": "Speech present from 0s but uniformly quiet (-38 dBFS): the 0-2s RMS sits below the -32 dBFS floor while onset, gaps and coverage (F5's sub-conditions) all stay legal - F5 has no loudness sub-check by design.",
+      "coupling": "",
+      "expected_failed": [
+        "F1"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F1"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": false,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -38.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f2-hook-behind-speaker",
+      "target": "F2",
+      "description": "Speaker raised (top=420) so the layout-path hook at y=0.30 sits behind the speaker: glyph occlusion far above the 25% cap. Drift kept at 3px/frame so F7 still passes.",
+      "coupling": "First construction used the compositor-path hook ('THE BAND NEVER REHEARSES', layout_rendered=False): its ink is budgeted at 0.92 x canvas and centred on the canvas, so it genuinely exits the safe zone (measured 14px left, 52px right) and F3 CORRECTLY failed alongside F2 - a fixture error, not a verifier error (25/26 agreement on that run; disagreement recorded in BUILDLOG). Rebuilt on the layout path, whose ink is safe-width-clamped by construction, to isolate F2.",
+      "expected_failed": [
+        "F2"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F2"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": false,
+          "measured": {
+            "glyph_occlusion_mean": 0.7878,
+            "glyph_occlusion_max": 0.7948,
+            "glyph_occlusion_alpha_weighted_mean": 0.7878,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                659.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 420,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f2-caption-over-face",
+      "target": "F2",
+      "description": "Caption block moved up onto the face (rect y 1000-1140, across the head band): caption-face overlap > 0 while the rect stays inside F3's lower-zone bounds (top >= 288, bottom <= 1600), isolating the failure to F2.",
+      "coupling": "",
+      "expected_failed": [
+        "F2"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F2"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": false,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 84000
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f2-partial-occlusion",
+      "target": "F2",
+      "description": "Layout hook centred at y=0.52 so the speaker (top=1000) covers roughly the lower half of the glyphs: occlusion above the 25% cap but far from total - the mid-range the cap exists for.",
+      "coupling": "",
+      "expected_failed": [
+        "F2"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F2"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": false,
+          "measured": {
+            "glyph_occlusion_mean": 0.404,
+            "glyph_occlusion_max": 0.4074,
+            "glyph_occlusion_alpha_weighted_mean": 0.404,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f3-face-centroid-low",
+      "target": "F3",
+      "description": "Speaker sunk (top=1500): the median face centroid lands below the central band's 1440px bottom edge. Captions carry no block rect (rect=None) so the low face cannot trip F2's caption-overlap sub-check - documented input state, rect is optional in VerifyInputs.",
+      "coupling": "",
+      "expected_failed": [
+        "F3"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F3"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": false,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1566.5
+              ]
+            },
+            "face_centroid_in_central_band": false
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1500,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f3-hook-above-band",
+      "target": "F3",
+      "description": "Hook centred at y=0.10: the glyph bbox top exits the central band's 288px top edge.",
+      "coupling": "",
+      "expected_failed": [
+        "F3"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F3"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": false,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 215,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f3-caption-below-zone",
+      "target": "F3",
+      "description": "Caption block pushed down (rect y 1560-1760): its bottom edge passes the 1600px lower-zone limit by 160px. The face (rows 1000-1294) never enters the block, so F2 stays clean.",
+      "coupling": "",
+      "expected_failed": [
+        "F3"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F3"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": false,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 160
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f4-head-margin-one-frame",
+      "target": "F4",
+      "description": "One frame (index 7) has the speaker at top=40: the worst-frame head-top margin is 40px < 90px while every frame stays contained and the MEDIAN centroid (F3) is unmoved. That frame's occlusion contribution is 1/12 of the hook window, under F2's cap.",
+      "coupling": "",
+      "expected_failed": [
+        "F4"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F4"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0656,
+            "glyph_occlusion_max": 0.787,
+            "glyph_occlusion_alpha_weighted_mean": 0.0656,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": false,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 40,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.8984
+          }
+        }
+      }
+    },
+    {
+      "id": "f4-speaker-clipped-right",
+      "target": "F4",
+      "description": "Speaker block spans x 480-1080+ (width 600 from x0=480): the face touches the right canvas edge on every frame, so the contained fraction is 0. Head-top margin (1000) and median centroid (~x 790, in band) stay legal.",
+      "coupling": "",
+      "expected_failed": [
+        "F4"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F4"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                790.8,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": false,
+          "measured": {
+            "frames_contained_frac": 0.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0151,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9949
+          }
+        }
+      }
+    },
+    {
+      "id": "f4-speaker-absent-half",
+      "target": "F4",
+      "description": "Speaker absent for the second half (frames 8-15 blank): contained frames are 8 of 16 total (the denominator is all frames by design), so the contained fraction is 0.50 < 0.98 while present-frame margins stay legal.",
+      "coupling": "",
+      "expected_failed": [
+        "F4"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F4"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                550.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": false,
+          "measured": {
+            "frames_contained_frac": 0.5,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 8,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9028
+          }
+        }
+      }
+    },
+    {
+      "id": "f5-dead-air-gap",
+      "target": "F5",
+      "description": "A 1.5s silence gap inside the speech span (speech 0-1s and 2.5-4s): max gap 1.5s > 0.45s. The 0-2s RMS stays above F1's floor (half the window is full-level speech), isolating the failure to F5.",
+      "coupling": "",
+      "expected_failed": [
+        "F5"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F5"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -23.01,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": false,
+          "measured": {
+            "max_silence_gap_s": 1.5,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f5-judge-cannot-summarize",
+      "target": "F5",
+      "description": "Fake Wonder judge returns can_summarize=False: the muted hook cannot be comprehended, F5's judge sub-check fails. Every deterministic sub-condition stays legal.",
+      "coupling": "",
+      "expected_failed": [
+        "F5"
+      ],
+      "wonder_can_summarize": false,
+      "actual_failed": [
+        "F5"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": false,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": false,
+            "wonder_summary": ""
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f5-caption-coverage-low",
+      "target": "F5",
+      "description": "Only one 1s caption cue over a 4s speech span: coverage 0.25 < 0.50 minimum. The cue carries the F6 conflict word and sits clear of the face, isolating F5.",
+      "coupling": "",
+      "expected_failed": [
+        "F5"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F5"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": false,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.25,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f5-late-onset-coupled",
+      "target": "F5",
+      "description": "Speech does not start until 2.5s (deadline 2.0s).",
+      "coupling": "Speech onset is a sub-condition of BOTH F1 and F5 in the shipped design, so a late onset cannot fail one without the other (F1 also loses its 0-2s RMS sub-check: the window is silent). The label names both; isolation is impossible by design, not by fixture weakness.",
+      "expected_failed": [
+        "F1",
+        "F5"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F1",
+        "F5"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": false,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -80.0,
+            "first_speech_onset_s": 2.5
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": false,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 2.5,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f6-no-open-loop",
+      "target": "F6",
+      "description": "Plain hook and plain early captions: no conflict word, number, or question anywhere in the first 3s.",
+      "coupling": "",
+      "expected_failed": [
+        "F6"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F6"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": false,
+          "measured": {
+            "patterns_fired": []
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f6-loop-after-3s",
+      "target": "F6",
+      "description": "The conflict word exists but only in a caption starting at exactly 3.0s ('It never gets old.', 3.0-4.0s) - the open loop arrives too late. Caption coverage stays 0.75 so F5 is unaffected.",
+      "coupling": "",
+      "expected_failed": [
+        "F6"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F6"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.75,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": false,
+          "measured": {
+            "patterns_fired": []
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f6-lexicon-near-miss",
+      "target": "F6",
+      "description": "Hook 'THE BAND QUITS AT MIDNIGHT': 'quits' reads as a conflict word to a human but is NOT in the shipped fixed lexicon ('quit' is). Labelled FAIL per the shipped semantics - a boundary case documenting lexicon exactness, recorded as a design observation.",
+      "coupling": "",
+      "expected_failed": [
+        "F6"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F6"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": false,
+          "measured": {
+            "patterns_fired": []
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "f7-frozen-speaker",
+      "target": "F7",
+      "description": "Speaker perfectly still (no drift): mean mask IoU over 0-3s is 1.0, no zoom, no slide - a frozen opening.",
+      "coupling": "",
+      "expected_failed": [
+        "F7"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F7"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                539.5,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": false,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 1.0
+          }
+        }
+      }
+    },
+    {
+      "id": "f7-absent-opening-coupled",
+      "target": "F7",
+      "description": "No speaker at all in the first 3s (frames 0-11 blank, speaker enters at frame 12).",
+      "coupling": "An absent speaker is simultaneously not contained (F4's contained fraction counts absent frames in its denominator) and a frozen opening (blank-vs-blank IoU is 1.0). The two failures are the same physical fault seen by two checks; isolation is impossible by design.",
+      "expected_failed": [
+        "F4",
+        "F7"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F4",
+        "F7"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                580.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": false,
+          "measured": {
+            "frames_contained_frac": 0.25,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 4,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": false,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 1.0
+          }
+        }
+      }
+    },
+    {
+      "id": "f7-subthreshold-motion",
+      "target": "F7",
+      "description": "The speaker moves exactly once - a single 1px shift at frame 6. Mean IoU over the 11 frame pairs in 0-3s is ~0.9997, at/above the 0.999 frozen ceiling: real motion, below the designed detection floor.",
+      "coupling": "",
+      "expected_failed": [
+        "F7"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F7"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                540.5,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": false,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9997
+          }
+        }
+      }
+    }
+  ]
+}

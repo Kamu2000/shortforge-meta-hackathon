@@ -140,3 +140,25 @@ Dated record of the work in this repository, written as it happens during the ev
 - **Wonder:** judged all three finals ($0.0153 / $0.0171 / $0.0194); the new empty-response retry was NOT exercised this run (zero `-empty-attempt` ledger entries) - it stands on its unit tests, not a live trigger.
 - **Money/time:** run cost **$0.5070** (inside the $0.50-0.90 design band, at its floor); cumulative ledger **$3.2361 of the $145 cap**. Door-to-door 3607s (~20 min/Short - unchanged from run 1; the render+verify cycle remains the Oct 30 benchmark target).
 - The Oct 29 21:00 pipeline gate's core criterion - 3 real videos end-to-end with PASSING receipts - is met. Remaining gate components: outreach wave 1 (packet ready, awaiting founder target picks) and the claims register.
+
+## 2026-10-29 - verifier proof pack: 26 labelled fault injections, per-rule precision/recall measured (Matrix C, pulled forward from Oct 30)
+
+- **Harness:** `tools/proof_pack.py` (standalone runner, NOT part of the unit suite) builds 26 labelled cases - 22 fault injections + 4 unmodified controls - runs `verifier.verify` on each with a FakeWonder judge (deterministic, no network, no keys, **zero paid calls**), and scores per-check outcomes against the labels. Full machine-readable report: `tools/proof_pack_report.json`. Scoring logic unit-tested separately (`tests/test_proof_pack.py`, +6 tests; suite **156/156**).
+- **Case design:** >=3 injections per check F1-F7, each built to fail ONLY its target check at the input level (hook window/text, audio energy profile, speaker alpha geometry, caption rect/cues, fake-judge verdict). Every check's distinct sub-conditions are exercised: F1 late hook / 1-word hook / uniformly quiet speech (-38 dBFS vs the -32 floor); F2 glyph occlusion 0.79 and 0.40 (cap 0.25) / caption block on the face; F3 centroid below band / hook above band / caption below zone; F4 one-frame 40px head margin / right-edge clipping (contained 0.0) / speaker absent half the frames (contained 0.50); F5 1.5s dead-air gap / judge cannot summarise / caption coverage 0.25; F6 no pattern / pattern only at >=3.0s / lexicon near-miss; F7 frozen / sub-threshold motion (one 1px shift, mean IoU 0.9997 vs the 0.999 ceiling).
+- **Result - exact label/verdict set agreement 26/26; no verifier-vs-label disagreements on the final case set:**
+
+  | Check | TP | FP | FN | TN | Precision | Recall |
+  |---|---|---|---|---|---|---|
+  | F1 | 4 | 0 | 0 | 22 | 1.000 | 1.000 |
+  | F2 | 3 | 0 | 0 | 23 | 1.000 | 1.000 |
+  | F3 | 3 | 0 | 0 | 23 | 1.000 | 1.000 |
+  | F4 | 4 | 0 | 0 | 22 | 1.000 | 1.000 |
+  | F5 | 4 | 0 | 0 | 22 | 1.000 | 1.000 |
+  | F6 | 3 | 0 | 0 | 23 | 1.000 | 1.000 |
+  | F7 | 3 | 0 | 0 | 23 | 1.000 | 1.000 |
+
+  Scope honesty: n=26 synthetic cases with labels written against the shipped design - this measures verifier/label consistency and fault-detection on injected faults, not accuracy on real-world renders. The blind pass on real renders (Kamlesh, Oct 30) is the complementary half of Matrix C.
+- **The one disagreement along the way was a fixture error, recorded not hidden:** the first construction of `f2-hook-behind-speaker` used the compositor-path hook (ink budgeted at 0.92 x canvas, canvas-centred), whose glyphs genuinely exit the safe zone (measured 14px left / 52px right) - F3 CORRECTLY failed alongside F2 (25/26 on that run). The case was rebuilt on the layout path (safe-width-clamped by construction; occlusion 0.7878) to isolate F2, and the correction is documented on the case itself. The verifier was right; the fixture was wrong.
+- **Documented couplings (isolation impossible by design, labelled with both failures):** speech onset is a sub-condition of both F1 and F5 (`f5-late-onset-coupled`, expected {F1, F5}); an absent opening speaker is simultaneously uncontained and a frozen opening (`f7-absent-opening-coupled`, expected {F4, F7}).
+- **Design observation (not a bug, not tuned):** `f6-lexicon-near-miss` - "QUITS" reads as conflict to a human but is not in F6's fixed lexicon ("quit" is); the verifier fails the case exactly as the shipped semantics specify. If the lexicon ever grows, it grows as a design change with its own receipt trail, not as a proof-pack adjustment.
+- No thresholds changed, no check semantics changed, `verifier.py` untouched, ledger untouched ($3.2361). This closes the offline half of claims-register PENDING #19; the number may be cited as "26/26 labelled synthetic cases, per-rule precision/recall 1.000 at n=26" with the scope note attached.
