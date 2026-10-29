@@ -49,7 +49,7 @@ from typing import Any, Iterable
 import numpy as np
 from meta_sam_parser import SegmentationMask, decode_mask_to_raster
 
-from .matte_finish import refine_matte
+from .matte_finish import largest_connected_component, refine_matte
 from .temporal_smooth import ema_smooth
 
 # <Nf> frame markers split the output text into per-frame chunks.
@@ -322,6 +322,14 @@ def finished_alpha(
                     break
             if canvas is None:
                 canvas = np.zeros(frame_shape, dtype=bool)
+            else:
+                # Drop detached islands BEFORE the temporal EMA:
+                # smoothed, a one-frame island would bleed into
+                # neighbouring frames' mattes; unsmoothed it is one
+                # frame's noise. The speaker is one connected mass;
+                # anything not touching it is not the speaker.
+                # (Refinement block, 2026-10-29 - see matte_finish.)
+                canvas = largest_connected_component(canvas)
             yield canvas
 
     alphas = ema_smooth(_canvases())

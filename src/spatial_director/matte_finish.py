@@ -14,7 +14,33 @@ order the design specifies:
 3. Feather: a small blur softens the final alpha transition so the
    composite has no hard digital edge.
 
-Pure NumPy (box filters via cumulative sums) - no model calls, no
+Refinement pass (2026-10-29, Kamlesh's QA of the gate outputs):
+the shipped defaults ghosted hook letters through the cap brim -
+the feathered edge carried too much alpha outside the true
+silhouette. Measured on a cached Holmes frame (short-1, frame 30;
+full record in the BUILDLOG), the retuned defaults below cut the
+alpha mass outside the binary mask from 569 to 44 (13x) and halved
+the partial-alpha halo, at a core-alpha cost of ~0.01:
+
+- choke 2 -> 3px (eats the bright fringe SAM leaves outside the
+  subject, worst at the cap brim);
+- feather radius 2 -> 1 (the double box-blur pass at r=2 spread
+  the transition over ~9px; r=1 keeps a soft edge over ~5px);
+- guided-filter radius 8 -> 4 and eps 1e-3 -> 1e-4 (a smaller,
+  stricter filter follows hair-scale edges instead of smoothing
+  across them).
+
+This module also owns ``largest_connected_component``: SAM object
+rasters can carry detached islands (a background object the model
+grouped with the speaker, mask noise), which the finish would
+otherwise float in the foreground. Keeping only the largest
+4-connected component drops the islands; what is ATTACHED to the
+silhouette (the microphone against Holmes's chest) is one
+component with the body and no classical filter can separate it -
+declared, not hidden.
+
+Pure NumPy (box filters via cumulative sums; component labelling
+via scipy.ndimage, a declared dependency) - no model calls, no
 provider spend; this is signal processing on masks SAM produced.
 Operates on 2D float arrays; masks come in as bool/float in [0, 1]
 and leave as float alpha in [0, 1].
@@ -26,11 +52,11 @@ from __future__ import annotations
 
 import numpy as np
 
-DEFAULT_CHOKE_PX = 2
+DEFAULT_CHOKE_PX = 3
 HIGH_CONTRAST_CHOKE_PX = 4
-DEFAULT_FEATHER_R = 2
-DEFAULT_GF_RADIUS = 8
-DEFAULT_GF_EPS = 1e-3
+DEFAULT_FEATHER_R = 1
+DEFAULT_GF_RADIUS = 4
+DEFAULT_GF_EPS = 1e-4
 
 
 def _box_blur(x: np.ndarray, r: int) -> np.ndarray:
@@ -45,6 +71,32 @@ def _box_blur(x: np.ndarray, r: int) -> np.ndarray:
         c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]
     ) / float(k * k)
     return out
+
+
+def largest_connected_component(mask: np.ndarray) -> np.ndarray:
+    """Keep only the largest 4-connected component of a bool mask.
+
+    Detached islands - background objects SAM grouped into the
+    speaker's raster, one-frame mask noise - are dropped; the
+    speaker's silhouette is a single connected mass in every clip
+    the spike measured. An empty mask returns empty. Labelling is
+    scipy.ndimage (classical CV, no model); 4-connectivity so a
+    diagonal pixel-touch does not marry an island to the body.
+    """
+    m = np.asarray(mask, dtype=bool)
+    if m.ndim != 2:
+        raise ValueError(f"mask must be 2D, got shape {m.shape}")
+    if not m.any():
+        return m.copy()
+    from scipy import ndimage
+
+    structure = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
+    labels, n = ndimage.label(m, structure=structure)
+    if n <= 1:
+        return m.copy()
+    sizes = ndimage.sum_labels(m, labels, index=np.arange(1, n + 1))
+    largest = int(np.argmax(sizes)) + 1
+    return labels == largest
 
 
 def guided_filter(

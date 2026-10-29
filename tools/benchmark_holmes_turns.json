@@ -1,0 +1,527 @@
+{
+  "source": "/home/hatch/workspace/meta-hackathon/spike-footage/holmes/source.mp4",
+  "created": "2026-10-29",
+  "note": "Holmes full-source Voice Transcribe turns, generated once for Matrix B so both providers sweep identical input. VT turn segmentation is not bit-deterministic; this frozen file is the benchmark's fixed input.",
+  "turns": [
+    {
+      "start_s": 3.82,
+      "end_s": 6.86,
+      "text": "Hey Dak, you ever heard of Joe Boo?"
+    },
+    {
+      "start_s": 7.18,
+      "end_s": 8.14,
+      "text": "James"
+    },
+    {
+      "start_s": 8.14,
+      "end_s": 11.42,
+      "text": "You know who it is?"
+    },
+    {
+      "start_s": 15.1,
+      "end_s": 20.7,
+      "text": "I'm doing great, man. Congratulations on Beautiful thing."
+    },
+    {
+      "start_s": 20.7,
+      "end_s": 25.98,
+      "text": "I have a baby look up at me"
+    },
+    {
+      "start_s": 27.82,
+      "end_s": 30.78,
+      "text": "Dak, there's your buddy"
+    },
+    {
+      "start_s": 31.82,
+      "end_s": 295.34,
+      "text": "well good morning good people Mark Holmes here of course with my buddy cowboy Joe Boo and as always I want to say thank you you all for watching commenting subscribing and being part of the Joe Boo Sports Report without you guys as well as you ladies you know that this literally does not work oh my goodness we are do you guys realize where we are right now we are literally literally about 32 hours away from the final roster cuts being made the Dallas Cowboys have some tough calls to make into getting this roster down to 53 men you know we've got some it's literally time to shit or or get off the toilet or as Trey Lance would say um flush the turd basically after that last performance um something that was interesting to me is um I am a positive guy I always try and look for the positive thing in everything and it's almost comical to me because one of the things that I've seen recently in the last 24 hours is they've said that Trey Lance had more yards and completions than any other quarterback this preseason and that may be because he played all but three series series in preseason most teams will play multiple quarterbacks Dak didn't play and again again you didn't have Cooper Rush play at all last week and he only played a series um the game before that and I think two series before that so you're not exactly going to see you know that he shouldn't be the number one getter there um the the Cowboys of course say that you know Trey Lance had no bearing on Dak Prescott's contract negotiations or anything like that so yeah so yeah you can best believe they didn't have any bearing on the they certainly don't right now now because he was just bad I'm sorry you could try and sugarcoat it all you want everybody who hates Dak Prescott is trying to find the silver lining on why he might end up being better maybe one day he will be maybe one day but we're dealing with with right now and to start the season out I need Dak Prescott out out there the other part of the equation here and we're going to start seeing seeing cuts are going to start flying through and as soon as they start flying through we'll be doing the best to go ahead and start letting you know who's getting cut and so on on I've got some work I've gotta do gotta do on a roof I've gotta actually get a lift to get up on there to fix the siding up up real high so we'll do the best we can to keep you informed because that's what we do here at Jobu Sports Report the good news is is I guess is that CeeDee Lamb is still busting ass let's take a look at his latest workout video here he's out he's on the beach running in the sand he's cutting cutting being filmed boom catching the ball boom here he goes supposedly supposedly CeeDee Lamb is in the best shape of his life he's ready to roll he's waiting for Jerry Jones to get this thing done now I don't know if this is correct or not I I really just don't know um but what I heard I actually want to this morning it's all about CD it's all about CeeDee Lamb and getting this thing done I don't know if we should believe what we hear because we've heard so many different things from get up and the crew and stuff there you know Dan follow and all this stuff and pretty Ricky and everything else if what they're saying is right it's criminal that from what it sounds like they're literally saying that CD and the Cowboys are only a million dollars apart per year a million dollars a year What burns you up is you know this whole sense of urgency now this last two weeks for the Cowboys to get Dak and CD CD done when you had six six months to do it."
+    },
+    {
+      "start_s": 296.62,
+      "end_s": 305.66,
+      "text": "deadlines make deals get done but they don't get done necessarily good but listen to this this morning because this is interesting we'll discuss it as we go through"
+    },
+    {
+      "start_s": 305.74,
+      "end_s": 305.82,
+      "text": "the"
+    },
+    {
+      "start_s": 305.82,
+      "end_s": 307.34,
+      "text": "the start of the season here comes number two"
+    },
+    {
+      "start_s": 307.42,
+      "end_s": 312.42,
+      "text": "two"
+    },
+    {
+      "start_s": 307.42,
+      "end_s": 308.3,
+      "text": "okay number two"
+    },
+    {
+      "start_s": 308.3,
+      "end_s": 322.86,
+      "text": "Dallas the big question is whether whether or not CD lamb will be with the Cowboys for their opening game on the road week one against the Browns CD lamb entering the last year of his deal he still hasn't reported time is tick tick ticking away"
+    },
+    {
+      "start_s": 323.02,
+      "end_s": 323.9,
+      "text": "you ain't lying about that one"
+    },
+    {
+      "start_s": 323.9,
+      "end_s": 329.66,
+      "text": "to Jerry Jones Jones choice of response when asked for an update over the weekend"
+    },
+    {
+      "start_s": 329.82,
+      "end_s": 331.02,
+      "text": "yeah"
+    },
+    {
+      "start_s": 331.34,
+      "end_s": 335.34,
+      "text": "without I don't have any updates but we are near the season starting"
+    },
+    {
+      "start_s": 335.42,
+      "end_s": 337.5,
+      "text": "have you seen him or his representation"
+    },
+    {
+      "start_s": 337.5,
+      "end_s": 340.86,
+      "text": "listen I've got a lot of things to talk about I'm only talking about who's here"
+    },
+    {
+      "start_s": 341.1,
+      "end_s": 342.46,
+      "text": "only talking about who's here"
+    },
+    {
+      "start_s": 342.62,
+      "end_s": 355.98,
+      "text": "okay so look this has stopped being cute right I mean a month ago I said oh maybe we've got a story in Dallas I'll try and make make it into something here but obviously obviously they'll get this thing done and Shefty we are less than two weeks away from them being on the field"
+    },
+    {
+      "start_s": 355.98,
+      "end_s": 356.94,
+      "text": "this is ridiculous"
+    },
+    {
+      "start_s": 356.94,
+      "end_s": 357.34,
+      "text": "season game"
+    },
+    {
+      "start_s": 357.5,
+      "end_s": 358.38,
+      "text": "13 days"
+    },
+    {
+      "start_s": 358.38,
+      "end_s": 364.3,
+      "text": "against what might have been the best defense in the NFL NFL last year and he's still not signed and Jerry doesn't sound like it's close"
+    },
+    {
+      "start_s": 364.38,
+      "end_s": 366.38,
+      "text": "August 26th today is"
+    },
+    {
+      "start_s": 366.38,
+      "end_s": 366.78,
+      "text": "Right"
+    },
+    {
+      "start_s": 366.78,
+      "end_s": 373.18,
+      "text": "August 26th the two sides are roughly roughly roughly I don't know the specifics about a million dollars"
+    },
+    {
+      "start_s": 373.18,
+      "end_s": 373.98,
+      "text": "a million dollars apart"
+    },
+    {
+      "start_s": 374.22,
+      "end_s": 375.18,
+      "text": "how"
+    },
+    {
+      "start_s": 375.34,
+      "end_s": 376.54,
+      "text": "he doesn't know the specifics though"
+    },
+    {
+      "start_s": 376.54,
+      "end_s": 413.98,
+      "text": "bridge that difference to get one of the most valuable players in football back into the fold less than two weeks before the start of the regular season and Dallas has to take on the Cleveland Browns we're talking about a million dollars if you're the Dallas Cowboys puff up the last few years inflate the average salary get the guy in camp and get it done they're not that far apart like I would have thought this deal would have been done weeks ago weeks ago and here we are August 26 it's still not done most people believe it's going to get done but it's hard to think that they have allowed it to linger"
+    },
+    {
+      "start_s": 413.98,
+      "end_s": 415.66,
+      "text": "one million dollars"
+    },
+    {
+      "start_s": 415.66,
+      "end_s": 429.34,
+      "text": "to this spot to this time and and again assuming it does get done because they're only roughly a million dollars apart then you gotta worry worry about him getting back in getting up to conditioning level soft tissue injury like what are we doing"
+    },
+    {
+      "start_s": 429.42,
+      "end_s": 454.22,
+      "text": "listen listen that that and I've been bringing this up for weeks and you lived it right through the Darrell Revis thing and and it's just the example that I bring up all the the time but when these players hold out until right before the season starts especially the skill position guys they want to be out there because they they want to be good teammates they want to earn the money when they get the deal they come in there and then they grab a hamstring the first second game and the entire season winds up being defined by that"
+    },
+    {
+      "start_s": 454.46,
+      "end_s": 462.54,
+      "text": "saw it firsthand saw it with Darrell Revis Darrell Revis held out got his money glad for it you know as a former player and then we played New England Patriots"
+    },
+    {
+      "start_s": 462.94,
+      "end_s": 463.42,
+      "text": "Here's the play"
+    },
+    {
+      "start_s": 463.42,
+      "end_s": 465.02,
+      "text": "there it is right there bam"
+    },
+    {
+      "start_s": 465.02,
+      "end_s": 466.46,
+      "text": "boom tore that hamstring"
+    },
+    {
+      "start_s": 466.46,
+      "end_s": 468.46,
+      "text": "was you know it just"
+    },
+    {
+      "start_s": 468.54,
+      "end_s": 478.38,
+      "text": "the season is defined by that yeah then he missed two weeks now now you're going to try and bring him back then oh he's still not now it's another three weeks it winds up being the entire season that you're dealing with"
+    },
+    {
+      "start_s": 478.46,
+      "end_s": 484.46,
+      "text": "that's that's that's usually the narrative because we always talk about you know when you miss time time in training camp"
+    },
+    {
+      "start_s": 484.46,
+      "end_s": 489.46,
+      "text": "Mm-hmm."
+    },
+    {
+      "start_s": 484.62,
+      "end_s": 487.18,
+      "text": "you're not in football shape. There's a difference between"
+    },
+    {
+      "start_s": 487.18,
+      "end_s": 492.18,
+      "text": "you're not"
+    },
+    {
+      "start_s": 487.18,
+      "end_s": 505.34,
+      "text": "running around and conditioning and running around with pads on you know doing all the things that it that you need to do you know on the football field so it should be a this should be a fair warning to all parties involved like boy you are jeopardizing your season by not getting having this having this guy in the training camp"
+    },
+    {
+      "start_s": 505.5,
+      "end_s": 506.86,
+      "text": "there's no lie on that one"
+    },
+    {
+      "start_s": 506.86,
+      "end_s": 515.5,
+      "text": "Lewis Lewis Riddick on this show described it as sabotaging their own season the way way this thing is playing out. Dan Orlovsky what are your thoughts?"
+    },
+    {
+      "start_s": 515.66,
+      "end_s": 522.54,
+      "text": "So the Cowboys have put their whole season the future of Dak Dak Prescott as a Cowboy"
+    },
+    {
+      "start_s": 522.54,
+      "end_s": 523.1,
+      "text": "Mm-hmm"
+    },
+    {
+      "start_s": 523.34,
+      "end_s": 525.58,
+      "text": "and the future of Mike McCarthy as their head coach"
+    },
+    {
+      "start_s": 525.58,
+      "end_s": 526.22,
+      "text": "Mm-hmm"
+    },
+    {
+      "start_s": 526.3,
+      "end_s": 528.86,
+      "text": "at legit risk over"
+    },
+    {
+      "start_s": 528.86,
+      "end_s": 529.42,
+      "text": "sabotaging themselves"
+    },
+    {
+      "start_s": 529.42,
+      "end_s": 534.3,
+      "text": "roughly I mean I you know we're not we're not talking about that much that's"
+    },
+    {
+      "start_s": 534.3,
+      "end_s": 539.58,
+      "text": "one of the dumbest things I have heard this whole offseason. If that's the case Shefty somewhere in that world"
+    },
+    {
+      "start_s": 540.14,
+      "end_s": 541.42,
+      "text": "And we have no reason to doubt."
+    },
+    {
+      "start_s": 541.42,
+      "end_s": 542.46,
+      "text": "Dan, I'm close."
+    },
+    {
+      "start_s": 543.02,
+      "end_s": 545.66,
+      "text": "That is absolutely ridiculous."
+    },
+    {
+      "start_s": 545.9,
+      "end_s": 546.94,
+      "text": "How much was worth?"
+    },
+    {
+      "start_s": 547.26,
+      "end_s": 548.62,
+      "text": "Organization billion"
+    },
+    {
+      "start_s": 548.62,
+      "end_s": 549.26,
+      "text": "billion dollars."
+    },
+    {
+      "start_s": 549.34,
+      "end_s": 549.66,
+      "text": "Okay."
+    },
+    {
+      "start_s": 549.74,
+      "end_s": 551.5,
+      "text": "Yeah. Yeah. Go ahead, Dan. Sorry."
+    },
+    {
+      "start_s": 551.58,
+      "end_s": 560.38,
+      "text": "They've put all of that at risk over a million bucks. This isn't over three, four, five million dollars a year. This isn't over"
+    },
+    {
+      "start_s": 560.54,
+      "end_s": 562.78,
+      "text": "one million dollars allegedly"
+    },
+    {
+      "start_s": 562.78,
+      "end_s": 567.9,
+      "text": "of the contract CD wants three they want five or something roughly a million dollars"
+    },
+    {
+      "start_s": 567.98,
+      "end_s": 569.82,
+      "text": "you know the Cowboys will give in"
+    },
+    {
+      "start_s": 569.82,
+      "end_s": 584.22,
+      "text": "your season at risk you're putting the the future of having Dak Dak as your quarterback at risk and then you're putting the future of having Michael Michael McCarthy as the head coach at risk over that that's one of of the dumbest things this offseason"
+    },
+    {
+      "start_s": 584.38,
+      "end_s": 596.3,
+      "text": "It's very difficult to figure out when you consider, and I almost mean this literally, that Jerry Jones probably could could find a million dollars in the cushions of his couch. And I say that, you know, only mostly jokingly, but to D's point,"
+    },
+    {
+      "start_s": 596.3,
+      "end_s": 596.46,
+      "text": "He probably could."
+    },
+    {
+      "start_s": 596.46,
+      "end_s": 608.86,
+      "text": "the franchise is worth $10 billion. The season has absolutely everything in the world riding on it. They use the term all in, and I I finally figured out that what Jerry meant by by that was he's putting everyone on notice. It's now or never."
+    },
+    {
+      "start_s": 608.86,
+      "end_s": 609.82,
+      "text": "And,"
+    },
+    {
+      "start_s": 609.82,
+      "end_s": 611.5,
+      "text": "and I'm going to to handicap you even more."
+    },
+    {
+      "start_s": 611.5,
+      "end_s": 616.14,
+      "text": "one to get done of the deals that they needed to get done. I I really do find this impossible to understand."
+    },
+    {
+      "start_s": 616.14,
+      "end_s": 617.1,
+      "text": "This is insane."
+    },
+    {
+      "start_s": 617.1,
+      "end_s": 622.3,
+      "text": "Justin Jefferson is at 35 million dollars a year so okay"
+    },
+    {
+      "start_s": 622.62,
+      "end_s": 623.9,
+      "text": "Just give him that contract."
+    },
+    {
+      "start_s": 623.9,
+      "end_s": 655.42,
+      "text": "isn't worth what Justin Jefferson is. He's a notch below. Okay what is it so is it 34 is it 33 is it between those two numbers is it 33 and a half it's not that hard to get done. My understanding is there's there's not an issue with the years in the deal I think in the end ultimately it's probably going to be just like the Jefferson deal Jefferson was four years plus one that was left five years in total one and four and I would think that that'll be the case that's not not the issue the issue is over the value of the deal and the value should not be hard to figure out and even if they"
+    },
+    {
+      "start_s": 655.42,
+      "end_s": 660.42,
+      "text": "This is crazy."
+    },
+    {
+      "start_s": 655.42,
+      "end_s": 666.7,
+      "text": "can't figure it out just sit down at a table and don't get up until that deal is done and this player is back back and he's getting ready for the start of the of the regular season."
+    },
+    {
+      "start_s": 666.7,
+      "end_s": 693.02,
+      "text": "Look if if I was his agent I would be asking for every penny that Justin Jefferson got because whether I think or you think think or you think Justin Jefferson might be a little bit better CD Lamb has been just as productive he is just as important he's on a team that desperately needs him he is part of the future of that franchise regardless of whether the quarterback is there for the next five years or not the building blocks of that team going forward are going to be CD Lamb and Micah Parsons no matter what you're going to have to get Parsons deal done next year"
+    },
+    {
+      "start_s": 693.02,
+      "end_s": 693.1,
+      "text": "Yes."
+    },
+    {
+      "start_s": 693.18,
+      "end_s": 706.14,
+      "text": "so let me let me reframe this very quickly I get you and and Dan in very quickly on this if they don't have him What are they? If if they go to week one against against Cleveland without him, what are the Cowboys?"
+    },
+    {
+      "start_s": 706.46,
+      "end_s": 708.94,
+      "text": "Toast. They're toast."
+    },
+    {
+      "start_s": 708.94,
+      "end_s": 713.94,
+      "text": "I don't know that they're toast."
+    },
+    {
+      "start_s": 708.94,
+      "end_s": 723.1,
+      "text": "I mean you're talking about a guy who led the league in targets, led the league in receptions, second in the in the league in in yards, receiving yards. He is their offense. Like he is their he is their offense."
+    },
+    {
+      "start_s": 723.26,
+      "end_s": 727.5,
+      "text": "I don't have the percentage of you know how much of how much of the offense he accounted for but I guarantee"
+    },
+    {
+      "start_s": 727.5,
+      "end_s": 728.14,
+      "text": "35"
+    },
+    {
+      "start_s": 728.14,
+      "end_s": 731.74,
+      "text": "there you go 35 35 35% of your offense"
+    },
+    {
+      "start_s": 731.74,
+      "end_s": 739.74,
+      "text": "I'm going to end it right there with that. But look at this, guys. See, this is what I'm talking about here. This is"
+    },
+    {
+      "start_s": 740.14,
+      "end_s": 756.62,
+      "text": "I get it. You it. You know, I listen to Walker Wade and the crew and everything else. And in some regards, we may be correct that you don't want to pay a receiver that kind of money because because what you look at is with wide wide receivers, the best wide receivers aren't making it to the Super Super Bowls."
+    },
+    {
+      "start_s": 757.1,
+      "end_s": 772.78,
+      "text": "It's the great tight ends that become really the ultimate weapons. But hypothetically, right now we know that we are are definitely dependent on Dak Prescott passing the ball to CD Lamb. And you you know you need both of them."
+    },
+    {
+      "start_s": 772.78,
+      "end_s": 816.7,
+      "text": "CeeDee Lamb did not throw the football to himself. And if if you want to go ahead just think about about this. I think 90, 95 yards of his 1700 1700 yards was one play that Dak Prescott got away from a sack in the end zone was was able to escape keep his eyes down the field and hit him in stride for him to go all the way if you don't think that Dak Prescott was part of that well I I I just can't talk to you but Dak needs him as Roger Staubach to me the greatest cowboy of all time said it doesn't matter what kind of pass I threw if Drew Pearson didn't catch it."
+    },
+    {
+      "start_s": 817.5,
+      "end_s": 836.94,
+      "text": "No truer truer words have ever been spoken. If Drew Pearson doesn't catch the pass I throw, it doesn't matter. What kind of pass I threw? So you need both of these guys. Now here is Justin Jefferson. Now this is apples to apples because Justin Jefferson and CeeDee Lamb both first round picks picks."
+    },
+    {
+      "start_s": 837.5,
+      "end_s": 858.62,
+      "text": "Excuse me, CD was drafted a little higher, you know, and he could have could have been an eagle, but Philly 500 said literally, I don't want Justin Jefferson. he's He's ass. But here's the thing. The first year, he would have been on the fifth year option just like CD about 17 million like CD is now."
+    },
+    {
+      "start_s": 859.26,
+      "end_s": 873.9,
+      "text": "Cap number 8.6 for this year because they gave him guaranteed money, write him a big check out the front. The following year, 15 million. And I'm not going to say 15 million is actually the real number."
+    },
+    {
+      "start_s": 874.3,
+      "end_s": 890.7,
+      "text": "Because you ended up gaining another 9 million and and we know the Cowboys aren't going to spend that. So in essence, here's what you actually look at. The first two years of C.D. Lamb costing you $15 million."
+    },
+    {
+      "start_s": 893.98,
+      "end_s": 910.54,
+      "text": "$15 million. We're paying $13 million over the next two years for Michael Gallup not to be here. Now granted, his number will climb to 38.9% but we all know that the salary cap is going to explode."
+    },
+    {
+      "start_s": 910.54,
+      "end_s": 920.62,
+      "text": "And as you start looking down the road at where the Cowboys are salary cap wise and I know we're going to have Tyler Smith that's going to need to get paid and paid and Micah Parsons is going to need to get paid."
+    },
+    {
+      "start_s": 921.74,
+      "end_s": 946.46,
+      "text": "At some point you probably are going to have to to pay the piper and take a year that's going to be the year that we just have to reset the the thing. But at the moment, having a Zach Martin who's getting close to retiring, having a Tyler Smith who is a young stud, having a Micah Parsons, a CeeDee Lamb, a Dak Prescott, the time should be right now to say, we've been so so close."
+    },
+    {
+      "start_s": 947.26,
+      "end_s": 963.42,
+      "text": "that for this time, not like we were when we were 8-8, 8-8, 8-8, we're 12-5, 12-5, 12-5. That this is the time to say I need to do everything I can can to try and win this this especially with Jerry at what 81 years of age?"
+    },
+    {
+      "start_s": 964.94,
+      "end_s": 991.5,
+      "text": "It's going to take time if you blow this thing up. And there's no guarantees blowing it up is going to get you a team team that's this good. So if we literally if it is true that we're only a million dollars a year apart and make no mistake about it Cowboys always going to try and lowball you and and make you think that you know think that think that they're going to get a deal and then never then never get a deal."
+    },
+    {
+      "start_s": 991.66,
+      "end_s": 1023.26,
+      "text": "We all know that this is going to be slightly behind Justin Justin Jefferson just like we've all said all along the only dumb thing is is is we've just waited to get there Alrighty good people we're going to be keeping our eyes open and our nose to the grindstone is that how it is you know grindstone would take it off real quick with all the news that's coming up as always I appreciate you guys peace out"
+    }
+  ]
+}
