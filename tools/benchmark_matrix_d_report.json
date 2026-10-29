@@ -1,0 +1,645 @@
+{
+  "matrix": "D",
+  "date": "2026-10-29",
+  "prompt_variants": [
+    {
+      "window": "holmes-short2-window",
+      "concept": "person",
+      "n_frames": 655,
+      "n_ids": 8,
+      "per_id": {
+        "0": {
+          "presence": 0.8229,
+          "median_box_area": 1127.0
+        },
+        "1": {
+          "presence": 1.0,
+          "median_box_area": 104904.0
+        },
+        "2": {
+          "presence": 0.2916,
+          "median_box_area": 304.0
+        },
+        "3": {
+          "presence": 0.1252,
+          "median_box_area": 920.0
+        },
+        "4": {
+          "presence": 0.0504,
+          "median_box_area": 1943.0
+        },
+        "5": {
+          "presence": 0.855,
+          "median_box_area": 3009.0
+        },
+        "6": {
+          "presence": 0.7298,
+          "median_box_area": 800.0
+        },
+        "8": {
+          "presence": 0.7237,
+          "median_box_area": 224.0
+        }
+      },
+      "picked_primary_id": 1,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 131,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 5-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 5,
+      "mean_sampled_step_iou": 0.9695
+    },
+    {
+      "window": "holmes-short2-window",
+      "concept": "man",
+      "billed_frames": 655,
+      "cost_usd": 0.131,
+      "request_id": "resp_6ae30872be3779c21f43402a",
+      "raw_response": "/home/hatch/workspace/meta-hackathon/benchmark-matrix-d-raw/holmes-short2-window--man.json",
+      "n_frames": 655,
+      "n_ids": 7,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 104832.0
+        },
+        "1": {
+          "presence": 0.2916,
+          "median_box_area": 304.0
+        },
+        "2": {
+          "presence": 0.9817,
+          "median_box_area": 2958.0
+        },
+        "3": {
+          "presence": 0.7725,
+          "median_box_area": 210.0
+        },
+        "4": {
+          "presence": 0.2275,
+          "median_box_area": 17985.0
+        },
+        "5": {
+          "presence": 0.7298,
+          "median_box_area": 800.0
+        },
+        "6": {
+          "presence": 0.7176,
+          "median_box_area": 1127.0
+        }
+      },
+      "picked_primary_id": 0,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 131,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 5-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 5,
+      "mean_sampled_step_iou": 0.9694,
+      "mean_iou_vs_person_baseline": 0.9928
+    },
+    {
+      "window": "holmes-short2-window",
+      "concept": "speaker",
+      "billed_frames": 655,
+      "cost_usd": 0.131,
+      "request_id": "resp_6ae3090a66fe2ab5966e4c4b",
+      "raw_response": "/home/hatch/workspace/meta-hackathon/benchmark-matrix-d-raw/holmes-short2-window--speaker.json",
+      "n_frames": 15,
+      "n_ids": 1,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 1560.0
+        }
+      },
+      "picked_primary_id": 0,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 3,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 5-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 5,
+      "mean_sampled_step_iou": 0.5689,
+      "mean_iou_vs_person_baseline": 0.0
+    },
+    {
+      "window": "holmes-short2-window",
+      "concept": "man speaking",
+      "billed_frames": 655,
+      "cost_usd": 0.131,
+      "request_id": "resp_6ae309233999289205a34e15",
+      "raw_response": "/home/hatch/workspace/meta-hackathon/benchmark-matrix-d-raw/holmes-short2-window--man_speaking.json",
+      "n_frames": 655,
+      "n_ids": 2,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 111972.0
+        },
+        "1": {
+          "presence": 0.7008,
+          "median_box_area": 3068.0
+        }
+      },
+      "picked_primary_id": 0,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 131,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 5-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 5,
+      "mean_sampled_step_iou": 0.9697,
+      "mean_iou_vs_person_baseline": 0.9732
+    },
+    {
+      "window": "belew-clipA",
+      "concept": "person",
+      "n_frames": 480,
+      "n_ids": 1,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 78546.0
+        }
+      },
+      "picked_primary_id": 0,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 96,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 5-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 5,
+      "mean_sampled_step_iou": 0.9817
+    },
+    {
+      "window": "belew-clipA",
+      "concept": "man",
+      "billed_frames": 480,
+      "cost_usd": 0.096,
+      "request_id": "resp_6ae309e72973846c98604e51",
+      "raw_response": "/home/hatch/workspace/meta-hackathon/benchmark-matrix-d-raw/belew-clipA--man.json",
+      "n_frames": 480,
+      "n_ids": 1,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 78228.0
+        }
+      },
+      "picked_primary_id": 0,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 96,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 5-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 5,
+      "mean_sampled_step_iou": 0.9816,
+      "mean_iou_vs_person_baseline": 0.993
+    },
+    {
+      "window": "belew-clipA",
+      "concept": "speaker",
+      "billed_frames": 480,
+      "cost_usd": 0.096,
+      "request_id": "resp_6ae30a3f2eeb8dbda35e4c02",
+      "raw_response": "/home/hatch/workspace/meta-hackathon/benchmark-matrix-d-raw/belew-clipA--speaker.json",
+      "zero_detections": true,
+      "n_frames": 480,
+      "n_ids": 0,
+      "per_id": {},
+      "picked_primary_id": null,
+      "primary_presence": 0.0,
+      "primary_objects_decoded": 0,
+      "decode_errors": 0,
+      "decode_scope": "no detections returned",
+      "sample_step": 5,
+      "mean_sampled_step_iou": null,
+      "mean_iou_vs_person_baseline": 0.0
+    }
+  ],
+  "selection_stress": [
+    {
+      "case": "spike-clipA-belew",
+      "n_frames": 480,
+      "n_ids": 1,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 78546.0
+        }
+      },
+      "picked_primary_id": 0,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 32,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.9664,
+      "expected_speaker_id": 0,
+      "pick_correct": true
+    },
+    {
+      "case": "spike-clipB-holmes",
+      "n_frames": 600,
+      "n_ids": 3,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 108802.0
+        },
+        "1": {
+          "presence": 1.0,
+          "median_box_area": 897.0
+        },
+        "2": {
+          "presence": 1.0,
+          "median_box_area": 304.0
+        }
+      },
+      "picked_primary_id": 0,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 40,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.8887
+    },
+    {
+      "case": "spike-clipC-holmes-tv-trap",
+      "n_frames": 599,
+      "n_ids": 10,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 1224.0
+        },
+        "1": {
+          "presence": 1.0,
+          "median_box_area": 99441.0
+        },
+        "2": {
+          "presence": 0.3222,
+          "median_box_area": 3540.0
+        },
+        "3": {
+          "presence": 0.0684,
+          "median_box_area": 1161.0
+        },
+        "4": {
+          "presence": 0.0718,
+          "median_box_area": 275.0
+        },
+        "5": {
+          "presence": 0.7012,
+          "median_box_area": 2898.0
+        },
+        "6": {
+          "presence": 0.6828,
+          "median_box_area": 1216.0
+        },
+        "7": {
+          "presence": 0.0768,
+          "median_box_area": 3570.0
+        },
+        "8": {
+          "presence": 0.5977,
+          "median_box_area": 3450.0
+        },
+        "9": {
+          "presence": 0.3088,
+          "median_box_area": 2451.0
+        }
+      },
+      "picked_primary_id": 1,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 40,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.8909,
+      "expected_speaker_id": 1,
+      "pick_correct": true
+    },
+    {
+      "case": "run3-short1",
+      "n_frames": 415,
+      "n_ids": 7,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 3330.0
+        },
+        "1": {
+          "presence": 0.4771,
+          "median_box_area": 819.0
+        },
+        "2": {
+          "presence": 1.0,
+          "median_box_area": 6750.0
+        },
+        "3": {
+          "presence": 1.0,
+          "median_box_area": 91848.0
+        },
+        "4": {
+          "presence": 0.4771,
+          "median_box_area": 987.0
+        },
+        "5": {
+          "presence": 0.4771,
+          "median_box_area": 240.0
+        },
+        "6": {
+          "presence": 0.5639,
+          "median_box_area": 2856.0
+        }
+      },
+      "picked_primary_id": 3,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 28,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.9501
+    },
+    {
+      "case": "run3-short2",
+      "n_frames": 655,
+      "n_ids": 8,
+      "per_id": {
+        "0": {
+          "presence": 0.8229,
+          "median_box_area": 1127.0
+        },
+        "1": {
+          "presence": 1.0,
+          "median_box_area": 104904.0
+        },
+        "2": {
+          "presence": 0.2916,
+          "median_box_area": 304.0
+        },
+        "3": {
+          "presence": 0.1252,
+          "median_box_area": 920.0
+        },
+        "4": {
+          "presence": 0.0504,
+          "median_box_area": 1943.0
+        },
+        "5": {
+          "presence": 0.855,
+          "median_box_area": 3009.0
+        },
+        "6": {
+          "presence": 0.7298,
+          "median_box_area": 800.0
+        },
+        "8": {
+          "presence": 0.7237,
+          "median_box_area": 224.0
+        }
+      },
+      "picked_primary_id": 1,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 44,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.9285
+    },
+    {
+      "case": "run3-short3",
+      "n_frames": 418,
+      "n_ids": 13,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 3480.0
+        },
+        "1": {
+          "presence": 1.0,
+          "median_box_area": 92708.0
+        },
+        "2": {
+          "presence": 0.2895,
+          "median_box_area": 870.0
+        },
+        "3": {
+          "presence": 0.1675,
+          "median_box_area": 397.5
+        },
+        "4": {
+          "presence": 0.256,
+          "median_box_area": 851.0
+        },
+        "5": {
+          "presence": 0.2488,
+          "median_box_area": 1170.0
+        },
+        "6": {
+          "presence": 0.1196,
+          "median_box_area": 1575.0
+        },
+        "7": {
+          "presence": 0.0287,
+          "median_box_area": 787.0
+        },
+        "8": {
+          "presence": 0.7225,
+          "median_box_area": 2254.0
+        },
+        "9": {
+          "presence": 0.5885,
+          "median_box_area": 936.0
+        },
+        "10": {
+          "presence": 0.5885,
+          "median_box_area": 912.0
+        },
+        "11": {
+          "presence": 0.5885,
+          "median_box_area": 204.0
+        },
+        "12": {
+          "presence": 0.1077,
+          "median_box_area": 2451.0
+        }
+      },
+      "picked_primary_id": 1,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 28,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.9765
+    },
+    {
+      "case": "run1-short1",
+      "n_frames": 659,
+      "n_ids": 9,
+      "per_id": {
+        "0": {
+          "presence": 0.1032,
+          "median_box_area": 180.0
+        },
+        "1": {
+          "presence": 1.0,
+          "median_box_area": 104880.0
+        },
+        "2": {
+          "presence": 0.2898,
+          "median_box_area": 304.0
+        },
+        "3": {
+          "presence": 0.085,
+          "median_box_area": 920.0
+        },
+        "4": {
+          "presence": 0.0501,
+          "median_box_area": 1914.0
+        },
+        "5": {
+          "presence": 0.8953,
+          "median_box_area": 3009.0
+        },
+        "6": {
+          "presence": 0.7314,
+          "median_box_area": 800.0
+        },
+        "8": {
+          "presence": 0.7269,
+          "median_box_area": 224.0
+        },
+        "9": {
+          "presence": 0.7193,
+          "median_box_area": 1104.0
+        }
+      },
+      "picked_primary_id": 1,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 44,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.9293
+    },
+    {
+      "case": "run1-short2",
+      "n_frames": 420,
+      "n_ids": 14,
+      "per_id": {
+        "0": {
+          "presence": 0.5976,
+          "median_box_area": 8964.0
+        },
+        "1": {
+          "presence": 0.5976,
+          "median_box_area": 4876.0
+        },
+        "2": {
+          "presence": 1.0,
+          "median_box_area": 97470.0
+        },
+        "3": {
+          "presence": 0.5976,
+          "median_box_area": 682.0
+        },
+        "4": {
+          "presence": 0.5976,
+          "median_box_area": 1700.0
+        },
+        "5": {
+          "presence": 0.5976,
+          "median_box_area": 3315.0
+        },
+        "6": {
+          "presence": 0.5929,
+          "median_box_area": 1085.0
+        },
+        "7": {
+          "presence": 0.2262,
+          "median_box_area": 208.0
+        },
+        "8": {
+          "presence": 0.3833,
+          "median_box_area": 3422.0
+        },
+        "9": {
+          "presence": 0.3595,
+          "median_box_area": 858.0
+        },
+        "10": {
+          "presence": 0.3595,
+          "median_box_area": 1100.0
+        },
+        "11": {
+          "presence": 0.3595,
+          "median_box_area": 2548.0
+        },
+        "12": {
+          "presence": 0.3595,
+          "median_box_area": 224.0
+        },
+        "13": {
+          "presence": 0.3571,
+          "median_box_area": 2451.0
+        }
+      },
+      "picked_primary_id": 2,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 28,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.9525
+    },
+    {
+      "case": "run1-short3",
+      "n_frames": 441,
+      "n_ids": 9,
+      "per_id": {
+        "0": {
+          "presence": 1.0,
+          "median_box_area": 3330.0
+        },
+        "1": {
+          "presence": 0.4127,
+          "median_box_area": 819.0
+        },
+        "2": {
+          "presence": 1.0,
+          "median_box_area": 6825.0
+        },
+        "3": {
+          "presence": 1.0,
+          "median_box_area": 90552.0
+        },
+        "4": {
+          "presence": 0.4127,
+          "median_box_area": 987.0
+        },
+        "5": {
+          "presence": 0.4127,
+          "median_box_area": 240.0
+        },
+        "6": {
+          "presence": 0.3152,
+          "median_box_area": 2451.0
+        },
+        "7": {
+          "presence": 0.6599,
+          "median_box_area": 1849.0
+        },
+        "8": {
+          "presence": 0.6304,
+          "median_box_area": 2730.0
+        }
+      },
+      "picked_primary_id": 3,
+      "primary_presence": 1.0,
+      "primary_objects_decoded": 30,
+      "decode_errors": 0,
+      "decode_scope": "picked-primary masks on every 15-th frame (uniform sample); selection + presence are box-based, all frames",
+      "sample_step": 15,
+      "mean_sampled_step_iou": 0.9502
+    }
+  ],
+  "ledger_total_usd": 3.8724
+}

@@ -108,3 +108,8 @@
 {"ts": "2026-10-29", "model": "muse-wonder-1.0", "cost_usd": 0.0194, "purpose": "verifier-f5-muted-hook", "request_id": "resp_6ae2b235b470b24b94764279"}
 {"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.027, "purpose": "benchmark-matrix-b-fixture", "request_id": "voyager/transcribe/3CF50712E2C748EBA1B1BD6774121A12"}
 {"ts": "2026-10-29", "model": "muse-voice-transcribe-1.0", "cost_usd": 0.0243, "purpose": "benchmark-matrix-b-fixture", "request_id": "voyager/transcribe/9149313C6AD3484E8F64023F3F14861B"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.131, "purpose": "benchmark-matrix-d-variant-man", "request_id": "resp_6ae30872be3779c21f43402a"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.131, "purpose": "benchmark-matrix-d-variant-speaker", "request_id": "resp_6ae3090a66fe2ab5966e4c4b"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.131, "purpose": "benchmark-matrix-d-variant-man speaking", "request_id": "resp_6ae309233999289205a34e15"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.096, "purpose": "benchmark-matrix-d-variant-man", "request_id": "resp_6ae309e72973846c98604e51"}
+{"ts": "2026-10-29", "model": "sam-3.1", "cost_usd": 0.096, "purpose": "benchmark-matrix-d-variant-speaker", "request_id": "resp_6ae30a3f2eeb8dbda35e4c02"}
