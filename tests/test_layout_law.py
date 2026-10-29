@@ -19,20 +19,26 @@ from spatial_director.layout_law import (  # noqa: E402
     _band_overlap_px,
     _face_band,
     _face_top,
+    _transform_alpha,
     CAPTION_BOTTOM_MARGIN,
+    EFFECT_OCCLUSION_BAND,
     GLYPH_OCCLUSION_CAP,
     SAFE_X0,
     SAFE_X1,
     caption_block_height,
     caption_layer,
     caption_lines,
+    effect_note,
+    effect_status,
     face_pixels,
     frame_geometry,
+    guarded_occupancy,
     hook_glyph_mask,
     initial_caption_rect,
     occupancy_map,
     plan_captions,
     plan_hook,
+    plan_hook_effect,
     predict_occlusion,
     to_canvas_alpha,
 )
@@ -118,6 +124,98 @@ class HookPlanningTests(unittest.TestCase):
         x0, y0, x1, y1 = plan.bbox
         self.assertGreaterEqual(x0, SAFE_X0)
         self.assertLessEqual(x1, SAFE_X1)
+
+
+class EffectBandTests(unittest.TestCase):
+    """The depth-effect objective (refinement, 2026-10-29): the
+    planner must AIM at 8-20% occlusion, not merely stay under the
+    25% cap - the gate run measured 0.0 on every draft because
+    nearest-to-preferred among the gate-safe candidates always
+    picked clear space above the head."""
+
+    def test_status_thresholds(self):
+        lo, hi = EFFECT_OCCLUSION_BAND
+        self.assertEqual(effect_status(0.0), "below_band")
+        self.assertEqual(effect_status(lo), "in_band")
+        self.assertEqual(effect_status(hi), "in_band")
+        self.assertEqual(effect_status(0.24), "above_band")
+        self.assertIn("EFFECT ABSENT", effect_note(0.0))
+        self.assertIn("inside", effect_note(0.14))
+
+    def test_planner_targets_the_band_when_reachable(self):
+        # Brute-force the candidate grid: if any gate-safe candidate
+        # lands in the band, the planner must return an in-band one.
+        alphas = [speaker_alpha(1100, x0=300, x1=800)
+                  for _ in range(4)]
+        occ_map = guarded_occupancy(alphas)
+        reachable = False
+        for i in range(55):
+            frac = round(0.14 + 0.01 * i, 2)
+            glyph, bbox = hook_glyph_mask(
+                "THE BAND NEVER REHEARSES", y_center_frac=frac)
+            occ = predict_occlusion(glyph, occ_map)
+            safe = (bbox[0] >= SAFE_X0 and bbox[2] <= SAFE_X1
+                    and bbox[3] <= 1440 and bbox[1] >= 288)
+            if safe and occ <= GLYPH_OCCLUSION_CAP \
+                    and effect_status(occ) == "in_band":
+                reachable = True
+        self.assertTrue(reachable)  # fixture sanity: band is reachable
+        plan = plan_hook("THE BAND NEVER REHEARSES", alphas)
+        self.assertEqual(plan.effect_status, "in_band")
+        self.assertGreaterEqual(plan.predicted_occlusion,
+                                EFFECT_OCCLUSION_BAND[0])
+        self.assertLessEqual(plan.predicted_occlusion,
+                             EFFECT_OCCLUSION_BAND[1])
+        self.assertTrue(plan.ok)
+
+    def test_below_band_is_flagged_not_hidden(self):
+        # Speaker hugs the bottom: no safe hook position touches it.
+        alphas = [speaker_alpha(1750) for _ in range(2)]
+        plan = plan_hook("THE BAND NEVER REHEARSES", alphas)
+        self.assertEqual(plan.predicted_occlusion, 0.0)
+        self.assertEqual(plan.effect_status, "below_band")
+        self.assertTrue(plan.ok)  # gate-safe AND effect-absent
+
+    def test_band_can_be_disabled(self):
+        alphas = [speaker_alpha(1000) for _ in range(4)]
+        plan = plan_hook("THE BAND NEVER REHEARSES", alphas,
+                         fracs=[0.2, 0.3, 0.4], occlusion_band=None)
+        self.assertEqual(plan.y_center_frac, 0.3)
+
+
+class HookEffectPlanTests(unittest.TestCase):
+    def _source_speaker(self, rows=(90, 360), cols=(180, 470),
+                        shape=(360, 640)):
+        a = np.zeros(shape, dtype=np.float64)
+        a[rows[0]:rows[1], cols[0]:cols[1]] = 1.0
+        return [a.copy() for _ in range(6)]
+
+    def test_in_band_without_lift_on_holmes_like_geometry(self):
+        plan = plan_hook_effect(
+            "ARE COWBOYS SABOTAGING THEIR OWN SEASON?",
+            self._source_speaker())
+        self.assertTrue(plan.geometry_ok)
+        self.assertEqual(plan.placement.effect_status, "in_band")
+        self.assertEqual(plan.lift_px, 0)
+
+    def test_unreachable_band_is_declared(self):
+        # Speaker squeezed to the far right, mostly outside the
+        # glyph span: no lift can manufacture overlap.
+        plan = plan_hook_effect(
+            "THE BAND NEVER REHEARSES",
+            self._source_speaker(cols=(560, 630)),
+            lift_steps=(0, 40))
+        self.assertEqual(plan.placement.effect_status, "below_band")
+        self.assertIn("no lift", plan.note)
+
+    def test_transform_alpha(self):
+        a = np.ones((10, 4))
+        padded = _transform_alpha(a, 3)
+        self.assertEqual(padded.shape, (13, 4))
+        self.assertEqual(padded[10:].sum(), 0.0)
+        cropped = _transform_alpha(a, -4)
+        self.assertEqual(cropped.shape, (6, 4))
+        np.testing.assert_array_equal(_transform_alpha(a, 0), a)
 
 
 class CaptionPlanningTests(unittest.TestCase):

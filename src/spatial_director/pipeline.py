@@ -65,9 +65,11 @@ from .caption_align import (
 )
 from .compositor import DEFAULT_CANVAS, read_video_frames, video_fps
 from .layout_law import (
+    EFFECT_OCCLUSION_BAND,
     apply_speaker_reframe,
+    effect_note,
     plan_captions,
-    plan_hook,
+    plan_hook_effect,
     plan_speaker_reframe,
     render_hook_layer,
     to_canvas_alpha,
@@ -79,7 +81,7 @@ from .sam_client import SamClient
 from .spark_client import SparkClient
 from .spark_open_client import Candidate, SparkOpenClient
 from .spend_ledger import SpendLedger
-from .verifier import HookSpec, VerifyInputs, _content_words, verify
+from .verifier import HookSpec, Receipt, VerifyInputs, _content_words, verify
 from .voice_transcribe import TranscriptTurn, VoiceTranscribeClient
 from .wonder_client import WonderClient
 
@@ -104,6 +106,22 @@ HOOK_SYSTEM_PROMPT = (
 
 class PipelineError(RuntimeError):
     """Any pipeline stage failure."""
+
+
+def _annotate_effect(receipt: Receipt) -> None:
+    """Append the depth-effect line to a receipt (annotation only).
+
+    The F1-F7 verdict is untouched: the line reports where the
+    MEASURED glyph occlusion stands against the planner's 8-20%
+    effect band, so a draft whose speaker never crosses the hook
+    text carries that fact on its receipt instead of passing as a
+    silent success (the gate run's failure mode: 0.0 everywhere).
+    """
+    f2 = next((c for c in receipt.checks if c.check_id == "F2"), None)
+    if f2 is None:
+        return
+    occ = float(f2.measured.get("glyph_occlusion_mean", 0.0))
+    receipt.notes.append(effect_note(occ))
 
 
 # ---------------------------------------------------------------- utilities
@@ -555,18 +573,14 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     _indices, src_alphas = finished_alpha(parsed, guides)
 
     # Speaker reframing by construction (F3): place the FACE, not
-    # just the text around it. The transform rewrites the
-    # source-space inputs, so layout, render and verifier all work
-    # from the reframed geometry - and text is planned after this,
-    # from the reframed alphas.
+    # just the text around it. The transform is PLANNED here but
+    # applied after the hook is known: the depth-effect planner
+    # (below) may add lift to the construction reframe so the
+    # speaker's head/shoulders actually reach the hook band, and
+    # the transform must be applied exactly once, at its final
+    # value, so layout, render and verifier all work from the same
+    # reframed geometry.
     reframe = plan_speaker_reframe(src_alphas, canvas)
-    if not reframe.identity:
-        frames, src_alphas = apply_speaker_reframe(
-            frames, src_alphas, reframe.pad_bottom_px)
-    log(f"short {index}: speaker reframe "
-        f"{'identity' if reframe.identity else reframe.note} "
-        f"(feasible {reframe.feasible})")
-    canvas_alphas = LazyCanvasAlphas(src_alphas, canvas)
 
     def make_canvas(alphas: list[np.ndarray]) -> LazyCanvasAlphas:
         return LazyCanvasAlphas(alphas, canvas)
@@ -591,18 +605,32 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         cues[0].text if cues else cand.reason, ts=ts)
     log(f"short {index}: hook {hook_text!r}; {len(cues)} caption cues")
 
+    # Depth-effect planning: aim the hook at the 8-20% occlusion
+    # band, lifting the speaker via the reframe machinery when no
+    # band position reaches it. The returned transform is the one
+    # applied - once - before anything is laid out or rendered.
+    hook_sample = min(len(src_alphas), int(HOOK_WINDOW_S * fps))
+    effect = plan_hook_effect(
+        hook_text, src_alphas, canvas, base_reframe=reframe,
+        hook_sample=hook_sample)
+    if effect.pad_bottom_px != 0:
+        frames, src_alphas = apply_speaker_reframe(
+            frames, src_alphas, effect.pad_bottom_px)
+    log(f"short {index}: speaker reframe "
+        f"{'identity' if reframe.identity else reframe.note} "
+        f"(feasible {reframe.feasible}); effect: {effect.note} "
+        f"(applied pad {effect.pad_bottom_px})")
+    canvas_alphas = LazyCanvasAlphas(src_alphas, canvas)
+
     # Layout from the decoded geometry.
-    hook_frames = min(len(canvas_alphas), int(HOOK_WINDOW_S * fps))
-    window_alphas = [canvas_alphas[i]
-                     for i in range(0, max(hook_frames, 1), 2)]
-    placement = plan_hook(hook_text, window_alphas, canvas)
-    del window_alphas
+    placement = effect.placement
     cap_layout = plan_captions(
         [(c.start_s, c.end_s) for c in cues], canvas_alphas,
         fps=fps, canvas=canvas)
     log(f"short {index}: layout hook frac "
         f"{placement.y_center_frac:.2f} (predicted occlusion "
-        f"{placement.predicted_occlusion:.3f}); caption rect "
+        f"{placement.predicted_occlusion:.3f}, effect "
+        f"{placement.effect_status}); caption rect "
         f"{cap_layout.rect} feasible {cap_layout.feasible}")
 
     hook_spec = HookSpec(hook_text, (0.0, min(HOOK_WINDOW_S, length)),
@@ -623,6 +651,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             audio=load_energy(draft1), hook=hook_spec, cues=cues,
             caption_rect=cap_layout.rect, sam_response_path=sam_path),
         wonder=clients.wonder, draft=1, ts=ts)
+    _annotate_effect(receipt1)
     log(f"short {index}: draft 1 verdict {receipt1.verdict} "
         f"failed {receipt1.failed}")
 
@@ -636,7 +665,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         work_dir=short_dir, canvas=canvas)
 
     def verify_fn(execution) -> Any:
-        return verify(
+        receipt2 = verify(
             VerifyInputs(
                 video_path=execution.render_path, fps=fps,
                 canvas_alphas=execution.canvas_alphas,
@@ -645,6 +674,8 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                 caption_rect=execution.caption_rect,
                 sam_response_path=sam_path),
             wonder=clients.wonder, draft=2, ts=ts)
+        _annotate_effect(receipt2)
+        return receipt2
 
     chain = rescue(receipt1, artifacts, spark=clients.spark,
                    verify_fn=verify_fn, ts=ts)
@@ -668,10 +699,18 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             "predicted_occlusion": round(placement.predicted_occlusion, 4),
             "caption_rect": list(cap_layout.rect),
             "caption_feasible": cap_layout.feasible,
+            "effect": {
+                "band": list(EFFECT_OCCLUSION_BAND),
+                "predicted_status": placement.effect_status,
+                "lift_px": effect.lift_px,
+                "geometry_ok": effect.geometry_ok,
+                "note": effect.note,
+            },
         },
         "audio_normalisation": norm,
         "speaker_reframe": {
             "pad_bottom_px": reframe.pad_bottom_px,
+            "applied_pad_bottom_px": effect.pad_bottom_px,
             "placed_centroid": reframe.placed_centroid,
             "placed_head_top_min": reframe.placed_head_top_min,
             "feasible": reframe.feasible,

@@ -12,9 +12,20 @@ can never disagree about where the speaker is):
 
 - **Hook band**: candidate vertical positions are rendered with the
   compositor's real text renderer and scored against the speaker
-  occupancy map over the hook window; the winner is the in-safe-zone
-  candidate nearest the design's preferred band whose predicted
-  glyph occlusion (glyph pixels the speaker covers) is <= 25%.
+  occupancy map over the hook window. The winner must be in the
+  safe zone and under the 25% occlusion cap - and, since the
+  refinement pass (2026-10-29), it must also satisfy the DEPTH
+  EFFECT objective: predicted glyph occlusion inside the 8-20%
+  band. The gate run's receipts showed why a cap alone is not a
+  layout law: every draft measured occlusion 0.0 - the planner
+  parked the hook in clear space above the head, the check passed
+  trivially, and the product's signature effect (the speaker
+  standing IN FRONT of the hook text) never visually happened. A
+  cap is a ceiling; the band is a target. ``plan_hook_effect``
+  additionally searches speaker lifts (the reframe machinery) when
+  no band position can reach the target, and every placement
+  carries an ``effect_status`` so a below-band result is flagged
+  on the record instead of passing silently.
 - **Caption block**: fixed two-line block, horizontally inside the
   safe zone, bottom edge anchored 320px above the canvas bottom,
   shifted up only if a face would enter it (the F2 rule is
@@ -72,6 +83,16 @@ GLYPH_OCCLUSION_CAP = 0.25
 HEAD_BAND_FRAC = 0.32  # spike bake-off: head = upper 32% of the mask
 ALPHA_THRESH = 0.5
 DEFAULT_HOOK_FRAC = 0.30  # the design's preferred hook band centre
+
+# The depth-effect band (refinement, 2026-10-29): predicted glyph
+# occlusion the planner AIMS for. Below the low edge the speaker
+# does not visibly cross the text (the gate run's failure mode:
+# 0.0 everywhere); above the high edge the text starts losing
+# legibility to the silhouette. The band sits strictly inside the
+# verifier's 25% cap, which remains the gate's ceiling and is not
+# this module's to change.
+EFFECT_OCCLUSION_BAND = (0.08, 0.20)
+EFFECT_OCCLUSION_TARGET = 0.14  # band centre: aim, don't hug edges
 
 # Evaluation finding (2026-10-29, frame inspection of the first
 # composite): at the cap brim the feathered matte edge lets hook
@@ -208,6 +229,54 @@ class HookPlacement:
     predicted_occlusion: float  # glyph fraction the speaker covers
     within_safe_zone: bool
     ok: bool  # occlusion <= cap AND within the safe zone
+    # Depth-effect standing of the predicted occlusion against
+    # EFFECT_OCCLUSION_BAND: "in_band" / "below_band" / "above_band".
+    # A placement can be ok (gate-safe) and below_band (effect
+    # absent) at once - the gate run's every draft was exactly that.
+    effect_status: str = "below_band"
+
+
+def effect_status(
+    occlusion: float,
+    band: tuple[float, float] = EFFECT_OCCLUSION_BAND,
+) -> str:
+    """Where an occlusion value stands against the effect band."""
+    if occlusion < band[0]:
+        return "below_band"
+    if occlusion > band[1]:
+        return "above_band"
+    return "in_band"
+
+
+def effect_note(
+    occlusion: float,
+    band: tuple[float, float] = EFFECT_OCCLUSION_BAND,
+) -> str:
+    """The receipt's effect line for a measured occlusion value.
+
+    This is an annotation, never a verdict: the F1-F7 gate judges
+    safety and legibility only. The line exists so that a render
+    whose speaker never crosses the hook text cannot pass silently
+    as a successful demonstration of the depth effect.
+    """
+    status = effect_status(occlusion, band)
+    if status == "in_band":
+        return (
+            f"effect: measured hook occlusion {occlusion:.3f} is "
+            f"inside the {band[0]:.2f}-{band[1]:.2f} depth-effect "
+            "band - the speaker visibly crosses the hook text.")
+    if status == "below_band":
+        return (
+            f"effect: measured hook occlusion {occlusion:.3f} is "
+            f"BELOW the {band[0]:.2f}-{band[1]:.2f} depth-effect "
+            "band - EFFECT ABSENT: the speaker does not visibly "
+            "cross the hook text on this draft, whatever the "
+            "checks say.")
+    return (
+        f"effect: measured hook occlusion {occlusion:.3f} is "
+        f"ABOVE the {band[0]:.2f}-{band[1]:.2f} depth-effect band "
+        "(still bounded by the 0.25 F2 cap) - the speaker covers "
+        "more of the hook than the effect targets.")
 
 
 def render_hook_layer(
@@ -331,20 +400,39 @@ def plan_hook(
     cap: float = GLYPH_OCCLUSION_CAP,
     fracs: Sequence[float] | None = None,
     head_guard_px: int = HEAD_GUARD_PX,
+    occlusion_band: tuple[float, float] | None = EFFECT_OCCLUSION_BAND,
 ) -> HookPlacement:
     """Choose the hook band centre from the window's speaker geometry.
 
     Candidates are scored by (predicted occlusion, safe-zone
     membership) against the GUARDED occupancy map (see
-    ``guarded_occupancy``). Preference order: safe + under the cap,
-    nearest the preferred band; then safe with the least occlusion;
-    then the least occlusion anywhere. Deterministic tie-breaks
-    throughout, so the same geometry always plans the same layout.
+    ``guarded_occupancy``). Preference order (deterministic
+    tie-breaks throughout, so the same geometry always plans the
+    same layout):
+
+    1. safe + under the cap + occlusion INSIDE the depth-effect
+       band, nearest the band's centre, then nearest the preferred
+       band - the effect actually happens, at its target strength;
+    2. safe + under the cap, nearest the band (from either side),
+       then nearest the preferred band;
+    3. safe, least occlusion;
+    4. least occlusion anywhere.
+
+    ``occlusion_band=None`` restores the pre-refinement behaviour
+    (tier 2 without the band-distance term: nearest the preferred
+    band among the gate-safe candidates).
     """
     if fracs is None:
-        fracs = [round(0.14 + 0.01 * i, 2) for i in range(43)]  # .14-.56
+        # .14-.68: the grid's lower half is where a low-seated
+        # speaker's head/shoulders actually are; the pre-refinement
+        # grid stopped at .56, one step short of the band on the
+        # gate run's geometry (0.080 predicted at .56, the grid's
+        # last candidate).
+        fracs = [round(0.14 + 0.01 * i, 2) for i in range(55)]
     alphas = list(window_alphas)
     occ_map = guarded_occupancy(alphas, head_guard_px)
+    band = occlusion_band if occlusion_band is not None \
+        else EFFECT_OCCLUSION_BAND
     scored: list[HookPlacement] = []
     for frac in fracs:
         glyph, bbox = hook_glyph_mask(text, canvas, y_center_frac=frac)
@@ -359,14 +447,42 @@ def plan_hook(
                 predicted_occlusion=occ,
                 within_safe_zone=safe,
                 ok=bool(safe and occ <= cap),
+                effect_status=effect_status(occ, band),
             )
         )
+
+    def band_distance(p: HookPlacement) -> float:
+        occ = p.predicted_occlusion
+        if occ < band[0]:
+            return band[0] - occ
+        if occ > band[1]:
+            return occ - band[1]
+        return 0.0
+
+    if occlusion_band is not None:
+        in_band = [p for p in scored
+                   if p.ok and p.effect_status == "in_band"]
+        if in_band:
+            target = (band[0] + band[1]) / 2.0
+            return min(
+                in_band,
+                key=lambda p: (abs(p.predicted_occlusion - target),
+                               abs(p.y_center_frac - preferred_frac),
+                               p.y_center_frac),
+            )
     good = [p for p in scored if p.ok]
     if good:
+        if occlusion_band is None:
+            return min(
+                good,
+                key=lambda p: (abs(p.y_center_frac - preferred_frac),
+                               p.predicted_occlusion, p.y_center_frac),
+            )
         return min(
             good,
-            key=lambda p: (abs(p.y_center_frac - preferred_frac),
-                           p.predicted_occlusion, p.y_center_frac),
+            key=lambda p: (band_distance(p),
+                           abs(p.y_center_frac - preferred_frac),
+                           p.y_center_frac),
         )
     safe = [p for p in scored if p.within_safe_zone]
     pool = safe if safe else scored
