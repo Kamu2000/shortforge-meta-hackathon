@@ -2,9 +2,15 @@
 
 The Director's signature frame, back to front:
 
-1. **Back** - the source frame, scaled to cover the canvas and
-   blurred: the scene is still recognisably the speaker's room, but
-   it reads as a backdrop, not a competing picture.
+1. **Back** - a treated backdrop. The original treatment (the
+   source frame scaled to cover and blur-36'd) failed the founder's
+   eye: at that radius the speaker's own blurred silhouette sits
+   behind him as a readable ghost person. The shipped default is
+   therefore the TREATED backdrop (heavy blur + darkening +
+   desaturation, so no person-shape survives), with a clean
+   near-black brand gradient as a selectable alternative and the
+   naive scale-blur kept for comparison. See ``background_layer``
+   and the 2026-10-29 BUILDLOG entry for the ghost-test numbers.
 2. **Middle** - the hook text, rendered programmatically (Pillow)
    and positioned BEHIND the speaker. This layer is the whole point:
    the speaker occludes the words, which is the depth effect editors
@@ -48,6 +54,15 @@ CANVAS_W = 1080
 CANVAS_H = 1920
 DEFAULT_CANVAS = (CANVAS_W, CANVAS_H)
 DEFAULT_BLUR_RADIUS = 36
+DEFAULT_BACKDROP = "treated"
+TREATED_BLUR_RADIUS = 90
+TREATED_BRIGHTNESS = 0.55
+TREATED_SATURATION = 0.30
+# Brand backdrop: near-black (#0B0B0C) tinted 12% toward Forge Blue
+# at the top and 12% toward Viral Pink at the bottom - a gradient a
+# viewer feels rather than sees.
+BRAND_TOP = (15, 25, 40)
+BRAND_BOTTOM = (40, 17, 26)
 XRAY_GROUND = (16, 18, 22)  # dark slate the separated cards fan over
 
 _FONT_CANDIDATES = (
@@ -89,6 +104,73 @@ def background_layer(
 
         cropped = cropped.filter(ImageFilter.GaussianBlur(blur_radius))
     return np.asarray(cropped).astype(np.uint8)
+
+
+def treated_background_layer(
+    frame_rgb: np.ndarray,
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    blur_radius: int = TREATED_BLUR_RADIUS,
+    brightness: float = TREATED_BRIGHTNESS,
+    saturation: float = TREATED_SATURATION,
+) -> np.ndarray:
+    """The shipped backdrop: cover-scale, heavy blur, dark, desat.
+
+    The naive blur (radius 36) leaves the speaker's silhouette
+    readable in the backdrop - a ghost person standing behind the
+    real one. Radius 90 destroys the silhouette's edges, and the
+    brightness/saturation grade pushes what remains toward a dark
+    neutral wash, so the backdrop reads as atmosphere, not as a
+    second picture of the subject.
+    """
+    from PIL import ImageEnhance
+
+    img = Image.fromarray(
+        background_layer(frame_rgb, canvas, blur_radius=blur_radius))
+    img = ImageEnhance.Color(img).enhance(saturation)
+    img = ImageEnhance.Brightness(img).enhance(brightness)
+    return np.asarray(img).astype(np.uint8)
+
+
+def brand_background_layer(
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+) -> np.ndarray:
+    """A clean near-black brand gradient (no source pixels at all).
+
+    Vertical blend from BRAND_TOP to BRAND_BOTTOM - Forge Blue and
+    Viral Pink at 12% over near-black. Nothing of the scene (and
+    therefore no ghost of the speaker) can appear in it; the cost
+    is losing the room's context entirely.
+    """
+    cw, ch = canvas
+    top = np.array(BRAND_TOP, dtype=np.float64)
+    bottom = np.array(BRAND_BOTTOM, dtype=np.float64)
+    t = np.linspace(0.0, 1.0, ch, dtype=np.float64)[:, None, None]
+    grad = top[None, None, :] * (1.0 - t) + bottom[None, None, :] * t
+    return np.repeat(grad, cw, axis=1).astype(np.uint8)
+
+
+def make_backdrop(
+    frame_rgb: np.ndarray,
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    backdrop: str = DEFAULT_BACKDROP,
+    blur_radius: int = DEFAULT_BLUR_RADIUS,
+) -> np.ndarray:
+    """Dispatch on the backdrop treatment name.
+
+    ``treated`` (default) = heavy blur + grade of the source;
+    ``brand`` = near-black brand gradient (frame ignored);
+    ``naive`` = the original scale + blur (kept for comparison -
+    it is the treatment that ghosted).
+    """
+    if backdrop == "treated":
+        return treated_background_layer(frame_rgb, canvas)
+    if backdrop == "brand":
+        return brand_background_layer(canvas)
+    if backdrop == "naive":
+        return background_layer(frame_rgb, canvas, blur_radius=blur_radius)
+    raise ValueError(f"unknown backdrop treatment: {backdrop!r}")
 
 
 def speaker_layer(
@@ -212,9 +294,11 @@ def composite_frame(
     canvas: tuple[int, int] = DEFAULT_CANVAS,
     *,
     blur_radius: int = DEFAULT_BLUR_RADIUS,
+    backdrop: str = DEFAULT_BACKDROP,
 ) -> np.ndarray:
     """One composited frame from a source frame + finished alpha."""
-    bg = background_layer(frame_rgb, canvas, blur_radius=blur_radius)
+    bg = make_backdrop(frame_rgb, canvas, backdrop=backdrop,
+                       blur_radius=blur_radius)
     fg, a = speaker_layer(frame_rgb, alpha, canvas)
     return composite_from_layers(bg, hook_rgba, fg, a)
 
@@ -237,6 +321,7 @@ def xray_frame(
     *,
     separation: float = 1.0,
     blur_radius: int = DEFAULT_BLUR_RADIUS,
+    backdrop: str = DEFAULT_BACKDROP,
 ) -> np.ndarray:
     """The layer stack, fanned apart: back -d, hook 0, speaker +d.
 
@@ -247,7 +332,8 @@ def xray_frame(
     what separates is the genuine layers, not a redraw.
     """
     cw, ch = canvas
-    bg = background_layer(frame_rgb, canvas, blur_radius=blur_radius)
+    bg = make_backdrop(frame_rgb, canvas, backdrop=backdrop,
+                       blur_radius=blur_radius)
     fg, a = speaker_layer(frame_rgb, alpha, canvas)
     if separation <= 0.0:
         return composite_from_layers(bg, hook_rgba, fg, a)
@@ -351,6 +437,7 @@ def render_composite_video(
     canvas: tuple[int, int] = DEFAULT_CANVAS,
     audio_from: str | Path | None = None,
     blur_radius: int = DEFAULT_BLUR_RADIUS,
+    backdrop: str = DEFAULT_BACKDROP,
 ) -> None:
     """Render the composite over a whole clip.
 
@@ -366,7 +453,8 @@ def render_composite_video(
             hook = hook_rgba if hook_visible_at(i / fps, hook_window) \
                 else None
             yield composite_frame(
-                frame, alpha, hook, canvas, blur_radius=blur_radius)
+                frame, alpha, hook, canvas, blur_radius=blur_radius,
+                backdrop=backdrop)
 
     _encode_video(gen(), out_path, fps=fps, canvas=canvas,
                   audio_from=audio_from)
@@ -381,6 +469,7 @@ def export_xray_mp4(
     hook_rgba: np.ndarray | None = None,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
     blur_radius: int = DEFAULT_BLUR_RADIUS,
+    backdrop: str = DEFAULT_BACKDROP,
 ) -> None:
     """Render the xray diagnostic: layers separate over the first 1.5s."""
     if len(source_frames) != len(alphas):
@@ -391,7 +480,7 @@ def export_xray_mp4(
             yield xray_frame(
                 frame, alpha, hook_rgba, canvas,
                 separation=separation_at(i / fps),
-                blur_radius=blur_radius)
+                blur_radius=blur_radius, backdrop=backdrop)
 
     _encode_video(gen(), out_path, fps=fps, canvas=canvas)
 

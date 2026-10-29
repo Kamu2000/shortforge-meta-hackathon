@@ -1,0 +1,513 @@
+{
+  "matrix": "B",
+  "date": "2026-10-29",
+  "workload": "pipeline candidate-moment sweep (SWEEP_SYSTEM_PROMPT imported from spark_open_client), Holmes full-source VT turns fixture, temperature 0.2, max_tokens 4000 with one bounded retry at 8000 on empty reply",
+  "turns_fixture": "/home/hatch/workspace/shortforge-meta-hackathon/tools/benchmark_holmes_turns.json",
+  "n_turns": 104,
+  "production_reference": {
+    "source": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-2/run-summary.json",
+    "n_candidates": 8,
+    "top3": [
+      {
+        "start_s": 515.6,
+        "end_s": 528.7,
+        "score": 0.97,
+        "reason": "Huge stakes claim: Cowboys risking entire season plus Dak and McCarthy futures over $1M"
+      },
+      {
+        "start_s": 250.5,
+        "end_s": 278.8,
+        "score": 0.96,
+        "reason": "Viral number reveal: Cowboys and CeeDee only $1M per year apart - instant contract outrage hook"
+      },
+      {
+        "start_s": 584.5,
+        "end_s": 596.5,
+        "score": 0.95,
+        "reason": "Meme-able line: Jerry could find $1M in his couch cushions vs $10B franchise value"
+      }
+    ]
+  },
+  "results": [
+    {
+      "provider": "baseten",
+      "rep": 1,
+      "ok": true,
+      "latency_s": 8.599,
+      "prompt_tokens": 4573,
+      "completion_tokens": 2082,
+      "request_id": "chatcmpl-35e6e0d496134a98a134c2fd86adedc1",
+      "empty_first_attempt": false,
+      "max_tokens_final": 4000,
+      "candidates": [
+        {
+          "start_s": 366.8,
+          "end_s": 374.0,
+          "score": 0.96,
+          "reason": "Bombshell: Cowboys and CeeDee Lamb only ~$1M apart per year with 13 days to kickoff"
+        },
+        {
+          "start_s": 515.7,
+          "end_s": 534.3,
+          "score": 0.94,
+          "reason": "Cowboys putting Dak's future and McCarthy's job at risk over $1M"
+        },
+        {
+          "start_s": 584.4,
+          "end_s": 596.3,
+          "score": 0.92,
+          "reason": "Jerry could find $1M in couch cushions - franchise worth $10B"
+        },
+        {
+          "start_s": 693.2,
+          "end_s": 708.9,
+          "score": 0.9,
+          "reason": "What are Cowboys Week 1 without CeeDee? Toast."
+        },
+        {
+          "start_s": 617.1,
+          "end_s": 623.9,
+          "score": 0.88,
+          "reason": "Justin Jefferson at $35M/year sets the price - just pay CeeDee"
+        },
+        {
+          "start_s": 727.5,
+          "end_s": 731.7,
+          "score": 0.87,
+          "reason": "Stat drop: CeeDee accounts for 35% of Cowboys offense"
+        },
+        {
+          "start_s": 894.0,
+          "end_s": 910.5,
+          "score": 0.86,
+          "reason": "$15M for CeeDee first 2 years vs $13M for Gallup not to be here"
+        },
+        {
+          "start_s": 454.5,
+          "end_s": 466.5,
+          "score": 0.84,
+          "reason": "Holdout warning: Revis held out then tore hamstring Week 1 vs Patriots"
+        },
+        {
+          "start_s": 31.8,
+          "end_s": 50.0,
+          "score": 0.82,
+          "reason": "32 hours until final 53-man roster cuts - Cowboys have tough calls"
+        },
+        {
+          "start_s": 414.0,
+          "end_s": 429.3,
+          "score": 0.81,
+          "reason": "If deal gets done late, soft-tissue injury risk could define season"
+        }
+      ],
+      "top3_overlap_vs_production": 2,
+      "top_score": 0.96,
+      "n_candidates": 10
+    },
+    {
+      "provider": "baseten",
+      "rep": 2,
+      "ok": true,
+      "latency_s": 9.645,
+      "prompt_tokens": 4573,
+      "completion_tokens": 2711,
+      "request_id": "chatcmpl-92752e20770b4ee893abc144e7522213",
+      "empty_first_attempt": false,
+      "max_tokens_final": 4000,
+      "candidates": [
+        {
+          "start_s": 366.8,
+          "end_s": 374.0,
+          "score": 0.96,
+          "reason": "Bombshell number: Cowboys and CeeDee only ~$1M apart per year with 13 days to kickoff"
+        },
+        {
+          "start_s": 515.7,
+          "end_s": 534.3,
+          "score": 0.94,
+          "reason": "Cowboys put entire season plus Dak and McCarthy futures at risk over ~$1M"
+        },
+        {
+          "start_s": 706.5,
+          "end_s": 708.9,
+          "score": 0.92,
+          "reason": "Brutal verdict: Cowboys are 'Toast' without CeeDee Week 1 vs Browns"
+        },
+        {
+          "start_s": 584.4,
+          "end_s": 596.3,
+          "score": 0.9,
+          "reason": "Jerry Jones could find $1M in his couch cushions - $10B franchise cheaping out"
+        },
+        {
+          "start_s": 708.9,
+          "end_s": 731.7,
+          "score": 0.89,
+          "reason": "Stat shock: CeeDee led NFL in targets/receptions and is 35% of Dallas offense"
+        },
+        {
+          "start_s": 506.9,
+          "end_s": 515.5,
+          "score": 0.88,
+          "reason": "Analyst says Cowboys are sabotaging their own season by stalling deal"
+        },
+        {
+          "start_s": 429.4,
+          "end_s": 454.2,
+          "score": 0.86,
+          "reason": "Warning: holdout skill guys grab hamstring Week 1-2 and season gets defined by injury"
+        },
+        {
+          "start_s": 617.1,
+          "end_s": 623.9,
+          "score": 0.85,
+          "reason": "Simple fix: Justin Jefferson at $35M a year - just give CeeDee that contract"
+        },
+        {
+          "start_s": 894.0,
+          "end_s": 910.5,
+          "score": 0.84,
+          "reason": "Cap math outrage: CeeDee costs $15M for 2 years while Gallup paid $13M to not be here"
+        },
+        {
+          "start_s": 342.6,
+          "end_s": 358.4,
+          "score": 0.83,
+          "reason": "Urgency spike: 13 days vs NFL's best defense and star WR still unsigned"
+        },
+        {
+          "start_s": 331.3,
+          "end_s": 340.9,
+          "score": 0.82,
+          "reason": "Jerry Jones stonewalls: I'm only talking about who's here on CeeDee holdout"
+        },
+        {
+          "start_s": 693.2,
+          "end_s": 706.1,
+          "score": 0.81,
+          "reason": "Direct question: What are Cowboys Week 1 in Cleveland without CeeDee?"
+        }
+      ],
+      "top3_overlap_vs_production": 1,
+      "top_score": 0.96,
+      "n_candidates": 12
+    },
+    {
+      "provider": "baseten",
+      "rep": 3,
+      "ok": true,
+      "latency_s": 7.876,
+      "prompt_tokens": 4573,
+      "completion_tokens": 2195,
+      "request_id": "chatcmpl-ff1bb83828264c17b3a025a1fe61dd01",
+      "empty_first_attempt": false,
+      "max_tokens_final": 4000,
+      "candidates": [
+        {
+          "start_s": 366.8,
+          "end_s": 374.0,
+          "score": 0.96,
+          "reason": "Bombshell number reveal: Cowboys and CeeDee Lamb are only ~$1M apart with 13 days to kickoff"
+        },
+        {
+          "start_s": 515.7,
+          "end_s": 534.3,
+          "score": 0.94,
+          "reason": "Claim Cowboys put entire season, Dak's future and McCarthy's job at risk over $1M"
+        },
+        {
+          "start_s": 693.2,
+          "end_s": 708.9,
+          "score": 0.92,
+          "reason": "Viral question: What are Cowboys Week 1 without CeeDee? Answer: Toast"
+        },
+        {
+          "start_s": 584.4,
+          "end_s": 596.3,
+          "score": 0.9,
+          "reason": "Viral jab: Jerry Jones could find $1M in his couch cushions for $10B franchise"
+        },
+        {
+          "start_s": 894.0,
+          "end_s": 910.5,
+          "score": 0.88,
+          "reason": "Shocking cap math: $15M for CeeDee's first 2 years vs $13M for Gallup to not be here"
+        },
+        {
+          "start_s": 429.4,
+          "end_s": 454.2,
+          "score": 0.87,
+          "reason": "Warning holdout WRs grab hamstring in Week 1-2 and ruin entire season"
+        },
+        {
+          "start_s": 454.5,
+          "end_s": 468.5,
+          "score": 0.85,
+          "reason": "First-hand Darrelle Revis holdout horror story ends with torn hamstring vs Patriots"
+        },
+        {
+          "start_s": 617.1,
+          "end_s": 623.9,
+          "score": 0.84,
+          "reason": "Blunt demand: Justin Jefferson got $35M a year, just give CeeDee that contract"
+        },
+        {
+          "start_s": 505.5,
+          "end_s": 515.5,
+          "score": 0.82,
+          "reason": "Former exec accusation: Cowboys are sabotaging their own season"
+        }
+      ],
+      "top3_overlap_vs_production": 1,
+      "top_score": 0.96,
+      "n_candidates": 9
+    },
+    {
+      "provider": "fireworks",
+      "rep": 1,
+      "ok": true,
+      "latency_s": 29.513,
+      "prompt_tokens": 4572,
+      "completion_tokens": 1979,
+      "request_id": "chatcmpl-ac0db42b70f24c1685156a3cf735be0c",
+      "empty_first_attempt": true,
+      "max_tokens_final": 8000,
+      "candidates": [
+        {
+          "start_s": 515.7,
+          "end_s": 534.3,
+          "score": 0.96,
+          "reason": "Claims Cowboys risked Dak, McCarthy and entire season over ~$1M per year - massive conflict/stakes"
+        },
+        {
+          "start_s": 584.4,
+          "end_s": 596.5,
+          "score": 0.94,
+          "reason": "Jerry could find $1M in couch cushions, franchise worth $10B - viral money comparison"
+        },
+        {
+          "start_s": 366.8,
+          "end_s": 374.0,
+          "score": 0.93,
+          "reason": "Reveals CeeDee Lamb and Cowboys only ~$1M apart on Aug 26 - shocking number holdout"
+        },
+        {
+          "start_s": 693.2,
+          "end_s": 708.9,
+          "score": 0.92,
+          "reason": "Direct question: What are Cowboys without CeeDee? Answer: Toast - perfect hook"
+        },
+        {
+          "start_s": 708.9,
+          "end_s": 723.1,
+          "score": 0.9,
+          "reason": "Stat bomb: led league in targets/receptions, 2nd in yards - he IS the offense"
+        },
+        {
+          "start_s": 894.0,
+          "end_s": 910.5,
+          "score": 0.89,
+          "reason": "Cap math shock: $15M for Lamb vs $13M paid to Gallup NOT to be there"
+        },
+        {
+          "start_s": 429.4,
+          "end_s": 454.2,
+          "score": 0.88,
+          "reason": "Warning holdouts grab hamstring Game 1-2 and season is defined by injury"
+        },
+        {
+          "start_s": 329.8,
+          "end_s": 342.5,
+          "score": 0.87,
+          "reason": "Jerry Jones cold quote: I'm only talking about who's here - dismissive conflict"
+        },
+        {
+          "start_s": 617.1,
+          "end_s": 623.9,
+          "score": 0.86,
+          "reason": "Justin Jefferson at $35M/year - just give CeeDee that contract benchmark"
+        },
+        {
+          "start_s": 307.4,
+          "end_s": 322.9,
+          "score": 0.85,
+          "reason": "Ticking clock question: Will CeeDee be there Week 1 vs Browns?"
+        }
+      ],
+      "top3_overlap_vs_production": 2,
+      "top_score": 0.96,
+      "n_candidates": 10
+    },
+    {
+      "provider": "fireworks",
+      "rep": 2,
+      "ok": true,
+      "latency_s": 48.847,
+      "prompt_tokens": 4572,
+      "completion_tokens": 2902,
+      "request_id": "chatcmpl-9f1db3648c2b4fef9e8e3291dc63a0fb",
+      "empty_first_attempt": false,
+      "max_tokens_final": 4000,
+      "candidates": [
+        {
+          "start_s": 366.8,
+          "end_s": 374.0,
+          "score": 0.95,
+          "reason": "Bombshell reveal Cowboys and CeeDee Lamb are just $1M per year apart on August 26th."
+        },
+        {
+          "start_s": 515.7,
+          "end_s": 534.3,
+          "score": 0.93,
+          "reason": "Claim Cowboys risk entire season plus Dak and McCarthy futures over roughly $1M."
+        },
+        {
+          "start_s": 584.4,
+          "end_s": 596.3,
+          "score": 0.91,
+          "reason": "Viral jab that Jerry Jones could find $1M in his couch cushions."
+        },
+        {
+          "start_s": 356.0,
+          "end_s": 364.3,
+          "score": 0.9,
+          "reason": "Outrage countdown - 13 days to facing NFL's best defense and star still unsigned."
+        },
+        {
+          "start_s": 693.2,
+          "end_s": 708.9,
+          "score": 0.9,
+          "reason": "Blunt prediction Cowboys are toast without CeeDee in Week 1 at Cleveland."
+        },
+        {
+          "start_s": 307.4,
+          "end_s": 322.9,
+          "score": 0.88,
+          "reason": "Urgent question if CeeDee Lamb will be available for Week 1 road opener vs Browns."
+        },
+        {
+          "start_s": 708.9,
+          "end_s": 723.1,
+          "score": 0.88,
+          "reason": "Stat bomb - CeeDee led NFL in targets and receptions, he is the offense."
+        },
+        {
+          "start_s": 617.1,
+          "end_s": 623.9,
+          "score": 0.87,
+          "reason": "Contract comp - Justin Jefferson at $35M per year sets CeeDee price tag."
+        },
+        {
+          "start_s": 890.7,
+          "end_s": 910.5,
+          "score": 0.87,
+          "reason": "Cap shocker - CeeDee costs $15M for 2 years while Gallup dead money is $13M to not play."
+        },
+        {
+          "start_s": 429.4,
+          "end_s": 454.2,
+          "score": 0.86,
+          "reason": "Warning holdouts grab hamstring in game 1-2 and season gets defined by injury."
+        },
+        {
+          "start_s": 454.5,
+          "end_s": 466.5,
+          "score": 0.85,
+          "reason": "Firsthand Darrelle Revis example - held out, got paid, then tore hamstring immediately."
+        }
+      ],
+      "top3_overlap_vs_production": 2,
+      "top_score": 0.95,
+      "n_candidates": 11
+    },
+    {
+      "provider": "fireworks",
+      "rep": 3,
+      "ok": true,
+      "latency_s": 44.472,
+      "prompt_tokens": 4572,
+      "completion_tokens": 3796,
+      "request_id": "chatcmpl-2eaa1d5bd5bf47fc89338022f3a03bef",
+      "empty_first_attempt": false,
+      "max_tokens_final": 4000,
+      "candidates": [
+        {
+          "start_s": 366.4,
+          "end_s": 374.0,
+          "score": 0.96,
+          "reason": "Exact date + 'roughly a million dollars apart' is the viral number conflict everyone will argue about"
+        },
+        {
+          "start_s": 515.7,
+          "end_s": 534.3,
+          "score": 0.95,
+          "reason": "Puts entire season plus Dak and McCarthy futures at risk over ~$1M - ultimate 'dumbest thing' take"
+        },
+        {
+          "start_s": 693.2,
+          "end_s": 708.9,
+          "score": 0.93,
+          "reason": "Direct question 'What are Cowboys without him?' answered with brutal one-word 'Toast'"
+        },
+        {
+          "start_s": 584.4,
+          "end_s": 596.3,
+          "score": 0.91,
+          "reason": "Jerry could find $1M in couch cushions vs $10B franchise - perfect outrage soundbite"
+        },
+        {
+          "start_s": 356.9,
+          "end_s": 364.3,
+          "score": 0.89,
+          "reason": "13 days vs best defense last year and still not signed creates ticking-clock urgency"
+        },
+        {
+          "start_s": 329.8,
+          "end_s": 340.9,
+          "score": 0.88,
+          "reason": "Jerry Jones cold quote 'I'm only talking about who's here' fuels holdout drama"
+        },
+        {
+          "start_s": 307.4,
+          "end_s": 322.9,
+          "score": 0.87,
+          "reason": "Will CeeDee be there Week 1 at Browns? 'tick tick ticking away' question hook"
+        },
+        {
+          "start_s": 505.5,
+          "end_s": 515.5,
+          "score": 0.86,
+          "reason": "Analyst calls holdout 'sabotaging their own season' - strong accusation clip"
+        },
+        {
+          "start_s": 708.9,
+          "end_s": 723.1,
+          "score": 0.85,
+          "reason": "Stat bomb: led league in targets and receptions, 2nd in yards - 'he IS their offense'"
+        },
+        {
+          "start_s": 894.0,
+          "end_s": 910.5,
+          "score": 0.84,
+          "reason": "Cap math shock: $13M dead money for Gallup not to be here vs $15M for Lamb"
+        },
+        {
+          "start_s": 454.5,
+          "end_s": 466.5,
+          "score": 0.83,
+          "reason": "Revis holdout cautionary tale with 'bam boom tore hamstring' visual warning"
+        },
+        {
+          "start_s": 617.1,
+          "end_s": 623.9,
+          "score": 0.82,
+          "reason": "Justin Jefferson $35M comp - 'Just give him that contract' simple solution take"
+        }
+      ],
+      "top3_overlap_vs_production": 1,
+      "top_score": 0.96,
+      "n_candidates": 12
+    }
+  ]
+}

@@ -53,6 +53,7 @@ from PIL import Image
 
 from .caption_align import CaptionCue, active_segments, load_energy
 from .compositor import (
+    DEFAULT_BACKDROP,
     DEFAULT_CANVAS,
     composite_frame,
     hook_visible_at,
@@ -298,6 +299,7 @@ def render_composite_with_captions(
     fps: float,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
     speaker_scale: float = 1.0,
+    backdrop: str = DEFAULT_BACKDROP,
 ) -> Path:
     """The shared render path: composite + captions IN FRONT.
 
@@ -319,7 +321,8 @@ def render_composite_with_captions(
         for i, (frame, alpha) in enumerate(zip(frames, src_alphas)):
             t = i / fps
             hook = hook_rgba if hook_visible_at(t, hook_window) else None
-            out = composite_frame(frame, alpha, hook, canvas)
+            out = composite_frame(frame, alpha, hook, canvas,
+                                  backdrop=backdrop)
             for j, cue in enumerate(cues):
                 if cue.start_s <= t < cue.end_s:
                     cap = cue_layers[j].astype(np.float64)

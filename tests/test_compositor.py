@@ -18,12 +18,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from spatial_director.compositor import (  # noqa: E402
     background_layer,
+    brand_background_layer,
     composite_frame,
     hook_layer,
     hook_visible_at,
+    make_backdrop,
     render_composite_video,
     separation_at,
     speaker_layer,
+    treated_background_layer,
     xray_frame,
 )
 
@@ -73,10 +76,65 @@ class LayerOrderTests(unittest.TestCase):
         self.assertLess(px[0], 90)
 
     def test_background_when_no_hook(self):
+        # The naive backdrop, explicitly: this test pins the original
+        # scale+blur layer's pixels. The shipped default is now the
+        # treated backdrop (see BackdropTests).
         out = composite_frame(
-            self.frame, self.alpha, None, CANVAS, blur_radius=4)
+            self.frame, self.alpha, None, CANVAS, blur_radius=4,
+            backdrop="naive")
         px = out[400, 230].astype(int)
         self.assertGreater(px[2], 120)  # blurred blue background
+
+
+class BackdropTests(unittest.TestCase):
+    def setUp(self):
+        self.frame = source_frame()
+        self.alpha = speaker_alpha()
+
+    def test_treated_is_darker_and_less_saturated(self):
+        naive = background_layer(self.frame, CANVAS, blur_radius=4)
+        treated = treated_background_layer(self.frame, CANVAS)
+        self.assertLess(treated.mean(), naive.mean())
+        # Saturation: channel spread (max-min per pixel) collapses.
+        spread_n = (naive.max(axis=2) - naive.min(axis=2)).mean()
+        spread_t = (treated.max(axis=2) - treated.min(axis=2)).mean()
+        self.assertLess(spread_t, spread_n)
+
+    def test_treated_blur_kills_the_silhouette_step(self):
+        # A hard-edged bright disc in the source (a "person") leaves
+        # a strong inside/outside luminance step in the naive
+        # backdrop; the treated backdrop must flatten it.
+        src = np.zeros((SRC_H, SRC_W, 3), dtype=np.uint8)
+        yy, xx = np.mgrid[0:SRC_H, 0:SRC_W]
+        disc = (xx - 34) ** 2 + (yy - 45) ** 2 <= 20 ** 2
+        src[disc] = (230, 230, 230)
+
+        def step(bg):
+            lum = bg.astype(float).mean(axis=2)
+            return abs(lum[240, 100] - lum[240, 250])
+
+        naive = background_layer(src, CANVAS, blur_radius=4)
+        treated = treated_background_layer(src, CANVAS)
+        self.assertLess(step(treated), 0.35 * step(naive))
+
+    def test_brand_gradient_is_near_black_and_frame_free(self):
+        bg = brand_background_layer(CANVAS)
+        self.assertEqual(bg.shape, (CANVAS[1], CANVAS[0], 3))
+        self.assertLess(bg.mean(), 30)             # near-black
+        self.assertGreater(bg[0, 0, 2], bg[0, 0, 0])   # blue tint top
+        self.assertGreater(bg[-1, 0, 0], bg[-1, 0, 2])  # pink tint base
+        other = composite_frame(
+            np.full_like(self.frame, 255), self.alpha, None, CANVAS,
+            backdrop="brand")
+        mine = composite_frame(
+            self.frame, self.alpha, None, CANVAS, backdrop="brand")
+        # Where the speaker is absent, the brand backdrop is the
+        # same regardless of the source frame.
+        np.testing.assert_array_equal(other[100, 230], mine[100, 230])
+
+    def test_unknown_backdrop_raises(self):
+        with self.assertRaises(ValueError):
+            make_backdrop(self.frame, CANVAS, backdrop="sparkly")
 
 
 class SpeakerPlacementTests(unittest.TestCase):
