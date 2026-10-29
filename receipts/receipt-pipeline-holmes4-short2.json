@@ -1,0 +1,380 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-3/short-2/draft2-trim-silence.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "PASSED_AFTER_REPAIR",
+  "repair": {
+    "status": "executed",
+    "menu_id": "TRIM_SILENCE",
+    "target_check": "F5",
+    "spark_reason": "lowers max_silence_gap_s from 1.0s to under 0.45s by cutting the over-long pause and retiming captions",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.003,
+      "request_id": "chatcmpl-01a18736-59ce-716f-bd55-42666cc426c8"
+    },
+    "extra_calls": [],
+    "detail": "trimmed 0.70s at 1.41s, 0.70s at 3.75s, 0.64s at 11.95s, 0.38s at 14.17s; 542 -> 469 frames"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-3/short-2/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -24.47,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1298,
+            "glyph_occlusion_max": 0.1451,
+            "glyph_occlusion_alpha_weighted_mean": 0.129,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                382.1,
+                1186.9
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1099,
+            "frames_with_speaker": 542,
+            "frames_total": 542
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.961,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man speaking into a microphone discusses the Dallas Cowboys putting their whole season and Dak Prescott's future at risk. The hook is the bold on-screen text asking if they are \"SABOTAGING SEASON OVER ... MILLION?\""
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "SABOTAGING SEASON OVER ONE MILLION?"
+              },
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "SABOTAGING SEASON OVER ONE MILLION? [million, one]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0052,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9988
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0245,
+          "request_id": "resp_6ae32052d08c87071c2240ba"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "bbdef88d93149ccf4f41ca6f017d804188148a85c3a7a55f8c01d699aba73a71",
+        "sam_response": "2f9a1f53b052a1f70252afd213c8f622761ab83c36226b2eba03e33f91d79e00",
+        "captions": "a9ed2d53f9d79186f75ee5a38cb99cd41b3f28fd323a18ead96b1fd4f396e850"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.130 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-3/short-2/draft2-trim-silence.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "PASSED_AFTER_REPAIR",
+      "failed_checks": [],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -23.76,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1321,
+            "glyph_occlusion_max": 0.1493,
+            "glyph_occlusion_alpha_weighted_mean": 0.1311,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                382.1,
+                1187.0
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1099,
+            "frames_with_speaker": 469,
+            "frames_total": 469
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.3,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.952,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man discusses the Dallas Cowboys putting their whole season and Dak Prescott's future at risk, with the hook text asking if they are sabotaging the season over a few million dollars."
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "SABOTAGING SEASON OVER ONE MILLION?"
+              },
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "SABOTAGING SEASON OVER ONE MILLION? [million, one]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0062,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9987
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0381,
+          "request_id": "resp_6ae321fe5b8208c5c6dd4ff8"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "72500ca0ee935161c3c2d2c79d29ed2e07eb659de313d50c2c668db1e324d2ec",
+        "sam_response": "2f9a1f53b052a1f70252afd213c8f622761ab83c36226b2eba03e33f91d79e00",
+        "captions": "de27e2e640c5fe02a5eba622513b2e19ffa0cd2bac902f9621f7367c60353e2c"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.132 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    }
+  ]
+}

@@ -238,3 +238,15 @@ Re-rendered run-3's shorts 1 and 3 entirely from cached artifacts (`tools/refine
 **Backdrop.** Treated is the default (ghost luma-step 5.52 -> 0.21 on the reference frame; the before-frame's giant blurred speaker-ghost is simply absent from the after-frames). Brand gradient remains selectable via `backdrop="brand"`.
 
 **Suite:** 180/180 (156 baseline + 24 new across the four workstreams and the Matrix D floor). Spend ledger untouched by this block: zero paid calls; the ledger's movement today ($3.2361 -> $3.8724) is the benchmark matrices' spend, itemised in their own entries.
+
+## 2026-10-29 (evening) — Holmes rerun run 4 on the refined build: 3/3 PASS, occlusion in band
+
+Paid rerun on the refined build, started from the main session ~15:21 IST, finished 16:17 IST (3360s door-to-door). Output dir `~/workspace/meta-hackathon/spike-footage/pipeline-run-3/` (the run-4 output dir; receipts committed as `receipts/receipt-pipeline-holmes4-short{1,2,3}.json`). Run cost $0.6097; ledger total now $4.4821 of the $145 cap (pre-run $3.8724).
+
+**Verdicts:** short 1 PASSED_AFTER_REPAIR (draft 1 FAIL on F5 only → TRIM_SILENCE); short 2 PASSED_AFTER_REPAIR (draft 1 FAIL on F5 only → TRIM_SILENCE); short 3 PASSED_FIRST_DRAFT. F1 and F3 pass on every draft of every short — the run-1 failure anatomy (F3 face position, F1 quiet opens) is fixed by construction: speaker reframe placed centroids 1541→1187, 1556→1187, 1516→1187 (target 1187, head-top min 1081/1098/1088); loudness normalisation gains +2.63/+9.34/+12.00 dB, draft-1 0–2s audio RMS −17.7/−24.5/−25.0 dB vs the −32 floor.
+
+**Headline — hook depth effect, measured on live renders (not offline):** F2 glyph occlusion, draft 1 → final draft: short 1 0.1246 → 0.1276; short 2 0.1298 → 0.1321; short 3 0.1325 (single draft). All three inside the 0.08–0.20 band, vs 0.0 on every draft of all three Shorts in run 3. Planner predictions (0.125/0.130/0.132) match the measured values to ~3 decimals. Finals are 1080x1920: 19.42s / 15.65s / 13.85s. Per-short cost $0.1836 / $0.2498 / $0.1250, shared $0.0513.
+
+**Windows/hooks:** short 1, 250.1–272.1s, "CD AND COWBOYS MILLION DOLLARS APART?"; short 2, 515.6–533.8s, "SABOTAGING SEASON OVER ONE MILLION?"; short 3, 583.5–597.5s, "FRANCHISE WORTH 10 BILLION DOLLARS?". Short 3's 416 decoded vs 415 SAM frames tail mismatch recurred and was handled by the shipped rule (truncate 1 surplus tail frame), as in run 3.
+
+**What did not change:** F5 remains the only draft-1 failure mode (silence gaps in the source audio, 1.46s / 1.0s max gaps on shorts 1/2); the rescue loop's TRIM_SILENCE repair passes both. No threshold was touched for this run.
