@@ -129,6 +129,54 @@ class SelectionTests(unittest.TestCase):
         f2 = [frame(i, [obj(1, b), obj(0, a)]) for i in range(4)]
         self.assertEqual(select_primary_id(f1), select_primary_id(f2))
 
+    def test_sole_tiny_object_fails_loudly(self):
+        # The Matrix D failure class (2026-10-29): the prompt
+        # 'speaker' on Holmes returned ONE persistent object with a
+        # 1,560 px^2 median box on a 640x360 frame (0.68%) - a
+        # loudspeaker-class region, IoU 0.0 vs the real speaker.
+        # Under the old rule it was picked silently; the
+        # plausibility floor must raise instead.
+        trap = (0, 0, 38, 39)  # 39x40 = 1,560 px^2 exactly
+        frames = [frame(i, [obj(0, trap, fw=640, fh=360)])
+                  for i in range(10)]
+        with self.assertRaises(MaskDecodeError) as ctx:
+            select_primary_id(frames)
+        self.assertIn("implausibly small", str(ctx.exception))
+
+    def test_real_speaker_scale_passes_the_floor(self):
+        # The measured real-speaker class: ~100k px^2 median box on
+        # the same 640x360 frame (~45% of frame).
+        speaker = (170, 10, 475, 352)  # 306x343 = 104,958 px^2
+        frames = [frame(i, [obj(3, speaker, fw=640, fh=360)])
+                  for i in range(10)]
+        self.assertEqual(select_primary_id(frames), 3)
+
+    def test_floor_applies_to_the_fallback_pool_too(self):
+        # Nothing is persistent (both ids under 50% presence), so
+        # the fallback pool decides - and its winner still faces
+        # the floor. A speck is a speck however it was picked.
+        a = (2, 2, 5, 5)        # 16 px^2 = 1.3% of the 40x30 frame
+        b = (20, 2, 24, 5)      # 20 px^2 = 1.7%
+        frames = []
+        for i in range(10):
+            if i < 4:
+                frames.append(frame(i, [obj(0, a)]))
+            elif i < 8:
+                frames.append(frame(i, [obj(1, b)]))
+            else:
+                frames.append(frame(i, []))
+        with self.assertRaises(MaskDecodeError):
+            select_primary_id(frames)
+
+    def test_floor_is_a_policy_knob_not_a_trapdoor(self):
+        # min_area_frac=0 restores pick-anything behaviour for
+        # callers that deliberately want the raw rule (benchmarks).
+        trap = (0, 0, 38, 39)
+        frames = [frame(i, [obj(0, trap, fw=640, fh=360)])
+                  for i in range(4)]
+        self.assertEqual(
+            select_primary_id(frames, min_area_frac=0.0), 0)
+
 
 def one_bit_payload(raster: np.ndarray) -> str:
     h, w = raster.shape

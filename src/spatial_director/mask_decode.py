@@ -31,6 +31,11 @@ jobs, in order:
    as a person). The primary speaker is therefore selected as the
    **largest-area persistent** object id: among ids present in at
    least half the frames, the one with the largest median box area.
+   One failure class the area race cannot catch - a SOLE tiny
+   persistent non-person object, measured by Matrix D (2026-10-29) -
+   is stopped by a plausibility floor on the winner's median box
+   area (2% of frame; see MIN_PRIMARY_AREA_FRAC): selection raises
+   instead of silently compositing a speck.
    The selected object's canvases then run through the finish stack -
    temporal smoothing (EMA + cut reset) followed by matte refinement
    (guided filter + choke + feather) - producing the finished
@@ -61,6 +66,26 @@ _OBJECT_RE = re.compile(
 )
 
 DEFAULT_MIN_PRESENCE = 0.5
+
+# Minimum plausible size for a primary speaker: the picked id's
+# MEDIAN BOX AREA as a fraction of frame area. Measured basis
+# (Matrix D prompt/selection benchmark, 2026-10-29): every real
+# speaker in the cached corpus has a median box of 99k-105k px^2 on
+# a 230,400 px^2 frame (~43-46% of frame). The two measured
+# non-speaker traps sit under 0.7%: the background-TV figure
+# (1,224 px^2, 0.53%) and the loudspeaker-class object the prompt
+# 'speaker' latched onto (1,560 px^2, 0.68%) - the latter was the
+# SOLE persistent object in its response, so the largest-area rule
+# picked it silently and confidently (IoU 0.0 vs the true speaker
+# on every sampled frame). The floor at 2% is ~3x above the worst
+# measured trap and ~21x below the smallest measured real speaker,
+# and it has a semantic reading: a "speaker" whose box covers
+# under 2% of the frame is not a composable subject - the depth
+# composite needs a person who fills a visible share of the shot.
+# The selection RULE is unchanged (largest-area persistent id,
+# prompt 'person'); the floor only converts the silent-wrong-answer
+# case into a loud MaskDecodeError.
+MIN_PRIMARY_AREA_FRAC = 0.02
 
 
 class MaskDecodeError(RuntimeError):
@@ -198,6 +223,7 @@ def select_primary_id(
     frames: list[FrameMasks],
     *,
     min_presence: float = DEFAULT_MIN_PRESENCE,
+    min_area_frac: float = MIN_PRIMARY_AREA_FRAC,
 ) -> int:
     """Pick the primary speaker: largest-area PERSISTENT object id.
 
@@ -208,14 +234,28 @@ def select_primary_id(
     detections are small, and a merely large but transient detection
     must not steal the track. If nothing is persistent (pathological
     input), fall back to the most-present id, then largest area, so
-    the function always returns a deterministic answer.
+    the pick itself is deterministic.
+
+    The pick then faces the plausibility floor
+    (``MIN_PRIMARY_AREA_FRAC``): if the winner's median box area is
+    under ``min_area_frac`` of the frame area, selection FAILS
+    LOUDLY with MaskDecodeError instead of returning a speck. The
+    failure class is measured (Matrix D, 2026-10-29): a sole tiny
+    persistent non-person object - a loudspeaker the prompt
+    'speaker' latched onto - previously passed this rule silently.
+    A run that stops here has no speaker worth compositing; a run
+    that continued would composite the wrong object and still pass
+    geometry checks built around it.
     """
     if not frames:
         raise MaskDecodeError("no frames to select a primary object from")
     areas: dict[int, list[int]] = {}
+    frame_areas: dict[int, list[int]] = {}
     for frame in frames:
         for obj in frame.objects:
             areas.setdefault(obj.object_id, []).append(obj.box_area)
+            frame_areas.setdefault(obj.object_id, []).append(
+                obj.frame_w * obj.frame_h)
     if not areas:
         raise MaskDecodeError("no objects in any frame")
 
@@ -231,9 +271,22 @@ def select_primary_id(
     pool = persistent if persistent else list(areas)
     # Largest median area first; presence then lowest id break ties
     # deterministically.
-    return sorted(
+    picked = sorted(
         pool, key=lambda oid: (-median_area(oid), -presence(oid), oid)
     )[0]
+    med = median_area(picked)
+    frame_area = float(statistics.median(frame_areas[picked]))
+    if frame_area > 0 and med < min_area_frac * frame_area:
+        raise MaskDecodeError(
+            f"primary object id {picked} is implausibly small: "
+            f"median box area {med:.0f} px^2 is "
+            f"{med / frame_area:.2%} of the {frame_area:.0f} px^2 "
+            f"frame, under the {min_area_frac:.0%} plausibility "
+            "floor (MIN_PRIMARY_AREA_FRAC) - this is the measured "
+            "signature of a non-speaker object (background figure / "
+            "loudspeaker-class detection), not a composable "
+            "speaker; failing loudly instead of compositing it")
+    return picked
 
 
 def primary_canvases(

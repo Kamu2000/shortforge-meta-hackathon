@@ -28,6 +28,7 @@ This README is updated as the build lands during the event; BUILDLOG.md carries 
 | Dependency | What it is | Used for |
 |---|---|---|
 | NumPy | Array library | Mask math, matte finishing, temporal smoothing, compositing |
+| SciPy (ndimage) | Scientific library | Connected-component labelling for matte cleanup (classical CV, not a model) |
 | Pillow | Imaging library | Hook-text rendering and frame handling |
 | meta-sam-parser | **Meta's official parser library** for the SAM segmentation protocol (PyPI) | Decoding SAM 3.1 mask payloads into rasters — the payload is a custom-base85 token over a context-coded arithmetic stream, and the library's lossless path thresholds coverage internally; our `mask_decode` module wraps it and never re-thresholds |
 
