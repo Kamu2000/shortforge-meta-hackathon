@@ -307,6 +307,62 @@ class CaptionRenderTests(unittest.TestCase):
         self.assertGreaterEqual(ys.min(), rect[1] - 2)
         self.assertLessEqual(ys.max(), rect[3] + 2)
 
+    def test_pill_present_and_clamped_to_rect(self):
+        from spatial_director.layout_law import CAPTION_PILL_FILL
+        rect = initial_caption_rect()
+        layer = caption_layer("hello world this is a caption", rect)
+        pill_px = layer[..., 3] == CAPTION_PILL_FILL[3]
+        self.assertGreater(pill_px.sum(), 500)
+        ys, xs = np.nonzero(pill_px)
+        # The pill is clamped to the block: it may never push ink
+        # outside the planned rect (the verifier measures the rect,
+        # and the safe zone is the rect's contract).
+        self.assertGreaterEqual(ys.min(), rect[1])
+        self.assertLess(ys.max(), rect[3])
+        self.assertGreaterEqual(xs.min(), rect[0])
+        self.assertLess(xs.max(), rect[2])
+        bare = caption_layer("hello world this is a caption", rect,
+                             pill=False)
+        # Anti-aliased glyph edges can land on any alpha value, so
+        # the pill-less render may hold a handful of 168s by chance;
+        # the pill is an area fill - orders of magnitude more.
+        self.assertLess((bare[..., 3] == CAPTION_PILL_FILL[3]).sum(), 100)
+
+
+class CaptionBodyAvoidanceTests(unittest.TestCase):
+    """Refinement (2026-10-29): captions should not sit on the
+    speaker's BODY either, when a face-feasible position allows -
+    and when none does, the overlap is reported, not hidden."""
+
+    def _two_part_speaker(self):
+        # Head high (face clear of the caption zone), torso low
+        # (squarely inside the default caption block).
+        a = np.zeros((CANVAS[1], CANVAS[0]), dtype=np.float64)
+        a[500:800, 340:740] = 1.0     # head/shoulders
+        a[1500:1920, 240:840] = 1.0   # torso at the desk
+        return a
+
+    def test_block_steps_up_off_the_body(self):
+        alphas = [self._two_part_speaker() for _ in range(24)]
+        layout = plan_captions([(0.0, 1.0)], alphas, fps=24)
+        self.assertTrue(layout.feasible)
+        self.assertEqual(layout.per_cue_overlap_px[0], 0)
+        self.assertEqual(layout.per_cue_body_overlap_px[0], 0)
+        # The block moved up off the torso (default bottom is 1600;
+        # the torso starts at 1500, so the block must end by then).
+        self.assertLessEqual(layout.rect[3], 1500)
+
+    def test_unavoidable_body_overlap_is_reported(self):
+        # One solid speaker from 1000 down: every legal caption
+        # position overlaps the body. The rect stays face-feasible
+        # and the body number is on the record.
+        alphas = [speaker_alpha(1000) for _ in range(24)]
+        layout = plan_captions([(0.0, 1.0)], alphas, fps=24)
+        self.assertTrue(layout.feasible)
+        self.assertEqual(layout.per_cue_overlap_px[0], 0)
+        self.assertGreater(layout.per_cue_body_overlap_px[0], 0)
+        self.assertEqual(layout.rect, initial_caption_rect())
+
 
 if __name__ == "__main__":
     unittest.main()

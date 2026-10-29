@@ -424,6 +424,61 @@ def align_turn(phrases: list[str], t0: float, t1: float,
                 cues[i].end_s = round(mid, 3)
                 cues[i + 1].start_s = round(mid, 3)
                 break
+
+    # Snap cue boundaries onto speech onsets/offsets (refinement,
+    # 2026-10-29). The uniform word layout can leave a phrase
+    # boundary a beat off the actual edge of the speech - real
+    # words are not uniform. Abutting cues share their boundary,
+    # so a boundary moves JOINTLY: when a segment edge (a speech
+    # onset or offset) lies within SNAP_TOLERANCE_S of the shared
+    # boundary, both cues' edges move onto it - the caption cut
+    # lands on the sound's edge, not near it. The turn's outer
+    # edges snap the same way. Guards keep every cue ordered and
+    # non-degenerate.
+    if cues:
+        first = cues[0]
+        near = [s for s, _e in segments
+                if abs(s - first.start_s) <= SNAP_TOLERANCE_S]
+        if near:
+            s0 = min(near, key=lambda s: abs(s - first.start_s))
+            if t0 <= s0 < first.end_s - 0.1:
+                first.start_s = round(s0, 3)
+        last = cues[-1]
+        near = [e for _s, e in segments
+                if abs(e - last.end_s) <= SNAP_TOLERANCE_S]
+        if near:
+            e0 = min(near, key=lambda e: abs(e - last.end_s))
+            if last.start_s + 0.1 < e0 <= t1:
+                last.end_s = round(e0, 3)
+        seg_edges = [x for seg in segments for x in seg]
+        for i in range(len(cues) - 1):
+            end_i, start_next = cues[i].end_s, cues[i + 1].start_s
+            if abs(end_i - start_next) < 0.002:
+                # Abutting cues share the boundary: move it jointly
+                # onto the nearest speech edge.
+                near = [x for x in seg_edges
+                        if abs(x - end_i) <= SNAP_TOLERANCE_S]
+                if not near:
+                    continue
+                e0 = min(near, key=lambda x: abs(x - end_i))
+                if cues[i].start_s + 0.1 < e0 < cues[i + 1].end_s - 0.1:
+                    cues[i].end_s = round(e0, 3)
+                    cues[i + 1].start_s = round(e0, 3)
+            else:
+                # Separated cues (a pause sits between them): each
+                # edge snaps independently, never crossing the other.
+                near = [x for x in seg_edges
+                        if abs(x - end_i) <= SNAP_TOLERANCE_S]
+                if near:
+                    e0 = min(near, key=lambda x: abs(x - end_i))
+                    if cues[i].start_s + 0.1 < e0 <= start_next:
+                        cues[i].end_s = round(e0, 3)
+                near = [x for x in seg_edges
+                        if abs(x - start_next) <= SNAP_TOLERANCE_S]
+                if near:
+                    s0 = min(near, key=lambda x: abs(x - start_next))
+                    if cues[i].end_s <= s0 < cues[i + 1].end_s - 0.1:
+                        cues[i + 1].start_s = round(s0, 3)
     return cues
 
 

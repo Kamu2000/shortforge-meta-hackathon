@@ -549,6 +549,12 @@ class CaptionLayout:
     rect: tuple[int, int, int, int]  # the shared block, x0,y0,x1,y1 excl.
     per_cue_overlap_px: dict[int, int] = field(default_factory=dict)
     feasible: bool = True  # False if a face still enters the block
+    # Worst per-cue overlap with the speaker's BODY (full silhouette,
+    # not just the face). Not a gate quantity - F2 measures the face
+    # only - but the refinement's polish target: the planner moves
+    # the block off the body when a face-feasible position allows
+    # it, and reports the number either way.
+    per_cue_body_overlap_px: dict[int, int] = field(default_factory=dict)
 
 
 def rect_overlap_px(region: np.ndarray, rect: tuple[int, int, int, int]) -> int:
@@ -674,10 +680,46 @@ def plan_captions(
             break
         candidate = (best_rect[0], y0, best_rect[2], y1)
         best_rect, best = candidate, overlaps(candidate)
+
+    def body_overlaps(r: tuple[int, int, int, int]) -> dict[int, int]:
+        bx0, by0, bx1, by1 = r
+        out: dict[int, int] = {}
+        for i in range(len(cue_spans)):
+            worst = 0
+            for f in cue_frames(i):
+                region = alphas[f][by0:by1, bx0:bx1] > ALPHA_THRESH
+                worst = max(worst, int(region.sum()))
+            out[i] = worst
+        return out
+
+    body = body_overlaps(best_rect)
+    if not any(best.values()):
+        # Face-feasible. Refinement (2026-10-29): also try to clear
+        # the BODY - captions printed across the speaker's shirt
+        # read as unfinished even though no gate measures them.
+        # Step up in 40px increments (never above CAPTION_MIN_TOP,
+        # never back into the face) and take the LOWEST position
+        # with zero body overlap; if none exists, the face-planned
+        # block stays and its body overlap is reported as-is.
+        step = 1
+        while True:
+            cand_y1 = best_rect[3] - 40 * step
+            cand_y0 = cand_y1 - block_h
+            if cand_y0 < CAPTION_MIN_TOP:
+                break
+            candidate = (best_rect[0], cand_y0, best_rect[2], cand_y1)
+            if any(overlaps(candidate).values()):
+                break  # climbing further only gets closer to the face
+            cand_body = body_overlaps(candidate)
+            if not any(cand_body.values()):
+                best_rect, body = candidate, cand_body
+                break
+            step += 1
     return CaptionLayout(
         rect=best_rect,
         per_cue_overlap_px=best,
         feasible=not any(v > 0 for v in best.values()),
+        per_cue_body_overlap_px=body,
     )
 
 
@@ -875,18 +917,163 @@ def apply_speaker_reframe(
     return frames, alphas
 
 
+# ---------------------------------------------------------------- hook effect
+#
+# plan_hook aims at the depth-effect band, but on some geometry no
+# band position reaches it: a small or low-seated speaker's
+# silhouette simply does not extend into any safe hook position.
+# Settling for occlusion ~0 is how the gate run shipped three
+# passing receipts with the product's signature effect absent.
+# plan_hook_effect therefore searches the one remaining lever -
+# lifting the speaker further with the reframe machinery (extra
+# bottom pad, solved by plan_speaker_reframe's own statistics and
+# clamps) - before accepting a below-band placement. Lifts are
+# tried smallest first and the search stops at the first in-band
+# placement; every candidate keeps the verifier-facing geometry
+# honest (median face centroid inside the central band, minimum
+# head top at the reframe planning floor). If no lift reaches the
+# band, the best (closest-to-band) feasible placement is returned
+# with its below-band status on the record - reported, never
+# hidden, and never a gate failure: the gate judges safety and
+# legibility, the effect line judges the demo.
+
+
+@dataclass
+class HookEffectPlan:
+    """A hook placement plus the speaker transform it requires."""
+
+    pad_bottom_px: int          # total transform to apply (source rows)
+    lift_px: int                # pad beyond the base reframe's plan
+    placement: HookPlacement
+    geometry_ok: bool           # centroid in band + head-top floor held
+    note: str = ""
+
+
+def _transform_alpha(alpha: np.ndarray, pad_bottom_px: int) -> np.ndarray:
+    """One alpha under a bottom-edge transform (apply_speaker_reframe
+    semantics for a single alpha: pad = zero rows, crop = slice)."""
+    if pad_bottom_px == 0:
+        return alpha
+    if pad_bottom_px > 0:
+        return np.pad(alpha, ((0, pad_bottom_px), (0, 0)),
+                      mode="constant")
+    keep = alpha.shape[0] + pad_bottom_px
+    if keep <= 0:
+        raise ValueError("transform would remove the whole frame")
+    return alpha[:keep].copy()
+
+
+def plan_hook_effect(
+    text: str,
+    src_alphas: Sequence[np.ndarray],
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    base_reframe: SpeakerReframe | None = None,
+    lift_steps: Sequence[int] = (0, 40, 80, 120, 160, 200),
+    hook_sample: int | None = None,
+    sample_stride: int = 2,
+) -> HookEffectPlan:
+    """Plan the hook's depth effect, lifting the speaker if needed.
+
+    ``src_alphas`` are the UNTRANSFORMED source-space alphas;
+    ``base_reframe`` is the pipeline's construction reframe (planned
+    here when not supplied). Returns the total bottom-edge
+    transform to apply plus the hook placement predicted on the
+    transformed geometry, sampled exactly as the pipeline samples
+    for ``plan_hook`` (every ``sample_stride``-th frame of the hook
+    window).
+    """
+    if base_reframe is None:
+        base_reframe = plan_speaker_reframe(src_alphas, canvas)
+    if not src_alphas:
+        placement = plan_hook(text, [np.zeros((canvas[1], canvas[0]))],
+                              canvas)
+        return HookEffectPlan(
+            base_reframe.pad_bottom_px, 0, placement, False,
+            note="no speaker geometry; effect cannot be planned")
+    sh = src_alphas[0].shape[0]
+    geos = [frame_geometry(a) for a in src_alphas]
+    face_bottom_max = max(
+        (g.face_box[3] for g in geos if g.face_box is not None),
+        default=sh)
+    n = hook_sample if hook_sample is not None else len(src_alphas)
+    idx = list(range(0, min(n, len(src_alphas)), max(1, sample_stride)))
+
+    def evaluate(pad: int) -> tuple[HookPlacement, bool]:
+        sample = [to_canvas_alpha(_transform_alpha(src_alphas[i], pad),
+                                  canvas)
+                  for i in idx]
+        geos_c = [frame_geometry(a) for a in sample]
+        cents = [g.face_centroid for g in geos_c
+                 if g.face_centroid is not None]
+        tops = [g.head_top for g in geos_c if g.head_top is not None]
+        geo_ok = bool(
+            cents and tops
+            and SAFE_Y0 <= float(np.median([c[1] for c in cents]))
+            <= SAFE_Y1
+            and min(tops) >= REFRAME_HEAD_TOP_PLAN_MIN)
+        return plan_hook(text, sample, canvas), geo_ok
+
+    best: HookEffectPlan | None = None
+    for lift in lift_steps:
+        pad = base_reframe.pad_bottom_px + int(lift)
+        if lift != 0 and not (face_bottom_max + 4 <= sh + pad <= 4 * sh):
+            continue  # outside the reframe clamps; not a legal lift
+        placement, geo_ok = evaluate(pad)
+        cand = HookEffectPlan(
+            pad, int(lift), placement, geo_ok,
+            note=(f"lift +{lift}px: predicted occlusion "
+                  f"{placement.predicted_occlusion:.3f} "
+                  f"({placement.effect_status}), geometry ok {geo_ok}"))
+        if geo_ok and placement.effect_status == "in_band":
+            cand.note = (
+                f"in-band at lift +{lift}px: predicted occlusion "
+                f"{placement.predicted_occlusion:.3f}")
+            return cand
+        if best is None or (
+            geo_ok and not best.geometry_ok
+        ) or (
+            geo_ok == best.geometry_ok
+            and abs(placement.predicted_occlusion
+                    - EFFECT_OCCLUSION_TARGET)
+            < abs(best.placement.predicted_occlusion
+                  - EFFECT_OCCLUSION_TARGET)
+        ):
+            best = cand
+    assert best is not None  # lift_steps always contains 0 in practice
+    best.note = (
+        f"no lift in {list(lift_steps)} reached the effect band; "
+        f"best is lift +{best.lift_px}px at predicted occlusion "
+        f"{best.placement.predicted_occlusion:.3f} "
+        f"({best.placement.effect_status}) - effect below target, "
+        "declared")
+    return best
+
+
+CAPTION_PILL_FILL = (8, 8, 10, 168)
+CAPTION_PILL_PAD_X = 16
+CAPTION_PILL_INSET_Y = 5
+
+
 def caption_layer(
     text: str,
     rect: tuple[int, int, int, int],
     canvas: tuple[int, int] = DEFAULT_CANVAS,
     *,
     font_size: int = CAPTION_FONT_SIZE,
+    pill: bool = True,
 ) -> np.ndarray:
     """Render one cue's text as an RGBA layer inside the block rect.
 
-    White fill with a dark stroke (the hook renderer's legibility
-    treatment), lines centred in the block. Captions render IN FRONT
-    of the speaker - this layer is composited last by the caller.
+    Legibility treatment (refinement, 2026-10-29): each line sits
+    on a subtle dark pill - a rounded rectangle at 66% opacity,
+    inset inside the line's own band and clamped to the block rect,
+    so the pill can never push ink outside the planned block - with
+    white fill and a thin dark stroke on top. The gate outputs'
+    bare stroked text washed out over bright clothing and the
+    treated backdrop's bright patches; the pill holds contrast
+    constant wherever the block lands. Captions render IN FRONT of
+    the speaker - this layer is composited last by the caller.
     """
     cw, ch = canvas
     img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
@@ -899,12 +1086,22 @@ def caption_layer(
     y = y0 + max(0, ((y1 - y0) - total_h) // 2)
     for line in lines:
         w = draw.textlength(line, font=font)
+        x = x0 + ((x1 - x0) - w) / 2
+        if pill:
+            draw.rounded_rectangle(
+                [max(x0, x - CAPTION_PILL_PAD_X),
+                 y + CAPTION_PILL_INSET_Y,
+                 min(x1, x + w + CAPTION_PILL_PAD_X),
+                 y + line_h - CAPTION_PILL_INSET_Y],
+                radius=(line_h - 2 * CAPTION_PILL_INSET_Y) // 2,
+                fill=CAPTION_PILL_FILL,
+            )
         draw.text(
-            (x0 + ((x1 - x0) - w) / 2, y),
+            (x, y),
             line,
             font=font,
             fill=(255, 255, 255, 255),
-            stroke_width=max(2, font_size // 14),
+            stroke_width=max(2, font_size // 28),
             stroke_fill=(10, 10, 12, 255),
         )
         y += line_h

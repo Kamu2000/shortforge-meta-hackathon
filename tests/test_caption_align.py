@@ -120,6 +120,27 @@ class AlignTests(unittest.TestCase):
         self.assertAlmostEqual(cues[0].start_s, 1.0)
         self.assertAlmostEqual(cues[0].end_s, 5.0)
 
+    def test_cue_edges_snap_to_speech_onsets(self):
+        # Segments (0, 1.9) and (4, 6): uniform word layout puts the
+        # shared phrase boundary at 4.05 - just after the second
+        # segment's onset. The joint edge snap must pull BOTH cues'
+        # shared boundary onto the onset itself (4.0): the caption
+        # cut lands on the sound's edge.
+        prof = profile_from_spans([(0.0, 1.9), (4.0, 6.0)], total_s=6.0)
+        cues = align_turn(["one two three", "four five six"],
+                          0.0, 6.0, prof)
+        self.assertEqual(len(cues), 2)
+        self.assertAlmostEqual(cues[0].end_s, 4.0, delta=0.01)
+        self.assertAlmostEqual(cues[1].start_s, 4.0, delta=0.01)
+        self.assertAlmostEqual(cues[1].end_s, 6.0, delta=0.05)
+        # And the offset side: boundary at 2.15 with the segment
+        # ending at 2.3 - the shared boundary moves onto the offset.
+        prof = profile_from_spans([(0.0, 2.3), (4.0, 6.0)], total_s=6.0)
+        cues = align_turn(["one two three", "four five six"],
+                          0.0, 6.0, prof)
+        self.assertAlmostEqual(cues[0].end_s, 2.3, delta=0.01)
+        self.assertAlmostEqual(cues[1].start_s, 2.3, delta=0.01)
+
     def test_cues_ordered_inside_turn(self):
         prof = profile_from_spans([(0.0, 10.0)], total_s=10.0)
         phrases = split_phrases("One two three. Four five six. Seven.")
