@@ -237,6 +237,12 @@ def process_short(index: int, run_dir: Path, out_dir: Path,
     receipt1.notes.append(
         "offline refinement validation: Wonder judge stubbed "
         "(FakeWonder, can_summarize=True); zero paid calls.")
+    # Persist the draft-1 receipt IMMEDIATELY: a killed driver must
+    # not take the evidence with it (learned 2026-10-29, when a
+    # detached run was reaped mid-short-3 and its verdicts were
+    # only recoverable from the files it left behind).
+    (out_dir / f"{tag}-draft1-receipt.json").write_text(
+        json.dumps(receipt1.to_dict(), indent=2), encoding="utf-8")
     f2 = next(c for c in receipt1.checks if c.check_id == "F2")
     log(f"{tag}: draft verdict {receipt1.verdict} failed "
         f"{receipt1.failed}; F2 measured occ "
@@ -325,12 +331,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--run-dir", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--shorts", default="1,3",
+                    help="comma-separated short indices to process")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     summary = json.loads((args.run_dir / "run-summary.json").read_text())
     hooks = {s["index"]: s["hook_text"] for s in summary["shorts"]}
     results = []
-    for index in (1, 3):
+    for index in [int(x) for x in args.shorts.split(",")]:
         results.append(process_short(
             index, args.run_dir, args.out, hooks[index],
             log=lambda m: print(m, flush=True)))
