@@ -1,0 +1,400 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-1/draft2-trim-silence.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "PASSED_AFTER_REPAIR",
+  "repair": {
+    "status": "executed",
+    "menu_id": "TRIM_SILENCE",
+    "target_check": "F5",
+    "spark_reason": "Reduces max_silence_gap_s from 1.1s to under 0.45s by cutting silence and retiming captions.",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0021,
+      "request_id": "chatcmpl-01a187e1-9708-7678-8f67-0f55db9e5ad6"
+    },
+    "extra_calls": [],
+    "detail": "trimmed 0.78s at 6.17s, 0.48s at 7.71s, 0.40s at 8.85s, 0.38s at 10.05s, 0.80s at 15.61s; 528 -> 462 frames"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-1/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -20.45,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1478,
+            "glyph_occlusion_max": 0.1813,
+            "glyph_occlusion_alpha_weighted_mean": 0.1447,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                498.2,
+                1186.6
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1072,
+            "frames_with_speaker": 528,
+            "frames_total": 528
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.1,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man gives his version of an upsetting experience involving Trent Reznor and Nine Inch Nails, saying Reznor was excited to work together and he listened to the songs out of curiosity. The hook is the on-screen"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "17 DAYS INTO NINE INCH NAILS?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "17 DAYS INTO NINE INCH NAILS?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "to say nothing um here's my version of [nothing]"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "I would reinvent Nine Inch Nails and he [nine]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0131,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9942
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0446,
+          "request_id": "resp_6ae34c26b8f7d9e8adda4f14"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "cfe113ce9bd91333bb24edc291a138275eb1168916a9cdfbcc77f6efe0b9d8cb",
+        "sam_response": "4f7701d1a45c423d1312503dff55a6dee3d28e2b107a8fe1fee0195dedfa8980",
+        "captions": "38b38ab20e1af02cd2f6b4b489af3259a0d6f67ddb8eede86849151fd4626b7f"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.148 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-1/draft2-trim-silence.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "PASSED_AFTER_REPAIR",
+      "failed_checks": [],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -20.47,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1478,
+            "glyph_occlusion_max": 0.1813,
+            "glyph_occlusion_alpha_weighted_mean": 0.1447,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                497.8,
+                1186.2
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1072,
+            "frames_with_speaker": 462,
+            "frames_total": 462
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.34,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.981,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man reflects on his brief, upsetting time in Nine Inch Nails and learning and recording their songs. The hook is the text \"17 DAYS INTO NINE INCH NAILS?\" implying his stint with the band lasted just 17 days."
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "17 DAYS INTO NINE INCH NAILS?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "17 DAYS INTO NINE INCH NAILS?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "to say nothing um here's my version of [nothing]"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "I would reinvent Nine Inch Nails and he [nine]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0131,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9942
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0358,
+          "request_id": "resp_6ae34e66f1e30df2de064870"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "a5b8f3d11ce0dfaa657bf3ed7d99cdcb161f0b9dfc68114c963be8dcccbf9a16",
+        "sam_response": "4f7701d1a45c423d1312503dff55a6dee3d28e2b107a8fe1fee0195dedfa8980",
+        "captions": "d65d152392d1cd3f444c90403cda1d0ea17e133daa5a8769b1b2e6460b142d08"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.148 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    }
+  ]
+}

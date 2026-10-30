@@ -1,0 +1,380 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-3/draft2-trim-silence.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "PASSED_AFTER_REPAIR",
+  "repair": {
+    "status": "executed",
+    "menu_id": "TRIM_SILENCE",
+    "target_check": "F5",
+    "spark_reason": "Reduces max_silence_gap_s from 1.16s to under 0.45s by cutting the over-long pause and retiming captions.",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.002,
+      "request_id": "chatcmpl-01a1880f-d252-7431-a0c7-a3d1c6f249bc"
+    },
+    "extra_calls": [],
+    "detail": "trimmed 0.86s at 0.59s, 0.28s at 10.10s, 0.26s at 13.25s, 0.34s at 19.13s, 0.24s at 20.92s; 527 -> 480 frames"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-3/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -21.69,
+            "first_speech_onset_s": 0.1
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1463,
+            "glyph_occlusion_max": 0.1805,
+            "glyph_occlusion_alpha_weighted_mean": 0.1424,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                496.6,
+                1187.2
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1078,
+            "frames_with_speaker": 527,
+            "frames_total": 527
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.16,
+            "first_speech_onset_s": 0.1,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man recounts auditioning/playing with Frank Zappa while David Bowie watched from the side of the stage and then said he wanted him. The hook is the on-screen question \"WHY ARE ZAPPA AUDITIONS NOTORIOUSLY DIFFICULT?\""
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "WHY ARE ZAPPA AUDITIONS NOTORIOUSLY DIFFICULT?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "no i didn't my audition for for david [no]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0191,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9969
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0193,
+          "request_id": "resp_6ae357fd2505989938714587"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "2f9d300809af0ea6675dbdf1af64366066a3afd924b73f80df791e3e5bd25c27",
+        "sam_response": "6d1149ca549367407da05b8104dd66481aaad0db93086aeeb57b35d8c26641ae",
+        "captions": "c59f0a0d634bcf7072862b72654411cea804a773056ef5c971c2f3f35913f938"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.146 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-3/draft2-trim-silence.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "PASSED_AFTER_REPAIR",
+      "failed_checks": [],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -18.46,
+            "first_speech_onset_s": 0.1
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1502,
+            "glyph_occlusion_max": 0.1805,
+            "glyph_occlusion_alpha_weighted_mean": 0.146,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                496.2,
+                1186.8
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1078,
+            "frames_with_speaker": 480,
+            "frames_total": 480
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.3,
+            "first_speech_onset_s": 0.1,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.994,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man recounts an audition story involving David Bowie and Frank Zappa, explaining that the music is difficult and chaotic. The hook is the on-screen text premise, \"WHY ARE ZAPPA AUDITIONS NOTORIOUSLY DIFFICULT?\""
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "WHY ARE ZAPPA AUDITIONS NOTORIOUSLY DIFFICULT?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "no i didn't my audition for for david [no]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0257,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9972
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0205,
+          "request_id": "resp_6ae35a2d80555d00db9c43a4"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "3c5adef63940dacac6528923eb34bfe03b05df586d759d94b37a2c72abc41bf9",
+        "sam_response": "6d1149ca549367407da05b8104dd66481aaad0db93086aeeb57b35d8c26641ae",
+        "captions": "cd3053f43714e93afa8d972feeb989c49fd444e63e3e285d70a6de04bfe06ab6"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.150 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    }
+  ]
+}

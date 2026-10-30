@@ -1,0 +1,400 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-2/draft2-trim-silence.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "PASSED_AFTER_REPAIR",
+  "repair": {
+    "status": "executed",
+    "menu_id": "TRIM_SILENCE",
+    "target_check": "F5",
+    "spark_reason": "Reduces max_silence_gap_s from 0.74s to under 0.45s by cutting the over-long pause and retiming captions",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0028,
+      "request_id": "chatcmpl-01a187f8-806c-7778-a040-670fe02dd354"
+    },
+    "extra_calls": [],
+    "detail": "trimmed 0.23s at 5.70s, 0.44s at 21.17s; 528 -> 512 frames"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-2/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -19.88,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1439,
+            "glyph_occlusion_max": 0.1544,
+            "glyph_occlusion_alpha_weighted_mean": 0.1402,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                483.6,
+                1186.9
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1087,
+            "frames_with_speaker": 528,
+            "frames_total": 528
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 0.74,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man recounts his favorite recording memory of entering the studio with Brian Eno, Jerry Harrison, and David Byrne after the others' parts were done, leaving him to play to just bass and drums. The hook is the on-screen premise \"NO VOCALS, NO SIGNPOST, JUST SOLO?\""
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "NO VOCALS, NO SIGNPOSTS, JUST SOLO?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "NO VOCALS, NO SIGNPOSTS, JUST SOLO? [no]"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "One of my favorite memories of recording is [one]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "already done there was nothing really much to [nothing]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0034,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9984
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0306,
+          "request_id": "resp_6ae35205e3757c7076694343"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "30e1b86ab91e92c9af81b0eccb337c2dce43feaf0a7559b8e01bc5d44f3ad00a",
+        "sam_response": "2986c60b5dee9dd259a6c5b84b520fae8e44a1656f576c8166f7db18ca95e01b",
+        "captions": "795c653eabc3abf3669a342c4aa224f3f2ba4d07b75bbfc472a37452bc39fadf"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.144 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-belew-2/short-2/draft2-trim-silence.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "PASSED_AFTER_REPAIR",
+      "failed_checks": [],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -19.91,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1439,
+            "glyph_occlusion_max": 0.1552,
+            "glyph_occlusion_alpha_weighted_mean": 0.1403,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                483.6,
+                1186.9
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1087,
+            "frames_with_speaker": 512,
+            "frames_total": 512
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.44,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.996,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man recounts one of his favorite recording memories, working in the studio with Brian Eno, Jerry Harrison, and David Byrne after Chris Frantz had already laid parts, leaving only bass and drums to play to. The hook is the on-screen premise \"NO VOCALS, NO SIGNPOSTS, JUST SOLO?\""
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "NO VOCALS, NO SIGNPOSTS, JUST SOLO?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "NO VOCALS, NO SIGNPOSTS, JUST SOLO? [no]"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "One of my favorite memories of recording is [one]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "already done there was nothing really much to [nothing]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0034,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9984
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.032,
+          "request_id": "resp_6ae35447afc88c1d160a4750"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "10c4da712f8dac00294fffdbb762643bc9655f7b2c980c96b39c22d13b9cced6",
+        "sam_response": "2986c60b5dee9dd259a6c5b84b520fae8e44a1656f576c8166f7db18ca95e01b",
+        "captions": "fbfeb01d3a202fe945f0b236c4b50b3a9c577378e13a28976d13689ec872313e"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.144 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ]
+    }
+  ]
+}
