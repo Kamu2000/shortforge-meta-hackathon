@@ -930,15 +930,17 @@ def apply_speaker_reframe(
 # Block 2 (2026-10-31, Kamlesh's design): during a speaker_forward
 # span the speaker is rendered larger and reframed toward the
 # canvas centre - emphasis framing for direct-address / payoff
-# moments. Unlike the construction reframe (a whole-Short
-# bottom-edge transform), emphasis is a per-span affine warp of
-# the source frames themselves: content scales by k about the
-# frame and translates by t, in source pixels, and the ordinary
-# speaker_layer placement then renders the warped frame. Because
-# the warp is baked into frames + alphas, to_canvas_alpha of a
-# warped alpha is exactly the geometry F3/F4 verify - the
-# planning below is solved in that same measured space, inside
-# the verifier's own limits, and a span whose emphasis cannot
+# moments. The mechanism is the compositor's own geometry, the
+# same one the construction reframe uses: speaker_layer scales a
+# frame by min(cw/w, ch/h) and bottom-anchors it, so a per-span
+# CROP of the source frame (a digital zoom - smaller frame, bigger
+# scale) plus a bottom PAD (lifts the placed frame, exactly like
+# plan_speaker_reframe's lift) reframes the speaker without any
+# resampling of the speaker's own pixels. The transform is baked
+# into the span's frames + alphas, so to_canvas_alpha of a
+# transformed alpha is exactly the geometry F3/F4 verify - and
+# the planning below is solved in that measured space, inside
+# the verifier's own limits. A span whose emphasis cannot
 # satisfy them falls back to the standard framing.
 
 EMPHASIS_SCALE = 1.18          # the emphasis the planner aims for
@@ -952,8 +954,9 @@ class SpeakerEmphasis:
     """A planned per-span emphasis transform (source space)."""
 
     feasible: bool
-    scale: float                       # 1.0 when infeasible
-    translate: tuple[float, float]     # source px (tx, ty)
+    scale: float                       # achieved zoom (1.0 = none)
+    crop: tuple[int, int, int, int]    # (x0, y0, w, h) source window
+    pad_bottom_px: int                 # rows appended below the crop
     placed_centroid: tuple[float, float] | None
     placed_head_top_min: int | None
     note: str = ""
@@ -966,29 +969,33 @@ def plan_speaker_emphasis(
     scale: float = EMPHASIS_SCALE,
     head_top_plan_min: int = REFRAME_HEAD_TOP_PLAN_MIN,
 ) -> SpeakerEmphasis:
-    """Plan an emphasis warp for one speaker_forward span.
+    """Plan an emphasis crop+pad for one speaker_forward span.
 
     Statistics mirror plan_speaker_reframe (and therefore F3/F4):
     the median per-frame face centroid and the minimum head top.
-    The warp p' = k.p + t is solved so the placed median centroid
-    lands on the canvas centre of the F3 band ((cw/2, band
-    centre)); k descends from ``scale`` until every planned limit
-    holds: placed head-top minimum >= ``head_top_plan_min`` (the
-    same 150px planning floor the reframe uses, above F4's 90px),
-    and the face box - at its widest frame - stays inside the
-    source frame horizontally and above its bottom (a zoom may
-    crop the body's edges; it may never crop the face). If no
-    k >= EMPHASIS_MIN_SCALE satisfies the limits, the span is
-    infeasible and the caller falls back to standard framing,
-    with the reason in ``note``.
+    For each candidate zoom k (descending from ``scale``): the
+    crop window is (sw/k, sh/k); its left edge is solved to centre
+    the face horizontally (clamped into the frame); its top edge
+    sits just above the face and never above the head top; the
+    bottom pad is then solved so the placed centroid lands on the
+    F3 band's centre. The candidate is feasible only if the
+    EVALUATED placement (integer parameters, the compositor's
+    own formulas) keeps the centroid inside the band on both
+    axes, the placed head-top minimum clears
+    ``head_top_plan_min`` (the 150px planning floor above F4's
+    90px), and the face box fits inside the crop window (a zoom
+    may crop the body's edges; it may never clip the face). If no
+    k >= EMPHASIS_MIN_SCALE is feasible, the caller falls back
+    to standard framing, with the reason in ``note``.
     """
     geos = [frame_geometry(a) for a in src_alphas]
     present = [g for g in geos if g.present
                and g.face_centroid is not None]
     if not present or not src_alphas:
         return SpeakerEmphasis(
-            feasible=False, scale=1.0, translate=(0.0, 0.0),
-            placed_centroid=None, placed_head_top_min=None,
+            feasible=False, scale=1.0, crop=(0, 0, 0, 0),
+            pad_bottom_px=0, placed_centroid=None,
+            placed_head_top_min=None,
             note="no speaker geometry in the span; nothing to "
                  "emphasise")
     sh, sw = src_alphas[0].shape
@@ -1001,49 +1008,78 @@ def plan_speaker_emphasis(
                   if g.face_box is not None)
     face_x1 = max(g.face_box[2] for g in present
                   if g.face_box is not None)
+    face_y0 = min(g.face_box[1] for g in present
+                  if g.face_box is not None)
     face_y1 = max(g.face_box[3] for g in present
                   if g.face_box is not None)
-    # speaker_layer placement of the (unwarped-dims) frame.
-    s = min(cw / sw, ch / sh)
-    ox = (cw - sw * s) / 2.0
-    oy = ch - sh * s
     target = (cw / 2.0, (SAFE_Y0 + SAFE_Y1) / 2.0)
 
     k = float(scale)
     last_note = ""
     while k >= EMPHASIS_MIN_SCALE - 1e-9:
-        tx = (target[0] - ox) / s - k * cx
-        ty = (target[1] - oy) / s - k * cy
-        placed_ht = oy + s * (k * ht_min + ty)
+        w = max(1, int(round(sw / k)))
+        h = max(1, int(round(sh / k)))
+        s_nom = min(cw / w, ch / h)
+        # Left edge: centre the face (ox is unchanged by a uniform
+        # crop, since w * s_nom == sw * s when width-bound; solve
+        # against the general formula anyway).
+        ox_nom = (cw - w * s_nom) / 2.0
+        x0 = int(round(cx - (target[0] - ox_nom) / s_nom))
+        x0 = min(max(0, x0), sw - w)
+        # Top edge: just above the face, never above the head top.
+        y0 = min(max(0, face_y0 - 20), sh - h, ht_min)
+        # Pad: solve oy so the centroid lands on the target row,
+        # using the width-bound scale (a pad only lowers the scale
+        # if it makes the frame height-bound, checked below).
+        oy_want = target[1] - s_nom * (cy - y0)
+        pad = int(round((ch - oy_want) / s_nom)) - h
+        height = h + pad
+        if height < face_y1 - y0 + 4:
+            last_note = (f"pad {pad} would crop the face at scale "
+                         f"{k:.2f}")
+            k -= EMPHASIS_SCALE_STEP
+            continue
+        s2 = min(cw / w, ch / height)
+        ox = (cw - w * s2) / 2.0
+        oy = ch - height * s2
+        placed_cx = ox + s2 * (cx - x0)
+        placed_cy = oy + s2 * (cy - y0)
+        placed_ht = oy + s2 * max(0, ht_min - y0)
+        if not (SAFE_X0 <= placed_cx <= SAFE_X1
+                and SAFE_Y0 <= placed_cy <= SAFE_Y1):
+            last_note = (f"placed centroid ({placed_cx:.0f},"
+                         f"{placed_cy:.0f}) outside the F3 band "
+                         f"at scale {k:.2f}")
+            k -= EMPHASIS_SCALE_STEP
+            continue
         if placed_ht < head_top_plan_min:
             last_note = (f"head-top plan {placed_ht:.0f}px < "
                          f"{head_top_plan_min}px floor at scale "
                          f"{k:.2f}")
             k -= EMPHASIS_SCALE_STEP
             continue
-        if k * face_x0 + tx < 0 or k * face_x1 + tx > sw \
-                or k * face_y1 + ty > sh:
-            last_note = (f"face box would clip the frame at scale "
-                         f"{k:.2f} (the speaker already fills the "
-                         f"frame; a zoom has nowhere to go)")
+        if face_x0 < x0 or face_x1 > x0 + w:
+            last_note = (f"face box would clip the crop window "
+                         f"at scale {k:.2f} (the speaker already "
+                         f"fills the frame width; a zoom has "
+                         f"nowhere to go)")
             k -= EMPHASIS_SCALE_STEP
             continue
-        placed_cx = ox + s * (k * cx + tx)
-        placed_cy = oy + s * (k * cy + ty)
         return SpeakerEmphasis(
             feasible=True, scale=round(k, 4),
-            translate=(round(tx, 2), round(ty, 2)),
+            crop=(x0, y0, w, h), pad_bottom_px=pad,
             placed_centroid=(round(placed_cx, 1),
                              round(placed_cy, 1)),
             placed_head_top_min=int(round(placed_ht)),
-            note=(f"emphasis x{k:.2f}: centroid "
-                  f"({cx:.0f},{cy:.0f}) -> ({placed_cx:.0f},"
-                  f"{placed_cy:.0f}) canvas, head-top min "
-                  f"{placed_ht:.0f}px >= {head_top_plan_min}px "
-                  f"plan floor"))
+            note=(f"emphasis x{k:.2f}: crop {(x0, y0, w, h)} + "
+                  f"pad {pad}; centroid ({cx:.0f},{cy:.0f}) -> "
+                  f"({placed_cx:.0f},{placed_cy:.0f}) canvas, "
+                  f"head-top min {placed_ht:.0f}px >= "
+                  f"{head_top_plan_min}px plan floor"))
     return SpeakerEmphasis(
-        feasible=False, scale=1.0, translate=(0.0, 0.0),
-        placed_centroid=None, placed_head_top_min=None,
+        feasible=False, scale=1.0, crop=(0, 0, sw, sh),
+        pad_bottom_px=0, placed_centroid=None,
+        placed_head_top_min=None,
         note=f"emphasis infeasible inside the F3/F4 limits: "
              f"{last_note}; standard framing kept for this span")
 
@@ -1053,28 +1089,26 @@ def _smoothstep(x: float) -> float:
     return x * x * (3.0 - 2.0 * x)
 
 
-def _warp_frame(frame: np.ndarray, k: float, tx: float,
-                ty: float) -> np.ndarray:
-    """One RGB frame under p' = k.p + t (PIL resize + paste)."""
-    sh, sw = frame.shape[:2]
-    img = Image.fromarray(frame)
-    scaled = img.resize((max(1, round(sw * k)),
-                         max(1, round(sh * k))), Image.BILINEAR)
-    out = Image.new("RGB", (sw, sh), (0, 0, 0))
-    out.paste(scaled, (round(tx), round(ty)))
-    return np.asarray(out)
+def _emphasis_frame(frame: np.ndarray, x0: int, y0: int, w: int,
+                    h: int, pad: int) -> np.ndarray:
+    """One RGB frame cropped to the window + bottom pad/crop."""
+    out = frame[y0:y0 + h, x0:x0 + w]
+    if pad > 0:
+        out = np.pad(out, ((0, pad), (0, 0), (0, 0)), mode="edge")
+    elif pad < 0:
+        out = out[:h + pad].copy()
+    return out
 
 
-def _warp_alpha(alpha: np.ndarray, k: float, tx: float,
-                ty: float) -> np.ndarray:
-    """One float alpha under p' = k.p + t (F-mode, no quantising)."""
-    sh, sw = alpha.shape
-    img = Image.fromarray(alpha.astype(np.float32), mode="F")
-    scaled = img.resize((max(1, round(sw * k)),
-                         max(1, round(sh * k))), Image.BILINEAR)
-    out = Image.new("F", (sw, sh), 0.0)
-    out.paste(scaled, (round(tx), round(ty)))
-    return np.asarray(out).astype(np.float32)
+def _emphasis_alpha(alpha: np.ndarray, x0: int, y0: int, w: int,
+                    h: int, pad: int) -> np.ndarray:
+    """One float alpha cropped to the window + bottom pad/crop."""
+    out = alpha[y0:y0 + h, x0:x0 + w]
+    if pad > 0:
+        out = np.pad(out, ((0, pad), (0, 0)), mode="constant")
+    elif pad < 0:
+        out = out[:h + pad].copy()
+    return out
 
 
 def apply_speaker_emphasis(
@@ -1086,29 +1120,35 @@ def apply_speaker_emphasis(
     *,
     ease_frames: int = EMPHASIS_EASE_FRAMES,
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """Bake an emphasis warp into frames/alphas inside a span.
+    """Bake an emphasis crop+pad into frames/alphas in a span.
 
     Transitions ease over ``ease_frames`` at both span boundaries
-    (smoothstep on the (scale, translate) interpolation from
-    identity), so the framing never jumps. Frames outside the
-    span - and boundary frames whose eased factor is exactly 0 -
-    are shared untouched; the input lists are not mutated (new
-    lists are returned, warped frames are new arrays).
+    (smoothstep interpolation of window + pad from identity), so
+    the framing never jumps. Frames outside the span - and
+    boundary frames whose eased factor is exactly 0 - are shared
+    untouched; the input lists are not mutated (new lists are
+    returned, transformed frames are new arrays).
     """
     frames = list(frames)
     alphas = list(alphas)
+    sh, sw = alphas[0].shape if alphas else (0, 0)
+    cx0, cy0, cw_, ch_ = emphasis.crop
     n = max(0, end_idx - start_idx)
     for j in range(n):
         ramp = min(_smoothstep(j / ease_frames),
                    _smoothstep((n - 1 - j) / ease_frames))
         if ramp <= 0.0:
             continue
-        k = 1.0 + (emphasis.scale - 1.0) * ramp
-        tx = emphasis.translate[0] * ramp
-        ty = emphasis.translate[1] * ramp
+        x0 = int(round(cx0 * ramp))
+        y0 = int(round(cy0 * ramp))
+        w = int(round(sw + (cw_ - sw) * ramp))
+        h = int(round(sh + (ch_ - sh) * ramp))
+        pad = int(round(emphasis.pad_bottom_px * ramp))
+        if (x0, y0, w, h, pad) == (0, 0, sw, sh, 0):
+            continue
         i = start_idx + j
-        frames[i] = _warp_frame(frames[i], k, tx, ty)
-        alphas[i] = _warp_alpha(alphas[i], k, tx, ty)
+        frames[i] = _emphasis_frame(frames[i], x0, y0, w, h, pad)
+        alphas[i] = _emphasis_alpha(alphas[i], x0, y0, w, h, pad)
     return frames, alphas
 
 

@@ -68,10 +68,14 @@ from .graphics_layer import build_graphics
 from .image_client import ImageClient
 from .layout_law import (
     EFFECT_OCCLUSION_BAND,
+    SAFE_Y0,
+    SAFE_Y1,
+    apply_speaker_emphasis,
     apply_speaker_reframe,
     effect_note,
     plan_captions,
     plan_hook_effect,
+    plan_speaker_emphasis,
     plan_speaker_reframe,
     render_hook_layer,
     to_canvas_alpha,
@@ -658,6 +662,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     # Disabled = None everywhere below = the pre-graphics code path.
     placed_graphics = None
     placed_backdrops = None
+    speaker_forward_decls = None
     graphics_report = None
     sfx_plan_events = None
     applied_sfx = None
@@ -671,9 +676,52 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             hook_glyph_bbox=glyph_bbox,
             hook_window=hook_spec.window, duration_s=length,
             ts=ts)
+        # Speaker-forward (block 2): emphasis framing for the
+        # planner's marked spans, planned inside the F3/F4 limits
+        # per span. A feasible warp is baked into frames/alphas -
+        # like the construction reframe - and the canvas alphas
+        # rebuilt, so render and verifier measure the emphasised
+        # geometry as-is; an infeasible span falls back to the
+        # standard framing with the reason on the record.
+        if build.speaker_forward:
+            decls: list[dict[str, Any]] = []
+            for span in build.speaker_forward:
+                f0 = max(0, int(round(span.start_s * fps)))
+                f1 = min(len(src_alphas),
+                         int(round(span.end_s * fps)))
+                plan = plan_speaker_emphasis(
+                    src_alphas[f0:f1], canvas)
+                if not plan.feasible:
+                    build.dropped.append({
+                        "span": span.to_dict(),
+                        "reason": "speaker_forward fell back to "
+                                  "standard framing: "
+                                  f"{plan.note}"})
+                    continue
+                frames, src_alphas = apply_speaker_emphasis(
+                    frames, src_alphas, plan, f0, f1)
+                decls.append({
+                    "span": {"start_s": span.start_s,
+                             "end_s": span.end_s},
+                    "scale": plan.scale,
+                    "centroid_target": [
+                        canvas[0] / 2.0,
+                        (SAFE_Y0 + SAFE_Y1) / 2.0],
+                    "placed_centroid": plan.placed_centroid,
+                    "placed_head_top_min":
+                        plan.placed_head_top_min,
+                    "note": plan.note})
+            if decls:
+                canvas_alphas = make_canvas(src_alphas)
+                speaker_forward_decls = decls
+                log(f"short {index}: speaker-forward emphasis "
+                    f"applied on {len(decls)} span(s)")
         placed_graphics = build.placed
         placed_backdrops = build.backdrops
         graphics_report = build.to_dict()
+        if speaker_forward_decls:
+            graphics_report["speaker_forward_transforms"] = \
+                speaker_forward_decls
         # SFX (block 2): effects derived deterministically from
         # the placed graphics, mixed over the normalised window
         # audio. The MIX is what ships; the window clip remains
@@ -713,6 +761,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             caption_rect=cap_layout.rect, sam_response_path=sam_path,
             graphics=placed_graphics,
             backdrops=placed_backdrops,
+            speaker_forward=speaker_forward_decls,
             speech_audio=energy if graphics_enabled else None,
             sfx=applied_sfx),
         wonder=clients.wonder, draft=1, ts=ts)
@@ -741,6 +790,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                 sam_response_path=sam_path,
                 graphics=execution.graphics,
                 backdrops=execution.backdrops,
+                speaker_forward=speaker_forward_decls,
                 speech_audio=(
                     load_energy(execution.speech_audio_from)
                     if execution.speech_audio_from is not None
