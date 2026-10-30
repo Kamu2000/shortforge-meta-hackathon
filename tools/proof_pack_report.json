@@ -65,30 +65,18 @@
       },
       "F8": {
         "tp": 6,
-        "fp": 1,
+        "fp": 0,
         "fn": 0,
-        "tn": 34,
-        "precision": 0.8571428571428571,
+        "tn": 35,
+        "precision": 1.0,
         "recall": 1.0
       }
     },
     "agreement": {
-      "exact_set_matches": 40,
+      "exact_set_matches": 41,
       "total_cases": 41
     },
-    "findings": [
-      {
-        "case": "plan-colliding-heroes-resolved",
-        "expected_failed": [],
-        "actual_failed": [
-          "F8"
-        ],
-        "false_positive_checks": [
-          "F8"
-        ],
-        "false_negative_checks": []
-      }
-    ]
+    "findings": []
   },
   "cases": [
     {
@@ -4642,14 +4630,12 @@
     {
       "id": "plan-colliding-heroes-resolved",
       "target": "control",
-      "description": "A card (2.0-5.0s) and a backdrop (4.0-7.0s) claim the same moment: resolve_heroes drops the later claim (the backdrop) at plan time, before any generation spend, and the surviving plan renders and verifies clean. If resolution regresses, the builder raises and the runner records an ERROR.",
+      "description": "A card (3.5-6.0s) and a backdrop (5.0-7.5s) claim the same moment: resolve_heroes drops the later claim (the backdrop) at plan time, before any generation spend, and the surviving plan renders and verifies clean. If resolution regresses, the builder raises and the runner records an ERROR.",
       "coupling": "",
       "expected_failed": [],
       "wonder_can_summarize": true,
-      "actual_failed": [
-        "F8"
-      ],
-      "verdict": "FAIL",
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
       "checks": {
         "F1": {
           "passed": true,
@@ -4742,7 +4728,7 @@
           }
         },
         "F8": {
-          "passed": false,
+          "passed": true,
           "measured": {
             "count": 1,
             "graphics": [
@@ -4754,16 +4740,14 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_glyph_overlap_px": 27485,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
                 "absence_match_max": 0.0,
                 "path_match": null,
-                "ok": false
+                "ok": true
               }
             ],
-            "offending_indices": [
-              0
-            ],
+            "offending_indices": [],
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],

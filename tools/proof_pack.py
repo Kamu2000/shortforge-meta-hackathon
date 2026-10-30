@@ -373,15 +373,18 @@ def _f8b(shared_video: Path, name: str, spec, *, leak=False):
 
 def _heroes_case(shared_video: Path, name: str):
     """Colliding hero claims, resolved at plan time: a card at
-    2.0-5.0s and a backdrop at 4.0-7.0s overlap, so the later
+    3.5-6.0s and a backdrop at 5.0-7.5s overlap, so the later
     claim (the backdrop) must drop BEFORE any generation, and
-    the surviving plan verifies clean. A resolution regression
-    raises here - the runner records it as an ERROR finding,
-    never a silent pass."""
-    card = GraphicSpan(start_s=2.0, end_s=5.0, kind="card",
+    the surviving plan verifies clean. (The spans sit clear of
+    the hook window: the case isolates hero resolution, and a
+    card box overlapping the window would have to dodge the
+    hook glyph zone as well.) A resolution regression raises
+    here - the runner records it as an ERROR finding, never a
+    silent pass."""
+    card = GraphicSpan(start_s=3.5, end_s=6.0, kind="card",
                        headline="BIG NEWS",
                        source_quote="the band never rehearses")
-    backdrop = GraphicSpan(start_s=4.0, end_s=7.0, kind="backdrop",
+    backdrop = GraphicSpan(start_s=5.0, end_s=7.5, kind="backdrop",
                            prompt="a stadium tunnel at night",
                            source_quote="the band never rehearses")
     kept, drops = resolve_heroes([card, backdrop])
@@ -390,7 +393,7 @@ def _heroes_case(shared_video: Path, name: str):
             f"hero resolution regressed: kept="
             f"{[s.kind for s in kept]} drops={drops}")
     return _f8(shared_video, name,
-               [_f8_spec((700, 300, 1000, 560), 2.0, 5.0)])
+               [_f8_spec((700, 300, 1000, 560), 3.5, 6.0)])
 
 
 CASES: list[Case] = [
@@ -735,7 +738,7 @@ CASES: list[Case] = [
           set(), lambda v: _std(
               v, speech_audio=profile([(0.0, 4.0)]))),
     _case("plan-colliding-heroes-resolved", "control",
-          "A card (2.0-5.0s) and a backdrop (4.0-7.0s) claim "
+          "A card (3.5-6.0s) and a backdrop (5.0-7.5s) claim "
           "the same moment: resolve_heroes drops the later "
           "claim (the backdrop) at plan time, before any "
           "generation spend, and the surviving plan renders "
