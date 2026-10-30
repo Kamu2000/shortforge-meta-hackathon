@@ -70,6 +70,7 @@ Written fresh in-repo on 2026-10-30.
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import json
 import re
@@ -142,7 +143,8 @@ PLANNER_SYSTEM_PROMPT = (
     "number or statistic, a comparison between two stated values, "
     "or a visual concept the words genuinely picture. Reply with "
     "strict JSON only: {\"graphics\": [{\"start_s\": number, "
-    "\"end_s\": number, \"kind\": \"card\" or \"image\", "
+    "\"end_s\": number, \"kind\": \"card\", \"image\", "
+    "\"backdrop\" or \"speaker_forward\", "
     "\"headline\": \"...\", \"facts\": \"...\", \"prompt\": \"...\", "
     "\"compare\": [{\"label\": \"...\", \"value\": number}, "
     "{\"label\": \"...\", \"value\": number}] or null, "
@@ -169,6 +171,21 @@ PLANNER_SYSTEM_PROMPT = (
     "kind \"image\" is only for a concrete visual object or "
     "concept that is not a person: prompt describes the picture in "
     "one sentence with NO text, NO numbers, NO letters, NO people. "
+    "kind \"backdrop\" is for when the speech pictures a SCENE or "
+    "place rather than an object (a stadium tunnel at night, a "
+    "harbour at dusk): the generated image becomes the backdrop "
+    "itself for that span, darkened behind the speaker - prompt "
+    "follows the image rules exactly (one sentence, NO text, NO "
+    "numbers, NO people). Backdrop is for scenes and concepts, "
+    "NEVER for numbers, names or comparisons - those stay cards. "
+    "kind \"speaker_forward\" marks a direct-address or payoff "
+    "moment: the speaker is framed larger and nearer the centre "
+    "for that span. It carries no headline, facts or prompt - "
+    "only the timing and the source_quote. ONE HERO PER MOMENT: "
+    "a card/image span, a backdrop span and a speaker_forward "
+    "span must never overlap in time - when hero claims overlap, "
+    "the later-starting one is dropped by the pipeline, so "
+    "choose the single strongest treatment for each moment. "
     "Each span is the seconds where the topic is spoken (use the "
     "caption timings given) and lasts 2.5 to 6 seconds. Graphics "
     "may appear from the very start of the Short (0s), "
@@ -413,10 +430,19 @@ class GraphicsBuild:
     # placement (the graphic itself was placed, in place) - the
     # refusal and its reason are on the record, never silent.
     path_rejections: list[dict[str, Any]] = field(default_factory=list)
+    # Block 2 heroes: prepared backdrop-mode spans (generated
+    # scenes on the backdrop layer) and the speaker_forward spans
+    # the pipeline applies as emphasis framing. Hero conflicts
+    # resolved by resolve_heroes land in ``dropped`` like any
+    # other drop.
+    backdrops: list[BackdropSpec] = field(default_factory=list)
+    speaker_forward: list[GraphicSpan] = field(default_factory=list)
 
     @property
     def total_cost_usd(self) -> float:
-        return round(sum(g.cost_usd for g in self.placed), 4)
+        return round(
+            sum(g.cost_usd for g in self.placed)
+            + sum(b.cost_usd for b in self.backdrops), 4)
 
     def to_dict(self) -> dict[str, Any]:
         """The graphics plan JSON (written per Short by the pipeline
@@ -430,6 +456,9 @@ class GraphicsBuild:
             "planner_call": self.planner_call,
             "error": self.error,
             "path_rejections": self.path_rejections,
+            "backdrops": [b.to_dict() for b in self.backdrops],
+            "speaker_forward": [s.to_dict()
+                                for s in self.speaker_forward],
             "total_cost_usd": self.total_cost_usd,
         }
 
@@ -459,8 +488,10 @@ def _reject(span: Any, reason: str) -> dict[str, Any]:
 def _derive_motion(span: GraphicSpan) -> str:
     """The motion a span's content earns - derived in code, never
     chosen by the planner, so the recorded type is auditable."""
-    if span.kind == "image":
+    if span.kind in ("image", "backdrop"):
         return "ken_burns"
+    if span.kind == "speaker_forward":
+        return "speaker_forward"
     if span.compare:
         return "build_two_state"
     if _TOKEN_RE.search(span.headline) or _TOKEN_RE.search(span.facts):
@@ -525,7 +556,8 @@ def parse_planner_reply(
         if path is not None:
             path = str(path).strip().lower() or None
         reason = None
-        if kind not in ("card", "image"):
+        if kind not in ("card", "image", "backdrop",
+                        "speaker_forward"):
             reason = f"unknown kind {kind!r}"
         elif path is not None and path not in PATH_KINDS:
             reason = f"unknown motion path {path!r}"
@@ -558,6 +590,27 @@ def parse_planner_reply(
                       "people are typographic name cards only")
         elif kind == "image" and not (8 <= len(prompt) <= 300):
             reason = "image prompt length outside [8, 300] chars"
+        elif kind == "backdrop" and not prompt:
+            reason = "backdrop without a prompt"
+        elif kind == "backdrop" and re.search(r"\d", prompt):
+            reason = ("backdrop prompt contains a digit (numbers "
+                      "never go through the image model)")
+        elif kind == "backdrop" and any(
+                phrase in prompt.lower()
+                for phrase in IMAGE_PROMPT_BLOCKLIST):
+            reason = ("backdrop prompt depicts a person/face - "
+                      "named people are typographic name cards only")
+        elif kind == "backdrop" and not (8 <= len(prompt) <= 300):
+            reason = "backdrop prompt length outside [8, 300] chars"
+        elif kind == "backdrop" and (headline or facts):
+            reason = ("backdrop span carries headline/facts - a "
+                      "backdrop is a scene, never data (numbers, "
+                      "names and comparisons stay cards)")
+        elif kind == "speaker_forward" and (headline or facts
+                                            or prompt):
+            reason = ("speaker_forward carries headline/facts/"
+                      "prompt - it is framing only; the verbatim "
+                      "quote is its whole content")
         if reason is None and compare is not None:
             reason = _validate_compare(compare, transcript_words,
                                        transcript_values)
@@ -583,6 +636,71 @@ def parse_planner_reply(
     # carries. Placement separates whatever overlaps in time onto
     # disjoint boxes, or drops what fits nowhere legal.
     return accepted, rejected
+
+
+HERO_KINDS = ("backdrop", "speaker_forward")
+
+
+def resolve_heroes(
+    spans: list[GraphicSpan],
+    hook_window: tuple[float, float] | None = None,
+) -> tuple[list[GraphicSpan], list[dict[str, Any]]]:
+    """ONE HERO PER MOMENT (block 2): enforce hero exclusivity.
+
+    A moment in the Short gets exactly one hero treatment: a
+    card/image graphic, a backdrop scene, a speaker_forward
+    emphasis, or none. Backdrop and speaker_forward spans are
+    EXCLUSIVE heroes: neither may overlap any other span, and no
+    other span may overlap them. Card/image-vs-card/image overlaps
+    keep the 2026-10-31 collision rules (placement separates them
+    spatially; F8 verifies) - they are not hero conflicts.
+    Overlapping hero claims resolve by dropping the LATER-starting
+    claim (ties: the later one in plan order), with the reason
+    recorded. A speaker_forward span overlapping the hook window
+    also drops: the hook's geometry is planned pre-emphasis, and
+    emphasis is for payoff moments, not the hook.
+    """
+    def overlaps(a_start: float, a_end: float,
+                 b_start: float, b_end: float) -> bool:
+        return a_start < b_end and b_start < a_end
+
+    kept: list[GraphicSpan] = []
+    drops: list[dict[str, Any]] = []
+    order = sorted(range(len(spans)),
+                   key=lambda i: (spans[i].start_s, i))
+    for i in order:
+        span = spans[i]
+        if span.kind == "speaker_forward" \
+                and hook_window is not None \
+                and overlaps(span.start_s, span.end_s,
+                             hook_window[0], hook_window[1]):
+            drops.append({
+                "span": span.to_dict(),
+                "reason": "speaker_forward overlaps the hook "
+                          "window - hook geometry is planned "
+                          "pre-emphasis, and emphasis is for "
+                          "payoff moments, not the hook"})
+            continue
+        conflict = None
+        for other in kept:
+            if not overlaps(span.start_s, span.end_s,
+                            other.start_s, other.end_s):
+                continue
+            if span.kind in HERO_KINDS or other.kind in HERO_KINDS:
+                conflict = other
+                break
+        if conflict is not None:
+            drops.append({
+                "span": span.to_dict(),
+                "reason": f"hero conflict: overlaps the "
+                          f"{conflict.kind} span at "
+                          f"{conflict.start_s:.2f}-{conflict.end_s:.2f}s"
+                          f" - one hero per moment, and the "
+                          f"later-starting claim drops"})
+            continue
+        kept.append(span)
+    kept_set = set(map(id, kept))
+    return [s for s in spans if id(s) in kept_set], drops
 
 
 def _validate_compare(compare: Any, transcript_words: list[str],
@@ -1086,6 +1204,94 @@ def prepare_image(image_rgb: Image.Image, span: GraphicSpan,
             box=(int(target_w), max(1, round(target_w * aspect)))))
 
 
+# ---------------------------------------------------------------- backdrop
+
+# Backdrop-mode treatment (block 2): the generated scene replaces
+# the backdrop layer for its span, treated so the speaker still
+# pops - darkened, desaturated, slightly blurred, with the same
+# slow Ken Burns drift images get. The speaker layer, hook and
+# captions are structurally untouched (the visual sits BEHIND
+# the speaker, on the layer the treated source backdrop uses).
+BACKDROP_BRIGHTNESS = 0.55
+BACKDROP_SATURATION = 0.55
+BACKDROP_BLUR_PX = 2.0
+
+
+@dataclass
+class BackdropSpec:
+    """One backdrop-mode span: a generated scene as the backdrop.
+
+    Mirrors GraphicSpec's timing/state contract (``layer_at(t)``
+    via an (t, start, end) state function) so retiming across a
+    TRIM_SILENCE repair works with dataclasses.replace exactly
+    like graphics. ``layer_at`` returns a full-canvas RGB frame.
+    """
+
+    start_s: float
+    end_s: float
+    layer_rgb: np.ndarray          # final state, canvas RGB
+    prompt: str = ""
+    source_quote: str = ""
+    cost_usd: float = 0.0
+    kind: str = "backdrop"
+    motion: str = "ken_burns"
+    _state_fn: LayerFn | None = None
+
+    def layer_at(self, t_s: float) -> np.ndarray:
+        if self._state_fn is not None:
+            return self._state_fn(t_s, self.start_s, self.end_s)
+        return self.layer_rgb
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind, "start_s": self.start_s,
+            "end_s": self.end_s, "motion": self.motion,
+            "prompt": self.prompt,
+            "source_quote": self.source_quote,
+            "cost_usd": self.cost_usd,
+        }
+
+
+def prepare_backdrop(image_rgb: Image.Image,
+                     canvas: tuple[int, int]) -> BackdropSpec:
+    """Treat a generated scene into a backdrop state function.
+
+    Cover-fit at 1.12x (the Ken Burns window needs the slack),
+    then the backdrop treatment: brightness x0.55, saturation
+    x0.55, slight blur. The drift reuses the image motion: zoom
+    eases 1.00 -> 1.06 with a slow pan, all inside the canvas.
+    Span timing is the caller's (the spec is built by
+    build_graphics with the span's times); this helper returns a
+    spec with placeholder times the caller replaces.
+    """
+    from PIL import ImageEnhance, ImageFilter
+    cw, ch = canvas
+    base = _cover_fit(image_rgb, (round(cw * 1.12), round(ch * 1.12)))
+    base = ImageEnhance.Brightness(base).enhance(BACKDROP_BRIGHTNESS)
+    base = ImageEnhance.Color(base).enhance(BACKDROP_SATURATION)
+    base = base.filter(ImageFilter.GaussianBlur(BACKDROP_BLUR_PX))
+
+    def state(p: float) -> np.ndarray:
+        zoom = 1.0 + (KEN_BURNS_MAX_ZOOM - 1.0) * min(1.0, max(0.0, p))
+        win_w = min(base.size[0], round(cw * 1.12 / zoom))
+        win_h = min(base.size[1], round(ch * 1.12 / zoom))
+        slack_x = base.size[0] - win_w
+        slack_y = base.size[1] - win_h
+        x = int(slack_x * (0.25 + 0.35 * p))
+        y = int(slack_y * (0.25 + 0.30 * p))
+        crop = base.crop((x, y, x + win_w, y + win_h)).resize(
+            (cw, ch), Image.BILINEAR)
+        return np.asarray(crop.convert("RGB"))
+
+    def state_fn(t: float, start: float, end: float) -> np.ndarray:
+        p = min(1.0, max(0.0, (t - start) / (end - start))) \
+            if end > start else 1.0
+        return state(p)
+
+    return BackdropSpec(start_s=0.0, end_s=0.0,
+                        layer_rgb=state(1.0), _state_fn=state_fn)
+
+
 def _paste_layer(content_image: Image.Image,
                  box: tuple[int, int, int, int],
                  canvas: tuple[int, int]) -> np.ndarray:
@@ -1533,15 +1739,27 @@ def build_graphics(
         planner_call=outcome.spark_call,
         planner_rejected=outcome.rejected,
         error=outcome.error)
+    # One hero per moment (block 2): backdrop and speaker_forward
+    # spans are exclusive heroes - resolve overlaps BEFORE any
+    # generation spend, dropping the later-starting claim.
+    hero_spans, hero_drops = resolve_heroes(
+        outcome.spans, hook_window=hook_window)
+    build.dropped.extend(hero_drops)
     items: list[tuple[GraphicSpan, GraphicContent]] = []
-    for span in outcome.spans:
+    for span in hero_spans:
+        if span.kind == "speaker_forward":
+            # No generation: the pipeline applies the emphasis
+            # framing to the speaker layer itself.
+            build.speaker_forward.append(span)
+            continue
         if span.kind == "card":
             items.append((span, prepare_card(span, cues)))
             continue
         if image_client is None:
             build.dropped.append({
                 "span": span.to_dict(),
-                "reason": "image span but no image client is wired"})
+                "reason": f"{span.kind} span but no image client "
+                          f"is wired"})
             continue
         sent_prompt = span.prompt + IMAGE_PROMPT_SUFFIX
         try:
@@ -1562,6 +1780,14 @@ def build_graphics(
             prompt=sent_prompt, source_quote=span.source_quote,
             compare=span.compare, motion=span.motion,
             path=span.path)
+        if span.kind == "backdrop":
+            spec = prepare_backdrop(image.convert("RGB"), canvas)
+            spec = dataclasses.replace(
+                spec, start_s=span.start_s, end_s=span.end_s,
+                prompt=span.prompt, source_quote=span.source_quote,
+                cost_usd=result.cost_usd)
+            build.backdrops.append(spec)
+            continue
         content = prepare_image(image.convert("RGB"), span)
         content.cost_usd = result.cost_usd
         items.append((span, content))

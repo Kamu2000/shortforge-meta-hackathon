@@ -311,10 +311,19 @@ def composite_frame(
     blur_radius: int = DEFAULT_BLUR_RADIUS,
     backdrop: str = DEFAULT_BACKDROP,
     graphics_rgba: np.ndarray | None = None,
+    backdrop_rgb: np.ndarray | None = None,
 ) -> np.ndarray:
-    """One composited frame from a source frame + finished alpha."""
-    bg = make_backdrop(frame_rgb, canvas, backdrop=backdrop,
-                       blur_radius=blur_radius)
+    """One composited frame from a source frame + finished alpha.
+
+    ``backdrop_rgb`` (block 2 backdrop mode) replaces the backdrop
+    layer wholesale for this frame - a generated scene treated in
+    graphics_layer.prepare_backdrop. It sits exactly where the
+    treated source backdrop sits: behind graphics, hook and
+    speaker. None = the historic make_backdrop treatment.
+    """
+    bg = backdrop_rgb if backdrop_rgb is not None else \
+        make_backdrop(frame_rgb, canvas, backdrop=backdrop,
+                      blur_radius=blur_radius)
     fg, a = speaker_layer(frame_rgb, alpha, canvas)
     return composite_from_layers(bg, hook_rgba, fg, a,
                                  graphics_rgba=graphics_rgba)

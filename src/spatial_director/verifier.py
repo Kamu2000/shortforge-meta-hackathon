@@ -89,7 +89,12 @@ from scipy import ndimage
 from .caption_align import CaptionCue, EnergyProfile, active_segments
 from .compositor import (DEFAULT_CANVAS, hook_layer, hook_slide_dx_at,
                          shift_layer_x)
-from .graphics_layer import FACE_MARGIN_PX, PATH_TRAVEL_S, GraphicSpec
+from .graphics_layer import (
+    FACE_MARGIN_PX,
+    PATH_TRAVEL_S,
+    BackdropSpec,
+    GraphicSpec,
+)
 from .layout_law import (
     CAPTION_BOTTOM_MARGIN,
     GLYPH_OCCLUSION_CAP,
@@ -265,6 +270,17 @@ class VerifyInputs:
     # graphics layer's SFX were in play. F8 checks gap-landing
     # effects are measurably present in the mix.
     sfx: list[dict[str, Any]] | None = None
+    # Backdrop-mode spans (block 2): the declared backdrop specs
+    # for this render. F8's backdrop leg certifies each scene is
+    # present inside its span and absent outside it. None = the
+    # layer was not in play (an empty list still runs F8 when
+    # graphics are in play).
+    backdrops: Sequence[BackdropSpec] | None = None
+    # Speaker-forward declarations (block 2): the emphasis
+    # transforms the pipeline applied, declared for the receipt.
+    # F3/F4 verify the render as-is; this section is the record,
+    # not a check input.
+    speaker_forward: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -304,6 +320,13 @@ class Receipt:
     # Applied SFX declarations (block 2) - present only on renders
     # whose shipped audio mixes the graphics layer's effects.
     sfx: list[dict[str, Any]] | None = None
+    # Backdrop-mode declarations (block 2): per span, the scene
+    # prompt as sent, the verbatim quote, and the image cost.
+    backdrops: list[dict[str, Any]] | None = None
+    # Speaker-forward declarations (block 2): per applied span,
+    # the emphasis transform (scale, centroid target) the
+    # pipeline planned inside the F3/F4 limits.
+    speaker_forward: list[dict[str, Any]] | None = None
 
     @property
     def failed(self) -> list[str]:
@@ -326,6 +349,10 @@ class Receipt:
             out["graphics"] = self.graphics
         if self.sfx is not None:
             out["sfx"] = self.sfx
+        if self.backdrops is not None:
+            out["backdrops"] = self.backdrops
+        if self.speaker_forward is not None:
+            out["speaker_forward"] = self.speaker_forward
         return out
 
     def to_json(self) -> str:
@@ -447,6 +474,27 @@ def _graphic_match(render_rgb: np.ndarray, spec: GraphicSpec, t_s: float,
     return float((diff[visible] <= GRAPHIC_PIXEL_TOL).mean())
 
 
+def _backdrop_match(render_rgb: np.ndarray, layer_rgb: np.ndarray,
+                    speaker_alpha: np.ndarray,
+                    exclude: np.ndarray) -> float | None:
+    """Fraction of TESTABLE pixels matching the declared backdrop.
+
+    The backdrop covers the whole canvas behind everything, so a
+    pixel is testable when the speaker (rendered in front) does
+    not cover it and it is not excluded (caption block, hook
+    glyphs, a graphic on the backdrop plane). None when too
+    little is testable to measure honestly - the same floor the
+    graphic match uses.
+    """
+    testable = (speaker_alpha <= 0.5) & ~exclude
+    if int(testable.sum()) < GRAPHIC_MIN_VISIBLE_PX:
+        return None
+    diff = np.abs(
+        render_rgb.astype(np.int16) - layer_rgb.astype(np.int16)
+    ).max(axis=2)
+    return float((diff[testable] <= GRAPHIC_PIXEL_TOL).mean())
+
+
 def _check_graphics(inputs: VerifyInputs,
                     alphas: Sequence[np.ndarray]) -> CheckResult:
     """F8: context graphics integrity, measured on the render.
@@ -464,6 +512,12 @@ def _check_graphics(inputs: VerifyInputs,
     collision, not spacing, is the discipline. There is NO count
     cap: the semantic bar, not a number, limits how many
     graphics a render carries.
+
+    Backdrop leg (block 2): each declared backdrop-mode scene is
+    pixel-matched at its span's midpoint over the pixels the
+    speaker, captions, hook glyphs and graphics do not cover,
+    and must NOT match at samples beyond its span edges - the
+    scene exists only inside its declared span.
     """
     specs = list(inputs.graphics or [])
     cw, ch = inputs.canvas
@@ -674,8 +728,90 @@ def _check_graphics(inputs: VerifyInputs,
             "stem_supplied": inputs.speech_audio is not None,
             "violations": sfx_violations,
         }
+    # Backdrop leg (block 2): each declared backdrop scene must be
+    # MEASURABLY the backdrop inside its span (mid-span pixel
+    # match against the declared treated layer) and absent
+    # outside it (samples TOLERANCE + 0.25s beyond the edges must
+    # NOT match it - outside the span the original treated
+    # backdrop shows). Testable pixels exclude the speaker, the
+    # caption block, the hook glyph bbox while the hook is up,
+    # and any graphic on the plane at that instant (hero rules
+    # keep graphics out of backdrop spans, but the leg does not
+    # assume it). An absence sample landing inside ANOTHER
+    # declared backdrop span is skipped: it measures that span's
+    # scene, not this one's absence.
+    backdrop_specs = list(inputs.backdrops or [])
+    per_backdrop: list[dict[str, Any]] = []
+    offending_backdrops: list[int] = []
+    for bi, bspec in enumerate(backdrop_specs):
+        def backdrop_match_at(idx: int) -> float | None:
+            if idx < 0 or idx >= n_frames:
+                return None
+            rgb = frame_at(idx)
+            if rgb is None:
+                return None
+            t = idx / fps
+            exclude = np.zeros((ch, cw), dtype=bool)
+            if inputs.caption_rect is not None:
+                x0, y0, x1, y1 = inputs.caption_rect
+                exclude[y0:y1, x0:x1] = True
+            if inputs.hook is not None:
+                w0, w1 = inputs.hook.window
+                if w0 <= t < w1:
+                    try:
+                        _, gbbox = inputs.hook.glyph_at(
+                            t, inputs.canvas)
+                        exclude[gbbox[1]:gbbox[3],
+                                gbbox[0]:gbbox[2]] = True
+                    except ValueError:
+                        pass  # no glyphs = nothing to exclude
+            for spec in specs:
+                if spec.start_s <= t < spec.end_s:
+                    layer = spec.layer_at(t)
+                    exclude |= layer[..., 3] > 127
+            return _backdrop_match(
+                rgb, bspec.layer_at(t), alphas[idx], exclude)
+
+        mid_idx = int(round(
+            (bspec.start_s + bspec.end_s) / 2.0 * fps))
+        presence = backdrop_match_at(mid_idx)
+
+        def inside_other(idx: int) -> bool:
+            t = idx / fps
+            return any(
+                j != bi and o.start_s <= t < o.end_s
+                for j, o in enumerate(backdrop_specs))
+
+        out_matches: list[float] = []
+        before = int(np.floor(
+            (bspec.start_s - GRAPHIC_SPAN_TOLERANCE_S - 0.25) * fps))
+        after = int(np.ceil(
+            (bspec.end_s + GRAPHIC_SPAN_TOLERANCE_S + 0.25) * fps))
+        for idx in (before, after):
+            if 0 <= idx < n_frames and not inside_other(idx):
+                m = backdrop_match_at(idx)
+                if m is not None:
+                    out_matches.append(m)
+        absence = max(out_matches) if out_matches else None
+        ok = bool(
+            presence is not None and presence >= GRAPHIC_MATCH_MIN
+            and (absence is None
+                 or absence <= GRAPHIC_ABSENT_MATCH_MAX)
+        )
+        if not ok:
+            offending_backdrops.append(bi)
+        per_backdrop.append({
+            "index": bi,
+            "kind": bspec.kind,
+            "motion": bspec.motion,
+            "presence_match": (None if presence is None
+                               else round(presence, 3)),
+            "absence_match_max": (None if absence is None
+                                  else round(absence, 3)),
+            "ok": ok,
+        })
     passed = not offending and not collision_violations \
-        and not sfx_violations
+        and not sfx_violations and not offending_backdrops
     return CheckResult(
         check_id="F8", name="context graphics integrity",
         passed=passed,
@@ -684,6 +820,8 @@ def _check_graphics(inputs: VerifyInputs,
             "graphics": per_graphic,
             "offending_indices": offending,
             "collision_violations": collision_violations,
+            "backdrops": per_backdrop,
+            "offending_backdrop_indices": offending_backdrops,
             "sfx": sfx_measured,
             "duration_s": round(duration, 3),
         },
@@ -1079,9 +1217,14 @@ def verify(inputs: VerifyInputs, *,
 
     # ---- F8: context graphics (only when the layer was in play) ----
     graphics_section = None
-    if inputs.graphics is not None:
+    backdrops_section = None
+    if inputs.graphics is not None or inputs.backdrops is not None:
         checks.append(_check_graphics(inputs, alphas))
-        graphics_section = [g.to_dict() for g in inputs.graphics]
+        if inputs.graphics is not None:
+            graphics_section = [g.to_dict() for g in inputs.graphics]
+        if inputs.backdrops is not None:
+            backdrops_section = [b.to_dict()
+                                 for b in inputs.backdrops]
 
     # ---- receipt ---------------------------------------------------------
     receipt = Receipt(
@@ -1091,6 +1234,8 @@ def verify(inputs: VerifyInputs, *,
         meta_calls=meta_calls,
         graphics=graphics_section,
         sfx=inputs.sfx,
+        backdrops=backdrops_section,
+        speaker_forward=inputs.speaker_forward,
         inputs_sha256={
             "video": _sha256_file(inputs.video_path)
             if Path(inputs.video_path).exists() else None,

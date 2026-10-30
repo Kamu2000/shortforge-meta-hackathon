@@ -27,6 +27,7 @@ from spatial_director.graphics_layer import (  # noqa: E402
     GraphicSpec,
     _paste_layer_clipped,
     path_box_at,
+    prepare_backdrop,
 )
 from spatial_director.layout_law import initial_caption_rect  # noqa: E402
 from spatial_director.spend_ledger import SpendLedger  # noqa: E402
@@ -697,6 +698,102 @@ class GraphicsF8Tests(unittest.TestCase):
             cls._dummy_td = td
             cls._dummy_path = make_video(Path(td.name) / "render.mp4")
         return cls._dummy_path
+
+
+# ---------------------------------------------------------------- F8 backdrop
+
+
+def backdrop_spec(start=3.5, end=6.5):
+    from PIL import Image as PILImage
+    spec = prepare_backdrop(
+        PILImage.new("RGB", (240, 300), (200, 100, 50)), CANVAS)
+    spec.start_s, spec.end_s = start, end
+    spec.prompt = "a stadium tunnel at night - no text"
+    spec.source_quote = "the band never rehearses"
+    spec.cost_usd = 0.01
+    return spec
+
+
+def render_backdrop_video(path, spec, *, leak=False, n=F8_N):
+    """Frames: a plain dark backdrop everywhere; the declared
+    treated scene inside the span (or everywhere, when leaking).
+    The speaker fixture's alpha region is painted a third colour -
+    those pixels are excluded from the match anyway."""
+    layer = spec.layer_at((spec.start_s + spec.end_s) / 2.0)
+    scene_px = tuple(int(v) for v in layer[0, 0])
+    alphas = speaker(n=n)
+
+    def gen():
+        for i in range(n):
+            t = i / FPS
+            inside = leak or (spec.start_s <= t < spec.end_s)
+            frame = np.zeros((CANVAS[1], CANVAS[0], 3),
+                             dtype=np.uint8)
+            frame[:, :] = scene_px if inside else (10, 10, 10)
+            frame[alphas[i] > 0.5] = (250, 250, 250)
+            yield frame
+
+    _encode_video(gen(), path, fps=FPS, canvas=CANVAS)
+    return path
+
+
+def f8b_inputs(video, backdrops):
+    inputs = f8_inputs(video, [])
+    inputs.backdrops = backdrops
+    return inputs
+
+
+class BackdropF8Tests(unittest.TestCase):
+    def test_backdrop_inside_its_span_passes(self):
+        with tempfile.TemporaryDirectory() as td:
+            spec = backdrop_spec()
+            video = render_backdrop_video(Path(td) / "r.mp4", spec)
+            receipt = verify(f8b_inputs(video, [spec]),
+                             wonder=FakeWonder(), ts="2026-10-31")
+            self.assertEqual(receipt.failed, [],
+                             msg=receipt.to_json())
+            f8 = check(receipt, "F8")
+            b = f8.measured["backdrops"][0]
+            self.assertGreaterEqual(b["presence_match"], 0.75)
+            self.assertLessEqual(b["absence_match_max"], 0.5)
+            data = json.loads(receipt.to_json())
+            self.assertEqual(len(data["backdrops"]), 1)
+            self.assertEqual(data["backdrops"][0]["cost_usd"], 0.01)
+
+    def test_backdrop_leaking_outside_its_span_fails_f8(self):
+        with tempfile.TemporaryDirectory() as td:
+            spec = backdrop_spec()
+            video = render_backdrop_video(Path(td) / "r.mp4", spec,
+                                          leak=True)
+            receipt = verify(f8b_inputs(video, [spec]),
+                             wonder=FakeWonder(), ts="2026-10-31")
+            self.assertEqual(receipt.failed, ["F8"])
+            f8 = check(receipt, "F8")
+            self.assertEqual(
+                f8.measured["offending_backdrop_indices"], [0])
+            self.assertGreater(
+                f8.measured["backdrops"][0]["absence_match_max"],
+                0.5)
+
+    def test_backdrop_missing_inside_its_span_fails_f8(self):
+        with tempfile.TemporaryDirectory() as td:
+            spec = backdrop_spec()
+            video = render_backdrop_video(Path(td) / "r.mp4", spec)
+            # Verify against a DIFFERENT declared scene: the render
+            # cannot match a backdrop it never showed.
+            other = backdrop_spec()
+            from PIL import Image as PILImage
+            treated = prepare_backdrop(
+                PILImage.new("RGB", (240, 300), (20, 180, 90)),
+                CANVAS)
+            other._state_fn = treated._state_fn
+            other.layer_rgb = treated.layer_rgb
+            receipt = verify(f8b_inputs(video, [other]),
+                             wonder=FakeWonder(), ts="2026-10-31")
+            self.assertEqual(receipt.failed, ["F8"])
+            self.assertLess(
+                check(receipt, "F8")
+                .measured["backdrops"][0]["presence_match"], 0.75)
 
 
 if __name__ == "__main__":

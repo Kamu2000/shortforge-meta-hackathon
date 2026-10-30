@@ -27,9 +27,11 @@ from spatial_director.graphics_layer import (  # noqa: E402
     path_box_at,
     place_prepared,
     plan_graphics,
+    prepare_backdrop,
     prepare_card,
     prepare_image,
     render_card_image,
+    resolve_heroes,
 )
 
 CANVAS = (1080, 1920)
@@ -93,6 +95,46 @@ class PlannerParseTests(unittest.TestCase):
         spans, rejected = self.parse(span_json(path="teleport_in"))
         self.assertEqual(spans, [])
         self.assertIn("unknown motion path", rejected[0]["reason"])
+
+    def test_backdrop_accepted(self):
+        spans, rejected = self.parse(span_json(
+            kind="backdrop", headline="", facts="",
+            prompt="a stadium tunnel at night, floodlights ahead"))
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(rejected, [])
+        self.assertEqual(spans[0].kind, "backdrop")
+        self.assertEqual(spans[0].motion, "ken_burns")
+
+    def test_backdrop_digit_prompt_rejected(self):
+        spans, rejected = self.parse(span_json(
+            kind="backdrop", headline="", facts="",
+            prompt="a stadium tunnel at night, gate 4 ahead"))
+        self.assertEqual(spans, [])
+        self.assertIn("digit", rejected[0]["reason"])
+
+    def test_backdrop_with_headline_rejected(self):
+        # Numbers/names/comparisons stay cards - a backdrop is a
+        # scene, never data.
+        spans, rejected = self.parse(span_json(
+            kind="backdrop", headline="BIG NEWS", facts="",
+            prompt="a stadium tunnel at night, floodlights ahead"))
+        self.assertEqual(spans, [])
+        self.assertIn("never data", rejected[0]["reason"])
+
+    def test_speaker_forward_accepted(self):
+        spans, rejected = self.parse(span_json(
+            kind="speaker_forward", headline="", facts="",
+            prompt=""))
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(rejected, [])
+        self.assertEqual(spans[0].motion, "speaker_forward")
+
+    def test_speaker_forward_with_headline_rejected(self):
+        spans, rejected = self.parse(span_json(
+            kind="speaker_forward", headline="BIG NEWS", facts="",
+            prompt=""))
+        self.assertEqual(spans, [])
+        self.assertIn("framing only", rejected[0]["reason"])
 
     def test_empty_list_is_valid(self):
         spans, rejected = self.parse({"graphics": []})
@@ -827,6 +869,89 @@ class SizeToSpaceTests(unittest.TestCase):
         box = placed[0].box
         self.assertLessEqual(box[2] - box[0], 200)
         self.assertLessEqual(box[3] - box[1], 250)
+
+
+# ---------------------------------------------------------------- heroes
+
+
+def _span(kind, start, end):
+    return GraphicSpan(start_s=start, end_s=end, kind=kind,
+                       headline="H" if kind == "card" else "",
+                       prompt=("a stadium tunnel at night"
+                               if kind in ("image", "backdrop")
+                               else ""),
+                       source_quote="q")
+
+
+class HeroResolutionTests(unittest.TestCase):
+    def test_later_hero_claim_drops(self):
+        card = _span("card", 2.0, 5.0)
+        backdrop = _span("backdrop", 4.0, 7.0)
+        kept, drops = resolve_heroes([card, backdrop])
+        self.assertEqual(kept, [card])
+        self.assertEqual(len(drops), 1)
+        self.assertIn("hero conflict", drops[0]["reason"])
+
+    def test_card_overlapping_an_earlier_backdrop_drops(self):
+        backdrop = _span("backdrop", 2.0, 5.0)
+        card = _span("card", 4.0, 7.0)
+        kept, drops = resolve_heroes([backdrop, card])
+        self.assertEqual(kept, [backdrop])
+        self.assertEqual(drops[0]["span"]["kind"], "card")
+
+    def test_two_cards_may_overlap(self):
+        a = _span("card", 2.0, 5.0)
+        b = _span("card", 4.0, 7.0)
+        kept, drops = resolve_heroes([a, b])
+        self.assertEqual(kept, [a, b])
+        self.assertEqual(drops, [])
+
+    def test_non_overlapping_heroes_coexist(self):
+        backdrop = _span("backdrop", 2.0, 5.0)
+        fwd = _span("speaker_forward", 6.0, 9.0)
+        kept, drops = resolve_heroes([backdrop, fwd])
+        self.assertEqual(kept, [backdrop, fwd])
+        self.assertEqual(drops, [])
+
+    def test_speaker_forward_in_hook_window_drops(self):
+        fwd = _span("speaker_forward", 1.0, 4.0)
+        kept, drops = resolve_heroes([fwd], hook_window=(0.0, 6.0))
+        self.assertEqual(kept, [])
+        self.assertIn("hook window", drops[0]["reason"])
+
+
+class BackdropBuildTests(unittest.TestCase):
+    CUES = BuildGraphicsTests.CUES
+
+    def test_backdrop_span_builds_a_spec(self):
+        payload = {"graphics": [
+            span_json(kind="backdrop", headline="", facts="",
+                      prompt="a stadium tunnel at night, lit",
+                      source_quote="the crew on get up")
+            ["graphics"][0],
+        ]}
+        spark = FakeSpark([json.dumps(payload)])
+        build = build_graphics(
+            spark, FakeImageClient(), self.CUES,
+            alphas_with_speaker(n=48), fps=4.0, duration_s=20.0,
+            canvas=CANVAS)
+        self.assertEqual(len(build.backdrops), 1)
+        spec = build.backdrops[0]
+        self.assertEqual(spec.kind, "backdrop")
+        self.assertIn("no text", spec.prompt)  # suffix recorded
+        self.assertEqual(spec.cost_usd, 0.01)
+        layer = spec.layer_at(spec.start_s + 0.5)
+        self.assertEqual(layer.shape, (CANVAS[1], CANVAS[0], 3))
+        data = build.to_dict()
+        self.assertEqual(len(data["backdrops"]), 1)
+        self.assertEqual(data["total_cost_usd"], 0.01)
+
+    def test_backdrop_treatment_darkens(self):
+        img = Image.new("RGB", (400, 400), (200, 200, 200))
+        spec = prepare_backdrop(img, CANVAS)
+        layer = spec.layer_at(0.0)
+        # 200 grey at x0.55 brightness, saturation-neutral.
+        self.assertAlmostEqual(int(layer[0, 0, 0]), 110, delta=3)
 
 
 if __name__ == "__main__":

@@ -78,7 +78,7 @@ from .layout_law import (
     plan_speaker_reframe,
     predict_occlusion,
 )
-from .graphics_layer import GraphicSpec
+from .graphics_layer import BackdropSpec, GraphicSpec
 from .sfx import SfxEvent, mix_to_file, plan_sfx
 from .spark_client import SparkClient
 from .verifier import MAX_WORD_GAP_S, HookSpec, Receipt, _content_words
@@ -218,6 +218,10 @@ class RenderArtifacts:
     # render's speech source; TRIM_SILENCE / DROP_GRAPHICS pass a
     # plan re-derived from their retimed / kept graphics.
     sfx_plan: list[SfxEvent] | None = None
+    # Backdrop-mode spans on draft 1 (block 2): carried like the
+    # graphics - TRIM_SILENCE retimes them, DROP_GRAPHICS removes
+    # the offending ones. None = backdrop mode not in play.
+    backdrops: list[BackdropSpec] | None = None
 
 
 @dataclass
@@ -242,6 +246,9 @@ class RepairExecution:
     # unmixed speech, the historic shape).
     sfx_events: list[dict[str, Any]] | None = None
     speech_audio_from: str | Path | None = None
+    # Backdrop-mode spans as rendered in THIS execution (retimed
+    # or filtered by the repair); None = not in play.
+    backdrops: list[BackdropSpec] | None = None
 
 
 @dataclass
@@ -349,6 +356,7 @@ def render_composite_with_captions(
     backdrop: str = DEFAULT_BACKDROP,
     graphics: Sequence[GraphicEntry] | None = None,
     hook_slide: tuple[float, float] | None = None,
+    backdrop_spans: Sequence[GraphicEntry] | None = None,
 ) -> Path:
     """The shared render path: composite + captions IN FRONT.
 
@@ -359,7 +367,11 @@ def render_composite_with_captions(
     exactly the pre-graphics stack. ``hook_slide`` is the F7 slide
     repair's (dx_start_px, duration_s): the hook card starts
     displaced and eases to its final position; None is the
-    historic static hook.
+    historic static hook. ``backdrop_spans`` (block 2) are
+    (provider, start_s, end_s) entries whose provider(t) returns
+    a full-canvas treated RGB backdrop for inside the span -
+    backdrop mode; outside every span the frame's own treated
+    backdrop shows, exactly as before.
     """
     from .compositor import _encode_video
 
@@ -381,8 +393,15 @@ def render_composite_with_captions(
                     hook = shift_layer_x(hook, dx)
             plane = graphics_layer_at(graphics, t, canvas) \
                 if graphics else None
+            bg = None
+            if backdrop_spans:
+                for provider, s0, e0 in backdrop_spans:
+                    if s0 <= t < e0:
+                        bg = np.asarray(provider(t))[..., :3]
+                        break
             out = composite_frame(frame, alpha, hook, canvas,
-                                  backdrop=backdrop, graphics_rgba=plane)
+                                  backdrop=backdrop, graphics_rgba=plane,
+                                  backdrop_rgb=bg)
             for j, cue in enumerate(cues):
                 if cue.start_s <= t < cue.end_s:
                     cap = cue_layers[j].astype(np.float64)
@@ -533,6 +552,7 @@ def _render_execution(
     graphics: list[GraphicSpec] | None = None,
     hook_slide: tuple[float, float] | None = None,
     sfx_plan: list[SfxEvent] | None = None,
+    backdrops: list[BackdropSpec] | None = None,
 ) -> RepairExecution:
     hook_rgba = hook.layer(artifacts.canvas) if hook.text else None
     out_path = Path(artifacts.work_dir) / out_name
@@ -545,6 +565,10 @@ def _render_execution(
     kwargs: dict[str, Any] = {}
     if carried is not None:
         kwargs["graphics"] = graphics_entries(carried)
+    carried_bd = artifacts.backdrops if backdrops is None \
+        else backdrops
+    if carried_bd is not None:
+        kwargs["backdrop_spans"] = backdrop_entries(carried_bd)
     if hook_slide is not None:
         kwargs["hook_slide"] = hook_slide
     # SFX (block 2): when the layer's effects are in play, the
@@ -586,7 +610,8 @@ def _render_execution(
         caption_rect=caption_rect, canvas_alphas=canvas_alphas,
         detail=detail, graphics=carried,
         hook_slide_px_s=slide_speed,
-        sfx_events=applied_sfx, speech_audio_from=speech_from)
+        sfx_events=applied_sfx, speech_audio_from=speech_from,
+        backdrops=carried_bd)
 
 
 def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
@@ -666,6 +691,10 @@ def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
         artifacts.graphics,
         lambda t: map_time(t, is_end=False),
         lambda t: map_time(t, is_end=True))
+    retimed_backdrops = _retime_backdrops(
+        artifacts.backdrops,
+        lambda t: map_time(t, is_end=False),
+        lambda t: map_time(t, is_end=True))
     # SFX follow the graphics through the retime: the plan is
     # re-derived from the retimed specs, so a graphic the trim
     # annihilated takes its sounds with it.
@@ -678,7 +707,7 @@ def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
         caption_rect=layout.rect, audio_from=audio_path,
         out_name="draft2-trim-silence.mp4", detail=detail,
         renderer=renderer, graphics=retimed_graphics,
-        sfx_plan=retimed_sfx)
+        sfx_plan=retimed_sfx, backdrops=retimed_backdrops)
 
 
 def _decode_samples(media_path: str | Path) -> np.ndarray:
@@ -997,6 +1026,16 @@ def graphics_entries(
     return [(g.layer_at, g.start_s, g.end_s) for g in graphics]
 
 
+def backdrop_entries(
+    backdrops: Sequence[BackdropSpec] | None,
+) -> list[GraphicEntry] | None:
+    """Renderer entries for backdrop-mode spans (same contract as
+    graphics_entries; the provider returns a full-canvas RGB)."""
+    if backdrops is None:
+        return None
+    return [(b.layer_at, b.start_s, b.end_s) for b in backdrops]
+
+
 def _retime_graphics(
     graphics: list[GraphicSpec] | None,
     map_start: Callable[[float], float],
@@ -1019,6 +1058,25 @@ def _retime_graphics(
     return out
 
 
+def _retime_backdrops(
+    backdrops: list[BackdropSpec] | None,
+    map_start: Callable[[float], float],
+    map_end: Callable[[float], float],
+) -> list[BackdropSpec] | None:
+    """Backdrop spans follow the same TRIM_SILENCE retime as
+    graphics (identical state-function contract, so
+    dataclasses.replace retimes them the same way)."""
+    if backdrops is None:
+        return None
+    out: list[BackdropSpec] = []
+    for b in backdrops:
+        start, end = map_start(b.start_s), map_end(b.end_s)
+        if end - start < 0.05:
+            continue
+        out.append(dataclasses.replace(b, start_s=start, end_s=end))
+    return out
+
+
 def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
                         renderer, **_) -> RepairExecution:
     """DROP_GRAPHICS: remove exactly the graphics F8 names - its
@@ -1030,7 +1088,7 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
     block cannot name the offenders (defensive), the repair
     drops ALL graphics: an empty graphics plane always passes
     F8, and the Short keeps its certified F1-F7 layers."""
-    if artifacts.graphics is None:
+    if artifacts.graphics is None and not artifacts.backdrops:
         raise RepairNotApplicable(
             "the draft carries no graphics - nothing to drop")
     f8 = next((c for c in receipt.checks if c.check_id == "F8"), None)
@@ -1040,10 +1098,21 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
         drop.add(int(pair["later_index"]))
     for pair in measured.get("spacing_violations", []):
         drop.add(int(pair["later_index"]))
-    if not drop:
-        drop = set(range(len(artifacts.graphics)))
-    kept = [g for i, g in enumerate(artifacts.graphics)
+    graphics_in = artifacts.graphics or []
+    if not drop and graphics_in:
+        drop = set(range(len(graphics_in)))
+    kept = [g for i, g in enumerate(graphics_in)
             if i not in drop]
+    # Backdrop offenders drop by the same rule (F8's
+    # offending_backdrop_indices); if F8 named nothing at all,
+    # the defensive drop covers backdrops too.
+    backdrops_in = artifacts.backdrops or []
+    drop_bd = {int(i) for i in
+               measured.get("offending_backdrop_indices", [])}
+    if not drop and not drop_bd and backdrops_in:
+        drop_bd = set(range(len(backdrops_in)))
+    kept_bd = [b for i, b in enumerate(backdrops_in)
+               if i not in drop_bd]
     # A dropped graphic's sounds drop with it: the SFX plan is
     # re-derived from the kept list.
     kept_sfx = plan_sfx(kept) if artifacts.sfx_plan is not None \
@@ -1056,8 +1125,13 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
         audio_from=artifacts.window_clip,
         out_name="draft2-drop-graphics.mp4",
         detail=(f"dropped graphic indices {sorted(drop)} of "
-                f"{len(artifacts.graphics)}; {len(kept)} kept"),
-        renderer=renderer, graphics=kept, sfx_plan=kept_sfx)
+                f"{len(graphics_in)}, backdrop indices "
+                f"{sorted(drop_bd)} of {len(backdrops_in)}; "
+                f"{len(kept)} graphics and {len(kept_bd)} "
+                f"backdrops kept"),
+        renderer=renderer, graphics=kept, sfx_plan=kept_sfx,
+        backdrops=kept_bd if artifacts.backdrops is not None
+        else None)
 
 
 _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {

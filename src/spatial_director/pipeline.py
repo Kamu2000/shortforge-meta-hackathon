@@ -79,6 +79,7 @@ from .layout_law import (
 from .mask_decode import finished_alpha, parse_sam_response
 from .rescue_loop import (
     RenderArtifacts,
+    backdrop_entries,
     graphics_entries,
     render_composite_with_captions,
     rescue,
@@ -656,6 +657,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     # carried through render, verify (F8) and the rescue artifacts.
     # Disabled = None everywhere below = the pre-graphics code path.
     placed_graphics = None
+    placed_backdrops = None
     graphics_report = None
     sfx_plan_events = None
     applied_sfx = None
@@ -670,6 +672,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             hook_window=hook_spec.window, duration_s=length,
             ts=ts)
         placed_graphics = build.placed
+        placed_backdrops = build.backdrops
         graphics_report = build.to_dict()
         # SFX (block 2): effects derived deterministically from
         # the placed graphics, mixed over the normalised window
@@ -695,6 +698,9 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     render_kwargs: dict[str, Any] = {}
     if placed_graphics is not None:
         render_kwargs["graphics"] = graphics_entries(placed_graphics)
+    if placed_backdrops is not None:
+        render_kwargs["backdrop_spans"] = backdrop_entries(
+            placed_backdrops)
     render_composite_with_captions(
         frames, src_alphas, hook_rgba=hook_rgba,
         hook_window=hook_spec.window, cues=cues,
@@ -706,6 +712,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             audio=load_energy(draft1), hook=hook_spec, cues=cues,
             caption_rect=cap_layout.rect, sam_response_path=sam_path,
             graphics=placed_graphics,
+            backdrops=placed_backdrops,
             speech_audio=energy if graphics_enabled else None,
             sfx=applied_sfx),
         wonder=clients.wonder, draft=1, ts=ts)
@@ -721,7 +728,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         cues=cues, caption_rect=cap_layout.rect,
         sam_response_path=sam_path, transcript_text=excerpt,
         work_dir=short_dir, canvas=canvas, graphics=placed_graphics,
-        sfx_plan=sfx_plan_events)
+        sfx_plan=sfx_plan_events, backdrops=placed_backdrops)
 
     def verify_fn(execution) -> Any:
         receipt2 = verify(
@@ -733,6 +740,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                 caption_rect=execution.caption_rect,
                 sam_response_path=sam_path,
                 graphics=execution.graphics,
+                backdrops=execution.backdrops,
                 speech_audio=(
                     load_energy(execution.speech_audio_from)
                     if execution.speech_audio_from is not None
