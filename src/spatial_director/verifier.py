@@ -89,7 +89,7 @@ from scipy import ndimage
 from .caption_align import CaptionCue, EnergyProfile, active_segments
 from .compositor import (DEFAULT_CANVAS, hook_layer, hook_slide_dx_at,
                          shift_layer_x)
-from .graphics_layer import FACE_MARGIN_PX, GraphicSpec
+from .graphics_layer import FACE_MARGIN_PX, PATH_TRAVEL_S, GraphicSpec
 from .layout_law import (
     CAPTION_BOTTOM_MARGIN,
     GLYPH_OCCLUSION_CAP,
@@ -571,6 +571,22 @@ def _check_graphics(inputs: VerifyInputs,
         out_matches = [m for m in (match_at(x, spec) for x in out_idx)
                        if m is not None]
         absence = max(out_matches) if out_matches else None
+        # Path leg (block 2): a travelling graphic is pixel-matched
+        # DURING its travel - at 35% of the declared travel time,
+        # deep enough in that the box is measurably displaced from
+        # its rest position - against the same layer_at(t) state
+        # the renderer drew. A render that parks the graphic at
+        # its resting box (or anywhere off-path) mismatches there
+        # even though its resting presence matches. The zone legs
+        # above measure spec.mask(), which for a path spec is the
+        # swept union, so a path crossing a forbidden zone fails
+        # them at any point of its travel.
+        path_match = None
+        if spec.path is not None:
+            idx_travel = int(round(
+                (spec.start_s + 0.35 * PATH_TRAVEL_S) * fps))
+            if 0 <= idx_travel < n_frames:
+                path_match = match_at(idx_travel, spec)
         ok = bool(
             face_overlap <= GRAPHIC_FACE_OVERLAP_MAX_PX
             and caption_overlap <= GRAPHIC_CAPTION_OVERLAP_MAX_PX
@@ -578,6 +594,7 @@ def _check_graphics(inputs: VerifyInputs,
             and hook_glyph_overlap <= GRAPHIC_HOOK_GLYPH_OVERLAP_MAX_PX
             and presence is not None and presence >= GRAPHIC_MATCH_MIN
             and (absence is None or absence <= GRAPHIC_ABSENT_MATCH_MAX)
+            and (path_match is None or path_match >= GRAPHIC_MATCH_MIN)
         )
         if not ok:
             offending.append(i)
@@ -585,6 +602,7 @@ def _check_graphics(inputs: VerifyInputs,
             "index": i,
             "kind": spec.kind,
             "motion": spec.motion,
+            "path": spec.path,
             "face_overlap_px": face_overlap,
             "caption_overlap_px": caption_overlap,
             "caption_zone_overlap_px": zone_overlap,
@@ -593,6 +611,8 @@ def _check_graphics(inputs: VerifyInputs,
                                    else round(presence, 3)),
             "absence_match_max": (None if absence is None
                                   else round(absence, 3)),
+            "path_match": (None if path_match is None
+                           else round(path_match, 3)),
             "ok": ok,
         })
 
@@ -676,6 +696,8 @@ def _check_graphics(inputs: VerifyInputs,
             "presence_match_min": GRAPHIC_MATCH_MIN,
             "absence_match_max": GRAPHIC_ABSENT_MATCH_MAX,
             "span_tolerance_s": GRAPHIC_SPAN_TOLERANCE_S,
+            "path_match_min": GRAPHIC_MATCH_MIN,
+            "path_travel_s": PATH_TRAVEL_S,
             "sfx_gap_lift_min_db": SFX_GAP_LIFT_MIN_DB,
             "sfx_gap_floor_db": SFX_GAP_FLOOR_DB,
         },

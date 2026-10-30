@@ -20,8 +20,10 @@ from spatial_director.caption_align import CaptionCue  # noqa: E402
 from spatial_director.spark_client import SparkClientError  # noqa: E402
 from spatial_director.graphics_layer import (  # noqa: E402
     GraphicSpan,
+    _path_legal,
     build_graphics,
     parse_planner_reply,
+    path_box_at,
     place_prepared,
     plan_graphics,
     prepare_card,
@@ -79,6 +81,17 @@ class PlannerParseTests(unittest.TestCase):
         self.assertEqual(rejected, [])
         self.assertEqual(spans[0].kind, "card")
         self.assertEqual(spans[0].headline, "$1M PER YEAR APART")
+
+    def test_path_accepted(self):
+        spans, rejected = self.parse(span_json(path="glide_in"))
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(rejected, [])
+        self.assertEqual(spans[0].path, "glide_in")
+
+    def test_unknown_path_rejected(self):
+        spans, rejected = self.parse(span_json(path="teleport_in"))
+        self.assertEqual(spans, [])
+        self.assertIn("unknown motion path", rejected[0]["reason"])
 
     def test_empty_list_is_valid(self):
         spans, rejected = self.parse({"graphics": []})
@@ -618,6 +631,132 @@ class BuildGraphicsTests(unittest.TestCase):
         self.assertEqual(build.placed, [])
         self.assertTrue(any("no image client" in d["reason"]
                             for d in build.dropped))
+
+
+# ---------------------------------------------------------------- paths
+
+
+class PathGeometryTests(unittest.TestCase):
+    BOX = (100, 800, 570, 940)
+    CV = (1080, 1920)
+
+    def test_glide_starts_off_canvas_and_lands_on_the_box(self):
+        start = path_box_at(self.BOX, "glide_in", 4.0, 4.0, self.CV)
+        self.assertEqual(start, (-470, 800, 0, 940))
+        self.assertEqual(
+            path_box_at(self.BOX, "glide_in", 4.9, 4.0, self.CV),
+            self.BOX)
+        mid = path_box_at(self.BOX, "glide_in", 4.45, 4.0, self.CV)
+        self.assertTrue(-470 < mid[0] < 100)
+
+    def test_glide_right_half_enters_from_the_right(self):
+        box = (600, 800, 1000, 940)
+        start = path_box_at(box, "glide_in", 4.0, 4.0, self.CV)
+        self.assertEqual(start[0], 1080)
+
+    def test_fall_starts_above_and_lands(self):
+        start = path_box_at(self.BOX, "fall_in", 4.0, 4.0, self.CV)
+        self.assertEqual(start, (100, -140, 570, 0))
+        self.assertEqual(
+            path_box_at(self.BOX, "fall_in", 5.5, 4.0, self.CV),
+            self.BOX)
+
+    def test_rise_starts_at_the_caption_ceiling(self):
+        # Canvas 1920 tall, caption margin 320: the floor position
+        # puts the box bottom exactly on y=1600.
+        start = path_box_at(self.BOX, "rise_in", 4.0, 4.0, self.CV)
+        self.assertEqual(start, (100, 1460, 570, 1600))
+        self.assertEqual(
+            path_box_at(self.BOX, "rise_in", 4.9, 4.0, self.CV),
+            self.BOX)
+
+    def test_approach_scales_about_the_centre(self):
+        start = path_box_at(self.BOX, "approach", 4.0, 4.0, self.CV)
+        w = start[2] - start[0]
+        h = start[3] - start[1]
+        self.assertAlmostEqual(w / 470, 0.7, places=2)
+        self.assertAlmostEqual(h / 140, 0.7, places=2)
+        self.assertEqual((start[0] + start[2]) // 2,
+                         (100 + 570) // 2)
+        # The swept area stays inside the final box.
+        self.assertTrue(100 <= start[0] and start[2] <= 570)
+
+    def test_path_legal_clean_and_blocked(self):
+        free = np.ones((1920, 1080), dtype=bool)
+        box = (100, 800, 570, 940)
+        self.assertTrue(_path_legal(free, box, "glide_in", 4.0,
+                                     self.CV))
+        blocked = free.copy()
+        blocked[800:940, 0:60] = False   # island in the corridor
+        self.assertFalse(_path_legal(blocked, box, "glide_in", 4.0,
+                                      self.CV))
+        # The same island is not in fall_in's column: still legal.
+        self.assertTrue(_path_legal(blocked, box, "fall_in", 4.0,
+                                     self.CV))
+        # Approach never leaves the box: legal iff the box is.
+        self.assertTrue(_path_legal(blocked, box, "approach", 4.0,
+                                     self.CV))
+
+
+class PathPlacementTests(unittest.TestCase):
+    def _item(self, path, start=4.0, end=7.0):
+        span = GraphicSpan(start_s=start, end_s=end, kind="card",
+                           headline="BIG NEWS", facts="",
+                           source_quote="q", path=path)
+        return (span, prepare_card(span))
+
+    def test_path_survives_and_travels(self):
+        rejections: list = []
+        placed, dropped = place_prepared(
+            [self._item("glide_in")], alphas_with_speaker(n=28),
+            fps=4.0, caption_rect=(60, 1460, 980, 1600),
+            canvas=CANVAS, path_rejections=rejections)
+        self.assertEqual(dropped, [])
+        self.assertEqual(rejections, [])
+        spec = placed[0]
+        self.assertEqual(spec.path, "glide_in")
+        self.assertEqual(spec.to_dict()["path"], "glide_in")
+        # Mid-travel the layer sits left of its resting box; at
+        # the span's end it is exactly the resting layer.
+        early = spec.layer_at(4.05)
+        xs = np.nonzero((early[..., 3] > 0).any(axis=0))[0]
+        self.assertLess(int(xs.min()), spec.box[0])
+        self.assertTrue(np.array_equal(
+            spec.layer_at(7.0), spec.layer_rgba))
+        # The swept mask is wider than the resting box.
+        swept = spec.mask()
+        sxs = np.nonzero(swept.any(axis=0))[0]
+        self.assertLess(int(sxs.min()), spec.box[0])
+        self.assertGreater(int(sxs.max()) - int(sxs.min()),
+                           spec.box[2] - spec.box[0])
+
+    def test_path_refused_when_corridor_crosses_hook_zone(self):
+        # The glyph zone covers the top-left; the card lands
+        # beside the head (below the zone). fall_in's column from
+        # the top edge crosses the zone; glide_in's row does not.
+        glyph = (16, 16, 500, 500)
+        rejections: list = []
+        placed, dropped = place_prepared(
+            [self._item("fall_in")], alphas_with_speaker(n=28),
+            fps=4.0, caption_rect=(60, 1460, 980, 1600),
+            hook_glyph_bbox=glyph, hook_window=(0.0, 10.0),
+            canvas=CANVAS, path_rejections=rejections)
+        self.assertEqual(dropped, [])
+        self.assertEqual(len(placed), 1)
+        self.assertIsNone(placed[0].path)
+        self.assertEqual(len(rejections), 1)
+        self.assertEqual(rejections[0]["path"], "fall_in")
+        self.assertIn("crosses a forbidden zone",
+                      rejections[0]["reason"])
+
+        rejections2: list = []
+        placed2, _ = place_prepared(
+            [self._item("glide_in")], alphas_with_speaker(n=28),
+            fps=4.0, caption_rect=(60, 1460, 980, 1600),
+            hook_glyph_bbox=glyph, hook_window=(0.0, 10.0),
+            canvas=CANVAS, path_rejections=rejections2)
+        self.assertEqual(placed2[0].path, "glide_in")
+        self.assertEqual(rejections2, [])
 
 
 if __name__ == "__main__":

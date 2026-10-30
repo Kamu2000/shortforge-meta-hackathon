@@ -409,6 +409,10 @@ class GraphicsBuild:
     planner_call: dict[str, Any] | None = None
     planner_rejected: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
+    # Block 2: graphics whose declared PATH was refused at
+    # placement (the graphic itself was placed, in place) - the
+    # refusal and its reason are on the record, never silent.
+    path_rejections: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def total_cost_usd(self) -> float:
@@ -425,6 +429,7 @@ class GraphicsBuild:
             "planner_rejected": self.planner_rejected,
             "planner_call": self.planner_call,
             "error": self.error,
+            "path_rejections": self.path_rejections,
             "total_cost_usd": self.total_cost_usd,
         }
 
@@ -1059,10 +1064,14 @@ def path_box_at(box: tuple[int, int, int, int], path: str,
     """The graphic's box at time ``t_s`` under its declared path.
 
     Pure geometry: glide enters from the nearer vertical edge at
-    the box's own height; rise/fall enter from the bottom/top edge
-    at the box's own column; approach scales about the box centre
-    (its swept area is inside the final box by construction). At
-    progress 1 every path returns the placed box itself.
+    the box's own height; fall enters from the top edge at the
+    box's own column; approach scales about the box centre (its
+    swept area is inside the final box by construction). Rise
+    enters from below - but the canvas bottom is unreachable: the
+    caption zone is a hard exclusion no path may cross, so rise
+    starts at the floor of the legal backdrop, its box bottom
+    resting on the caption zone's ceiling, and rises from there.
+    At progress 1 every path returns the placed box itself.
     """
     x0, y0, x1, y1 = box
     w, h = x1 - x0, y1 - y0
@@ -1073,7 +1082,9 @@ def path_box_at(box: tuple[int, int, int, int], path: str,
         x = int(round(start_x + (x0 - start_x) * q))
         return (x, y0, x + w, y1)
     if path == "rise_in":
-        y = int(round(ch + (y0 - ch) * q))
+        floor_y = ch - CAPTION_BOTTOM_MARGIN - h
+        start_y = max(y0, floor_y)
+        y = int(round(start_y + (y0 - start_y) * q))
         return (x0, y, x1, y + h)
     if path == "fall_in":
         y = int(round(-h + (y0 + h) * q))
@@ -1212,13 +1223,19 @@ def place_prepared(
     hook_glyph_bbox: tuple[int, int, int, int] | None = None,
     hook_window: tuple[float, float] | None = None,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
+    path_rejections: list[dict[str, Any]] | None = None,
 ) -> tuple[list[GraphicSpec], list[dict[str, Any]]]:
     """Place prepared graphics or drop them, with reasons.
 
     This function owns ONLY the geometry: the hard exclusions and
     the search. A span whose graphic fits nowhere legal is dropped
     with the reason - the layer never trades the exclusions for
-    coverage.
+    coverage. A span whose declared PATH fits nowhere legal keeps
+    its placement but loses the path (recorded in
+    ``path_rejections`` when a list is supplied): the swept area
+    is validated against the same free mask as the resting box,
+    plus the swept areas of already-placed path graphics whose
+    spans overlap in time.
     """
     cw, ch = canvas
     caption_top = ch - CAPTION_BOTTOM_MARGIN
@@ -1264,6 +1281,19 @@ def place_prepared(
             forbidden[max(0, by0 - PLACED_GAP_PX):by1 + PLACED_GAP_PX,
                       max(0, bx0 - PLACED_GAP_PX):bx1 + PLACED_GAP_PX] \
                 = True
+        # Swept areas of already-placed PATH graphics whose spans
+        # overlap this one in time: a travelling graphic owns its
+        # whole corridor, not just its resting box.
+        for prev in placed:
+            if prev.path is None:
+                continue
+            if not (prev.start_s < span.end_s
+                    and span.start_s < prev.end_s):
+                continue
+            swept = prev.mask()
+            if swept.any():
+                dist = ndimage.distance_transform_edt(~swept)
+                forbidden |= dist <= PLACED_GAP_PX
         free = (occupancy <= FREE_OCCUPANCY_MAX) & ~forbidden
         edt = ndimage.distance_transform_edt(free)
         region = (CANVAS_MARGIN_PX, CANVAS_MARGIN_PX,
@@ -1278,17 +1308,42 @@ def place_prepared(
                           "occupancy"})
             continue
 
+        # Path validation: the declared travel must stay inside
+        # the same free mask at every sampled instant. A refused
+        # path never costs the graphic its placement - it appears
+        # in place, and the refusal is recorded.
+        path = span.path
+        if path is not None and not _path_legal(
+                free, box, path, span.start_s, canvas):
+            if path_rejections is not None:
+                path_rejections.append({
+                    "span": span.to_dict(), "path": path,
+                    "reason": "declared path crosses a forbidden "
+                              "zone somewhere along its travel "
+                              "(face + margin, caption zone, hook "
+                              "glyph zone, speaker occupancy, or "
+                              "another graphic's swept area); the "
+                              "graphic is placed in place instead"})
+            path = None
+
         def layer_fn(t: float, start: float, end: float,
                      _content: GraphicContent = content,
                      _box: tuple[int, int, int, int] = box,
-                     _canvas: tuple[int, int] = canvas) -> np.ndarray:
+                     _canvas: tuple[int, int] = canvas,
+                     _path: str | None = path) -> np.ndarray:
             if end > start:
                 p = min(1.0, max(0.0, (t - start) / (end - start)))
             else:
                 p = 1.0
             img = _content.state_fn(p) if _content.state_fn \
                 else _content.final_image
-            return _paste_layer(img, _box, _canvas)
+            if _path is None:
+                return _paste_layer(img, _box, _canvas)
+            cur = path_box_at(_box, _path, t, start, _canvas)
+            cur_size = (cur[2] - cur[0], cur[3] - cur[1])
+            if cur_size != img.size:
+                img = img.resize(cur_size, Image.BILINEAR)
+            return _paste_layer_clipped(img, cur, _canvas)
 
         placed.append(GraphicSpec(
             kind=span.kind, start_s=span.start_s, end_s=span.end_s,
@@ -1297,7 +1352,8 @@ def place_prepared(
             source_quote=span.source_quote, prompt=span.prompt,
             headline=span.headline, facts=span.facts,
             compare=span.compare, motion=span.motion,
-            cost_usd=content.cost_usd, _state_fn=layer_fn))
+            cost_usd=content.cost_usd, _state_fn=layer_fn,
+            path=path))
         placed_boxes.append(box)
     return placed, dropped
 
@@ -1358,14 +1414,15 @@ def build_graphics(
             start_s=span.start_s, end_s=span.end_s, kind=span.kind,
             headline=span.headline, facts=span.facts,
             prompt=sent_prompt, source_quote=span.source_quote,
-            compare=span.compare, motion=span.motion)
+            compare=span.compare, motion=span.motion,
+            path=span.path)
         content = prepare_image(image.convert("RGB"), span)
         content.cost_usd = result.cost_usd
         items.append((span, content))
     placed, dropped = place_prepared(
         items, canvas_alphas, fps=fps, caption_rect=caption_rect,
         hook_glyph_bbox=hook_glyph_bbox, hook_window=hook_window,
-        canvas=canvas)
+        canvas=canvas, path_rejections=build.path_rejections)
     build.placed = placed
     build.dropped.extend(dropped)
     return build

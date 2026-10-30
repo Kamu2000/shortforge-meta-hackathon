@@ -23,7 +23,11 @@ from spatial_director.compositor import (  # noqa: E402
     _encode_video,
     graphics_layer_at,
 )
-from spatial_director.graphics_layer import GraphicSpec  # noqa: E402
+from spatial_director.graphics_layer import (  # noqa: E402
+    GraphicSpec,
+    _paste_layer_clipped,
+    path_box_at,
+)
 from spatial_director.layout_law import initial_caption_rect  # noqa: E402
 from spatial_director.spend_ledger import SpendLedger  # noqa: E402
 from spatial_director.verifier import (  # noqa: E402
@@ -472,6 +476,25 @@ def solid_spec(box, start, end, color=(200, 60, 120)):
         source_quote="the band never rehearses", motion="static")
 
 
+def path_spec(box, start, end, path="glide_in",
+              color=(200, 60, 120)):
+    """A GraphicSpec whose layer travels the declared path, built
+    from the same geometry the renderer uses."""
+    from PIL import Image as PILImage
+    w, h = box[2] - box[0], box[3] - box[1]
+    img = PILImage.new("RGBA", (w, h), color + (255,))
+
+    def state_fn(t, s, e, _img=img, _box=box, _path=path):
+        return _paste_layer_clipped(
+            _img, path_box_at(_box, _path, t, s, CANVAS), CANVAS)
+
+    return GraphicSpec(
+        kind="card", start_s=start, end_s=end, box=box,
+        layer_rgba=state_fn(end, start, end), headline="PATH CARD",
+        source_quote="the band never rehearses", motion="static",
+        path=path, _state_fn=state_fn)
+
+
 def render_graphics_video(path, entries, n=F8_N):
     def gen():
         for i in range(n):
@@ -546,6 +569,31 @@ class GraphicsF8Tests(unittest.TestCase):
             f8 = check(receipt, "F8")
             self.assertLess(
                 f8.measured["graphics"][0]["presence_match_min"], 0.75)
+
+    def test_travelling_graphic_on_path_passes(self):
+        with tempfile.TemporaryDirectory() as td:
+            spec = path_spec((700, 300, 1000, 560), 3.5, 6.5)
+            receipt = self._run(td, [spec])
+            self.assertEqual(receipt.failed, [], msg=receipt.to_json())
+            g = check(receipt, "F8").measured["graphics"][0]
+            self.assertEqual(g["path"], "glide_in")
+            self.assertGreaterEqual(g["path_match"], 0.75)
+
+    def test_graphic_parked_off_path_fails_f8(self):
+        # The render parks the graphic at its resting box for the
+        # whole span while the plan declares a glide: the travel
+        # sample catches it where the resting presence cannot.
+        with tempfile.TemporaryDirectory() as td:
+            spec = path_spec((700, 300, 1000, 560), 3.5, 6.5)
+            entries = [(lambda t, _s=spec: _s.layer_rgba,
+                        spec.start_s, spec.end_s)]
+            video = render_graphics_video(Path(td) / "render.mp4",
+                                          entries)
+            receipt = verify(f8_inputs(video, [spec]),
+                             wonder=FakeWonder(), ts="2026-10-30")
+            self.assertEqual(receipt.failed, ["F8"])
+            g = check(receipt, "F8").measured["graphics"][0]
+            self.assertLess(g["path_match"], 0.75)
 
     def test_graphic_inside_face_margin_fails_f8(self):
         # The box never touches a face pixel, but its right edge
