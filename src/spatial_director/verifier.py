@@ -1,4 +1,5 @@
-"""The F1-F7 verifier: deterministic checks first, one judge second.
+"""The F1-F7 verifier (+ F8 for graphics renders): deterministic
+checks first, one judge second.
 
 This is the gate the whole product is named for. It runs on the
 ACTUAL render (never a proxy, never the plan), in the order the
@@ -49,6 +50,13 @@ disagree is reconciled in the BUILDLOG and in layout_law):
   > 120px/s in 0-1.5s, or clear inter-frame motion across 0-3s
   (mean mask IoU < 0.999 - a talking head passes on motion; a frozen
   frame fails every way it is measured).
+- F8 context graphics (only on renders the graphics layer was part
+  of): per graphic - zero overlap with the face region and the
+  caption block/zone, no presence inside the first 3.0s hook
+  window, pixel-measured presence inside its span and absence
+  outside it (+-0.5s); across graphics, >= 4s of clean screen
+  between consecutive spans. No count cap: the semantic bar limits
+  the number, F8 certifies what was placed.
 
 Written fresh in-repo on 2026-10-29.
 """
@@ -68,6 +76,7 @@ import numpy as np
 
 from .caption_align import CaptionCue, EnergyProfile, active_segments
 from .compositor import DEFAULT_CANVAS, hook_layer
+from .graphics_layer import HOOK_EXCLUSION_END_S, MIN_GAP_S, GraphicSpec
 from .layout_law import (
     CAPTION_BOTTOM_MARGIN,
     GLYPH_OCCLUSION_CAP,
@@ -99,6 +108,18 @@ ZOOM_MIN_FRAC = 0.06
 SLIDE_MIN_PX_S = 120.0
 MOTION_IOU_CEILING = 0.999  # mean IoU at/above this reads as frozen
 GHOSTING_DELTA = 0.05       # alpha-weighted minus geometric occlusion
+
+# F8 (context graphics) thresholds. The overlap and spacing rules
+# are hard (0 px / the kept MIN_GAP_S ruling); presence is measured
+# on the render's own pixels against the graphic's deterministic
+# layer_at(t) state, with H.264-tolerant matching.
+GRAPHIC_FACE_OVERLAP_MAX_PX = 0
+GRAPHIC_CAPTION_OVERLAP_MAX_PX = 0
+GRAPHIC_MATCH_MIN = 0.75        # in-span pixel match (visible part)
+GRAPHIC_ABSENT_MATCH_MAX = 0.5  # out-of-span: above this = present
+GRAPHIC_SPAN_TOLERANCE_S = 0.5  # presence window vs declared span
+GRAPHIC_PIXEL_TOL = 28          # per-channel abs diff counting as same
+GRAPHIC_MIN_VISIBLE_PX = 50     # below this a sample is unmeasurable
 
 _STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "in", "is", "it",
@@ -165,6 +186,11 @@ class VerifyInputs:
     sam_response_path: str | Path | None = None
     hook_slide_px_s: float = 0.0
     canvas: tuple[int, int] = DEFAULT_CANVAS
+    # Context graphics (2026-10-30): None = the graphics layer was
+    # not part of this render (F8 does not run; the receipt is the
+    # original F1-F7 shape). A list (possibly empty) = the layer
+    # was enabled and these specs are what should be on the render.
+    graphics: Sequence[GraphicSpec] | None = None
 
 
 @dataclass
@@ -197,13 +223,17 @@ class Receipt:
     notes: list[str] = field(default_factory=list)
     draft: int = 1
     created: str = ""
+    # The graphics section (per graphic: kind, span, motion, box,
+    # source quote or prompt, cost) - present only on renders the
+    # graphics layer was part of; None keeps the historic shape.
+    graphics: list[dict[str, Any]] | None = None
 
     @property
     def failed(self) -> list[str]:
         return [c.check_id for c in self.checks if not c.passed]
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "receipt_version": 1,
             "artifact": self.artifact,
             "created": self.created,
@@ -215,6 +245,9 @@ class Receipt:
             "inputs_sha256": self.inputs_sha256,
             "notes": self.notes,
         }
+        if self.graphics is not None:
+            out["graphics"] = self.graphics
+        return out
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
@@ -283,6 +316,197 @@ def _content_words(text: str) -> list[str]:
     return [w for w in words if w not in _STOPWORDS]
 
 
+# ---------------------------------------------------------------- F8
+
+
+def _grab_frame(video_path: str | Path, t_s: float,
+                canvas: tuple[int, int]) -> np.ndarray | None:
+    """One frame of the render at ``t_s`` (RGB uint8), or None.
+
+    Input seeking + re-encode is frame-accurate for the frame at
+    the requested time; F8 samples at least 0.25s inside a span
+    edge, far from any boundary ambiguity.
+    """
+    cw, ch = canvas
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t_s):.3f}",
+         "-i", str(video_path), "-frames:v", "1",
+         "-s", f"{cw}x{ch}", "-f", "rawvideo", "-pix_fmt", "rgb24",
+         "pipe:1"],
+        capture_output=True)
+    need = cw * ch * 3
+    if proc.returncode != 0 or len(proc.stdout) < need:
+        return None
+    return np.frombuffer(proc.stdout[:need], dtype=np.uint8) \
+        .reshape(ch, cw, 3).copy()
+
+
+def _graphic_match(render_rgb: np.ndarray, spec: GraphicSpec, t_s: float,
+                   speaker_alpha: np.ndarray) -> float | None:
+    """Fraction of the graphic's VISIBLE pixels the render matches.
+
+    Visible = the graphic layer is opaque there AND the speaker
+    (who renders in front) does not cover it. The comparison layer
+    is ``spec.layer_at(t_s)`` - the same deterministic state the
+    compositor drew, animation included. None when too little of
+    the graphic is visible to measure honestly.
+    """
+    layer = spec.layer_at(t_s)
+    visible = (layer[..., 3] > 127) & (speaker_alpha <= 0.5)
+    if int(visible.sum()) < GRAPHIC_MIN_VISIBLE_PX:
+        return None
+    diff = np.abs(
+        render_rgb.astype(np.int16) - layer[..., :3].astype(np.int16)
+    ).max(axis=2)
+    return float((diff[visible] <= GRAPHIC_PIXEL_TOL).mean())
+
+
+def _check_graphics(inputs: VerifyInputs,
+                    alphas: Sequence[np.ndarray]) -> CheckResult:
+    """F8: context graphics integrity, measured on the render.
+
+    Per graphic: zero overlap with the face region (sampled frames
+    of its span) and with the caption block/zone; no presence
+    during the first 3.0s hook window; present (pixel match) inside
+    its span and absent outside it, within the 0.5s tolerance. And
+    across graphics: at least MIN_GAP_S of clean screen between
+    consecutive spans - the kept spacing ruling. There is NO count
+    cap (2026-10-30 ruling): the semantic bar, not a number,
+    limits how many graphics a render carries.
+    """
+    specs = list(inputs.graphics or [])
+    cw, ch = inputs.canvas
+    fps = inputs.fps
+    n_frames = len(alphas)
+    duration = n_frames / fps if fps else 0.0
+    zone_top = ch - CAPTION_BOTTOM_MARGIN
+    grabbed: dict[int, np.ndarray | None] = {}
+
+    def frame_at(idx: int) -> np.ndarray | None:
+        if idx not in grabbed:
+            grabbed[idx] = _grab_frame(
+                inputs.video_path, idx / fps, inputs.canvas)
+        return grabbed[idx]
+
+    def match_at(idx: int, spec: GraphicSpec) -> float | None:
+        if idx < 0 or idx >= n_frames:
+            return None
+        rgb = frame_at(idx)
+        if rgb is None:
+            return None
+        return _graphic_match(rgb, spec, idx / fps, alphas[idx])
+
+    per_graphic: list[dict[str, Any]] = []
+    offending: list[int] = []
+    for i, spec in enumerate(specs):
+        gmask = spec.mask()
+        # Face + caption overlap from the spec's own mask (the
+        # layout quantities), sampled over the span's frames.
+        face_overlap = 0
+        f0 = max(0, int(spec.start_s * fps))
+        f1 = min(n_frames, max(f0 + 1, int(np.ceil(spec.end_s * fps))))
+        step = max(1, (f1 - f0) // 5)
+        for f in range(f0, f1, step):
+            face_overlap = max(
+                face_overlap,
+                int((gmask & face_pixels(alphas[f])).sum()))
+        caption_overlap = (
+            rect_overlap_px(gmask, inputs.caption_rect)
+            if inputs.caption_rect is not None else 0)
+        zone_overlap = int(gmask[zone_top:, :].sum())
+        hook_overlap = max(
+            0.0, min(spec.end_s, HOOK_EXCLUSION_END_S)
+            - max(spec.start_s, 0.0))
+        # Presence: in-span samples sit >= 0.25s inside the edges
+        # (past the fade); out-of-span samples sit TOLERANCE + 0.25s
+        # beyond the edges, when the render has room there.
+        lo = int(np.ceil((spec.start_s + 0.25) * fps))
+        hi = int(np.floor((spec.end_s - 0.25) * fps))
+        in_idx = [x for x in (lo, (lo + hi) // 2, hi)
+                  if lo <= x <= hi and 0 <= x < n_frames]
+        if not in_idx and n_frames:
+            mid = min(n_frames - 1,
+                      max(0, int((spec.start_s + spec.end_s)
+                                 / 2.0 * fps)))
+            in_idx = [mid]
+        in_matches = [m for m in (match_at(x, spec) for x in in_idx)
+                      if m is not None]
+        presence = min(in_matches) if in_matches else None
+        out_idx = []
+        before = int(np.floor(
+            (spec.start_s - GRAPHIC_SPAN_TOLERANCE_S - 0.25) * fps))
+        after = int(np.ceil(
+            (spec.end_s + GRAPHIC_SPAN_TOLERANCE_S + 0.25) * fps))
+        if before >= 0:
+            out_idx.append(before)
+        if after < n_frames:
+            out_idx.append(after)
+        out_matches = [m for m in (match_at(x, spec) for x in out_idx)
+                       if m is not None]
+        absence = max(out_matches) if out_matches else None
+        ok = bool(
+            face_overlap <= GRAPHIC_FACE_OVERLAP_MAX_PX
+            and caption_overlap <= GRAPHIC_CAPTION_OVERLAP_MAX_PX
+            and zone_overlap <= GRAPHIC_CAPTION_OVERLAP_MAX_PX
+            and hook_overlap <= 0.0
+            and presence is not None and presence >= GRAPHIC_MATCH_MIN
+            and (absence is None or absence <= GRAPHIC_ABSENT_MATCH_MAX)
+        )
+        if not ok:
+            offending.append(i)
+        per_graphic.append({
+            "index": i,
+            "kind": spec.kind,
+            "motion": spec.motion,
+            "face_overlap_px": face_overlap,
+            "caption_overlap_px": caption_overlap,
+            "caption_zone_overlap_px": zone_overlap,
+            "hook_window_overlap_s": round(hook_overlap, 3),
+            "presence_match_min": (None if presence is None
+                                   else round(presence, 3)),
+            "absence_match_max": (None if absence is None
+                                  else round(absence, 3)),
+            "ok": ok,
+        })
+
+    ordered = sorted(range(len(specs)), key=lambda i: specs[i].start_s)
+    spacing_violations: list[dict[str, Any]] = []
+    for a, b in zip(ordered, ordered[1:]):
+        gap = specs[b].start_s - specs[a].end_s
+        if gap < MIN_GAP_S - 1e-9:
+            spacing_violations.append({
+                "earlier_index": a, "later_index": b,
+                "gap_s": round(gap, 3),
+            })
+    passed = not offending and not spacing_violations
+    return CheckResult(
+        check_id="F8", name="context graphics integrity",
+        passed=passed,
+        measured={
+            "count": len(specs),
+            "graphics": per_graphic,
+            "offending_indices": offending,
+            "spacing_violations": spacing_violations,
+            "duration_s": round(duration, 3),
+        },
+        threshold={
+            "face_overlap_max_px": GRAPHIC_FACE_OVERLAP_MAX_PX,
+            "caption_overlap_max_px": GRAPHIC_CAPTION_OVERLAP_MAX_PX,
+            "hook_window_end_s": HOOK_EXCLUSION_END_S,
+            "min_gap_s": MIN_GAP_S,
+            "presence_match_min": GRAPHIC_MATCH_MIN,
+            "absence_match_max": GRAPHIC_ABSENT_MATCH_MAX,
+            "span_tolerance_s": GRAPHIC_SPAN_TOLERANCE_S,
+        },
+        note=("the count is uncapped by design (2026-10-30 "
+              "ruling): the semantic bar limits graphics, F8 "
+              "certifies placement, timing and spacing of whatever "
+              "was placed. Presence is measured on the render's "
+              "pixels against each graphic's deterministic "
+              "layer_at(t) state."),
+    )
+
+
 # ---------------------------------------------------------------- the gate
 
 
@@ -290,7 +514,8 @@ def verify(inputs: VerifyInputs, *,
            wonder: WonderClient | None = None,
            draft: int = 1,
            ts: str = "") -> Receipt:
-    """Run F1-F7 over one render and issue its receipt.
+    """Run F1-F7 (plus F8 when graphics are supplied) over one
+    render and issue its receipt.
 
     All deterministic checks always run (a failure never
     short-circuits the rest - the receipt reports everything, so a
@@ -608,12 +833,19 @@ def verify(inputs: VerifyInputs, *,
               "opening); all three measurements are reported."),
     ))
 
+    # ---- F8: context graphics (only when the layer was in play) ----
+    graphics_section = None
+    if inputs.graphics is not None:
+        checks.append(_check_graphics(inputs, alphas))
+        graphics_section = [g.to_dict() for g in inputs.graphics]
+
     # ---- receipt ---------------------------------------------------------
     receipt = Receipt(
         artifact=str(inputs.video_path),
         verdict="",  # set below
         checks=checks,
         meta_calls=meta_calls,
+        graphics=graphics_section,
         inputs_sha256={
             "video": _sha256_file(inputs.video_path)
             if Path(inputs.video_path).exists() else None,
