@@ -327,6 +327,48 @@ def hook_visible_at(t_s: float, window: tuple[float, float] | None) -> bool:
     return window[0] <= t_s < window[1]
 
 
+def shift_layer_x(layer: np.ndarray, dx_px: float) -> np.ndarray:
+    """Shift a canvas-sized layer horizontally by ``dx_px`` pixels.
+
+    Zero-filled at the vacated edge, never wrapped: a slide-in
+    card must enter from off-canvas geometry, not teleport glyphs
+    from the far edge. Works for RGBA uint8 layers and bool masks
+    alike (the shift is pure slicing).
+    """
+    dx = int(round(dx_px))
+    if dx == 0:
+        return layer
+    out = np.zeros_like(layer)
+    h, w = layer.shape[:2]
+    if dx > 0:
+        out[:, dx:] = layer[:, :w - dx]
+    else:
+        out[:, :w + dx] = layer[:, -dx:]
+    return out
+
+
+def hook_slide_dx_at(t_s: float, window: tuple[float, float] | None,
+                     slide: tuple[float, float] | None) -> float:
+    """Horizontal hook offset at ``t_s`` for a slide repair.
+
+    ``slide`` is (dx_start_px, duration_s): the card starts
+    displaced by dx_start at the window start and eases linearly
+    to its final position over ``duration_s``. Outside the slide
+    the offset is 0, so a finished slide is the static layer.
+    """
+    if slide is None or window is None:
+        return 0.0
+    dx_start, duration = slide
+    if duration <= 0:
+        return 0.0
+    progress = (t_s - window[0]) / duration
+    if progress <= 0.0:
+        return dx_start
+    if progress >= 1.0:
+        return 0.0
+    return dx_start * (1.0 - progress)
+
+
 # ---------------------------------------------------------------- graphics
 
 GRAPHIC_FADE_S = 0.2  # fade in/out ceiling for context graphics

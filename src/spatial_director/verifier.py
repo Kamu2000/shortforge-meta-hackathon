@@ -75,7 +75,8 @@ from typing import Any, Sequence
 import numpy as np
 
 from .caption_align import CaptionCue, EnergyProfile, active_segments
-from .compositor import DEFAULT_CANVAS, hook_layer
+from .compositor import (DEFAULT_CANVAS, hook_layer, hook_slide_dx_at,
+                         shift_layer_x)
 from .graphics_layer import HOOK_EXCLUSION_END_S, MIN_GAP_S, GraphicSpec
 from .layout_law import (
     CAPTION_BOTTOM_MARGIN,
@@ -153,6 +154,13 @@ class HookSpec:
     window: tuple[float, float]
     y_center_frac: float
     layout_rendered: bool = False  # True = layout_law safe-width layer
+    # Slide repair (2026-10-30, F7): (dx_start_px, duration_s) -
+    # the card starts displaced by dx_start at the window start and
+    # eases to its final position over duration_s. None = the
+    # historic static hook. The slide speed is a designed value
+    # AND a measured one: the renderer composites exactly this
+    # offset function, and F7 reads the speed back off it.
+    slide: tuple[float, float] | None = None
 
     def layer(self, canvas: tuple[int, int] = DEFAULT_CANVAS) -> np.ndarray:
         if self.layout_rendered:
@@ -172,6 +180,35 @@ class HookSpec:
         bbox = (int(xs.min()), int(ys.min()),
                 int(xs.max()) + 1, int(ys.max()) + 1)
         return mask, bbox
+
+    @property
+    def slide_px_s(self) -> float:
+        """Designed slide speed in px/s; 0.0 for a static hook."""
+        if not self.slide:
+            return 0.0
+        dx_start, duration = self.slide
+        if duration <= 0:
+            return 0.0
+        return abs(dx_start) / duration
+
+    def glyph_at(self, t_s: float,
+                 canvas: tuple[int, int] = DEFAULT_CANVAS):
+        """Glyph mask + bbox at ``t_s`` (slide-aware).
+
+        With no slide this is exactly ``glyph()``; with a slide the
+        mask is shifted by the same offset function the renderer
+        composites, so F2 measures occlusion against the glyphs
+        where they actually are at that instant, not where they
+        end up.
+        """
+        mask, bbox = self.glyph(canvas)
+        dx = hook_slide_dx_at(t_s, self.window, self.slide)
+        if dx == 0.0:
+            return mask, bbox
+        shifted = shift_layer_x(mask, dx)
+        x0, y0, x1, y1 = bbox
+        return shifted, (x0 + int(round(dx)), y0,
+                         x1 + int(round(dx)), y1)
 
 
 @dataclass
@@ -588,8 +625,24 @@ def verify(inputs: VerifyInputs, *,
         occs, aws = [], []
         for f in frames_in(*inputs.hook.window):
             a = alphas[f]
-            occs.append(float(((a > 0.5) & glyph).sum()) / glyph_n)
-            aws.append(float((a * glyph).sum()) / glyph_n)
+            if inputs.hook.slide is not None:
+                # A sliding card's glyphs are elsewhere during the
+                # slide: measure against the position at this
+                # frame's instant, with that frame's visible glyph
+                # count as the denominator (edge clipping shrinks
+                # it), or the measurement would bless positions
+                # the glyphs never occupied.
+                glyph_f, _ = inputs.hook.glyph_at(
+                    f / fps, inputs.canvas)
+                glyph_n_f = int(glyph_f.sum())
+                if glyph_n_f == 0:
+                    continue
+                occs.append(float(((a > 0.5) & glyph_f).sum())
+                            / glyph_n_f)
+                aws.append(float((a * glyph_f).sum()) / glyph_n_f)
+            else:
+                occs.append(float(((a > 0.5) & glyph).sum()) / glyph_n)
+                aws.append(float((a * glyph).sum()) / glyph_n)
         occ_mean = round(float(np.mean(occs)), 4) if occs else 0.0
         occ_max = round(float(np.max(occs)), 4) if occs else 0.0
         aw_mean = round(float(np.mean(aws)), 4) if aws else 0.0
@@ -812,14 +865,22 @@ def verify(inputs: VerifyInputs, *,
     for a, b in zip(seq, seq[1:]):
         ious.append(mask_iou(alphas[a], alphas[b]))
     mean_iou = round(float(np.mean(ious)), 4) if ious else 1.0
+    # Slide speed: the hook's own slide parameters when the render
+    # carries them (the renderer composites exactly that offset
+    # function, so the speed is read back off the render's design,
+    # not asserted blindly); the legacy declared field otherwise.
+    # Thresholds unchanged: SLIDE_MIN_PX_S still decides.
+    slide_measured = inputs.hook_slide_px_s
+    if inputs.hook is not None and inputs.hook.slide is not None:
+        slide_measured = inputs.hook.slide_px_s
     checks.append(CheckResult(
         check_id="F7", name="static opening",
         passed=bool(zoom >= ZOOM_MIN_FRAC
-                    or inputs.hook_slide_px_s > SLIDE_MIN_PX_S
+                    or slide_measured > SLIDE_MIN_PX_S
                     or mean_iou < MOTION_IOU_CEILING),
         measured={
             "speaker_scale_change_0_1p5s": zoom,
-            "hook_slide_px_s": inputs.hook_slide_px_s,
+            "hook_slide_px_s": round(slide_measured, 1),
             "mean_mask_iou_0_3s": mean_iou,
         },
         threshold={

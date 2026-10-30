@@ -59,7 +59,9 @@ from .compositor import (
     GraphicEntry,
     composite_frame,
     graphics_layer_at,
+    hook_slide_dx_at,
     hook_visible_at,
+    shift_layer_x,
 )
 from .layout_law import (
     GLYPH_OCCLUSION_CAP,
@@ -89,6 +91,7 @@ RESCALE_SPEAKER = "RESCALE_SPEAKER"
 REGENERATE_HOOK_TEXT = "REGENERATE_HOOK_TEXT"
 REFRAME_SPEAKER = "REFRAME_SPEAKER"
 DROP_GRAPHICS = "DROP_GRAPHICS"
+ENGAGE_HOOK_SLIDE = "ENGAGE_HOOK_SLIDE"
 
 
 @dataclass(frozen=True)
@@ -116,10 +119,19 @@ REPAIR_MENU: dict[str, RepairSpec] = {
         "Re-render with the speaker scaled down so the head clears "
         "the canvas edges with margin."),
     REGENERATE_HOOK_TEXT: RepairSpec(
-        REGENERATE_HOOK_TEXT, ("F1", "F6", "F7"),
+        REGENERATE_HOOK_TEXT, ("F1", "F6"),
         "Replace the hook line with a new one for the same moment "
         "(more content words / an open-loop pattern / a stronger "
-        "opening line)."),
+        "opening line). Text cannot fix a motion failure: F7 is "
+        "NOT a target here (2026-10-30 Holmes graphics run: a "
+        "regenerated hook left F7's slide at 0.0 because the "
+        "hook layer is static)."),
+    ENGAGE_HOOK_SLIDE: RepairSpec(
+        ENGAGE_HOOK_SLIDE, ("F7",),
+        "Slide the hook card into place over the opening second: "
+        "designed motion for a genuinely static opening, at a "
+        "slide speed above F7's floor. The speaker does not move; "
+        "only the hook card does."),
     REFRAME_SPEAKER: RepairSpec(
         REFRAME_SPEAKER, ("F3",),
         "Re-frame the speaker so the measured face centroid lands "
@@ -212,6 +224,10 @@ class RepairExecution:
     canvas_alphas: Sequence[np.ndarray]
     detail: str = ""
     graphics: list[GraphicSpec] | None = None
+    # F7 slide repair's designed speed in px/s; 0.0 = no slide.
+    # The re-verify reads it back into VerifyInputs so F7's
+    # measured slide is the speed this render actually carries.
+    hook_slide_px_s: float = 0.0
 
 
 @dataclass
@@ -318,6 +334,7 @@ def render_composite_with_captions(
     speaker_scale: float = 1.0,
     backdrop: str = DEFAULT_BACKDROP,
     graphics: Sequence[GraphicEntry] | None = None,
+    hook_slide: tuple[float, float] | None = None,
 ) -> Path:
     """The shared render path: composite + captions IN FRONT.
 
@@ -325,7 +342,10 @@ def render_composite_with_captions(
     function, so a repair differs from the draft only in the inputs
     its executor changed - never in the renderer. ``graphics`` is
     the context graphics plane (compositor entries); None renders
-    exactly the pre-graphics stack.
+    exactly the pre-graphics stack. ``hook_slide`` is the F7 slide
+    repair's (dx_start_px, duration_s): the hook card starts
+    displaced and eases to its final position; None is the
+    historic static hook.
     """
     from .compositor import _encode_video
 
@@ -341,6 +361,10 @@ def render_composite_with_captions(
         for i, (frame, alpha) in enumerate(zip(frames, src_alphas)):
             t = i / fps
             hook = hook_rgba if hook_visible_at(t, hook_window) else None
+            if hook is not None and hook_slide is not None:
+                dx = hook_slide_dx_at(t, hook_window, hook_slide)
+                if dx != 0.0:
+                    hook = shift_layer_x(hook, dx)
             plane = graphics_layer_at(graphics, t, canvas) \
                 if graphics else None
             out = composite_frame(frame, alpha, hook, canvas,
@@ -493,6 +517,7 @@ def _render_execution(
     renderer: Callable[..., Path],
     speaker_scale: float = 1.0,
     graphics: list[GraphicSpec] | None = None,
+    hook_slide: tuple[float, float] | None = None,
 ) -> RepairExecution:
     hook_rgba = hook.layer(artifacts.canvas) if hook.text else None
     out_path = Path(artifacts.work_dir) / out_name
@@ -505,6 +530,8 @@ def _render_execution(
     kwargs: dict[str, Any] = {}
     if carried is not None:
         kwargs["graphics"] = graphics_entries(carried)
+    if hook_slide is not None:
+        kwargs["hook_slide"] = hook_slide
     renderer(
         frames, src_alphas,
         hook_rgba=hook_rgba, hook_window=hook.window,
@@ -513,10 +540,14 @@ def _render_execution(
         fps=artifacts.fps, canvas=artifacts.canvas,
         speaker_scale=speaker_scale, **kwargs,
     )
+    slide_speed = 0.0
+    if hook_slide is not None and hook_slide[1] > 0:
+        slide_speed = abs(hook_slide[0]) / hook_slide[1]
     return RepairExecution(
         render_path=out_path, hook=hook, cues=cues,
         caption_rect=caption_rect, canvas_alphas=canvas_alphas,
-        detail=detail, graphics=carried)
+        detail=detail, graphics=carried,
+        hook_slide_px_s=slide_speed)
 
 
 def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
@@ -855,6 +886,61 @@ def _exec_regenerate_hook(artifacts: RenderArtifacts, receipt: Receipt,
         renderer=renderer)
 
 
+# F7 slide repair: designed motion above F7's 120 px/s floor with
+# margin, at a distance the hook band can actually travel.
+SLIDE_SPEED_PX_S = 200.0
+SLIDE_TARGET_PX = 240.0
+
+
+def _exec_engage_hook_slide(artifacts: RenderArtifacts, receipt: Receipt,
+                            renderer, **_) -> RepairExecution:
+    """ENGAGE_HOOK_SLIDE: give a static opening designed motion.
+
+    Why this repair exists (2026-10-30 Holmes graphics run):
+    short-2's window is genuinely static (speaker scale change
+    0.0027, mask IoU 0.999) and REGENERATE_HOOK_TEXT left F7
+    identical - new text on a static layer is still static, and
+    no text change can move a motionless speaker. The fix must
+    be motion, by construction: the hook card slides into place
+    over the opening second at 200 px/s (F7's floor is 120).
+    The slide is horizontal inside the hook band, from the side
+    with more canvas room, so the glyphs never leave the band and
+    the speaker geometry (F3/F4) is untouched. Speed is exact by
+    construction: duration = distance / 200 for whatever distance
+    the band allows, so the repair is general to any static
+    window, not tuned to one. F2 stays honest: the verifier
+    measures occlusion against the slid glyph position per frame.
+    """
+    _mask, bbox = artifacts.hook.glyph(artifacts.canvas)
+    x0, _y0, x1, _y1 = bbox
+    canvas_w = artifacts.canvas[0]
+    left_room, right_room = x0, canvas_w - x1
+    if max(left_room, right_room) <= 0:
+        raise RepairNotApplicable(
+            "hook glyphs already span the full canvas width; "
+            "no room for a slide")
+    if left_room >= right_room:
+        dx = -min(SLIDE_TARGET_PX, left_room)
+    else:
+        dx = min(SLIDE_TARGET_PX, right_room)
+    duration = abs(dx) / SLIDE_SPEED_PX_S
+    hook = HookSpec(artifacts.hook.text, artifacts.hook.window,
+                    artifacts.hook.y_center_frac,
+                    layout_rendered=artifacts.hook.layout_rendered,
+                    slide=(dx, duration))
+    return _render_execution(
+        artifacts, frames=artifacts.frames,
+        src_alphas=artifacts.src_alphas,
+        canvas_alphas=artifacts.canvas_alphas, hook=hook,
+        cues=artifacts.cues, caption_rect=artifacts.caption_rect,
+        audio_from=artifacts.window_clip,
+        out_name="draft2-engage-hook-slide.mp4",
+        detail=f"hook slide {dx:+.0f}px over {duration:.2f}s "
+               f"({SLIDE_SPEED_PX_S:.0f} px/s; F7 floor 120 px/s); "
+               f"speaker untouched",
+        renderer=renderer, hook_slide=(dx, duration))
+
+
 def graphics_entries(
     graphics: Sequence[GraphicSpec] | None,
 ) -> list[GraphicEntry] | None:
@@ -927,6 +1013,7 @@ _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {
     REGENERATE_HOOK_TEXT: _exec_regenerate_hook,
     REFRAME_SPEAKER: _exec_reframe_speaker,
     DROP_GRAPHICS: _exec_drop_graphics,
+    ENGAGE_HOOK_SLIDE: _exec_engage_hook_slide,
 }
 
 

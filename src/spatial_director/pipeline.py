@@ -712,7 +712,8 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                 hook=execution.hook, cues=execution.cues,
                 caption_rect=execution.caption_rect,
                 sam_response_path=sam_path,
-                graphics=execution.graphics),
+                graphics=execution.graphics,
+                hook_slide_px_s=execution.hook_slide_px_s),
             wonder=clients.wonder, draft=2, ts=ts)
         _annotate_effect(receipt2)
         return receipt2
