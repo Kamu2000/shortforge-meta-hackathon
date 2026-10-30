@@ -78,7 +78,7 @@ from .caption_align import CaptionCue
 from .compositor import DEFAULT_CANVAS, _load_font
 from .image_client import ImageClient
 from .layout_law import CAPTION_BOTTOM_MARGIN, face_pixels
-from .spark_client import SparkClient
+from .spark_client import SparkClient, SparkClientError
 
 # ---------------------------------------------------------------- constants
 
@@ -88,8 +88,11 @@ MAX_SPAN_S = 6.0
 MIN_GAP_S = 4.0              # clean screen between graphics ("sparse
                              # seconds" - a kept ruling, also an F8 rule)
 REVEAL_MIN_SPAN_S = 3.5      # shorter quote/name cards stay static
-PLANNER_MAX_TOKENS = 4000  # Spark reasons first; 2500 starved on
-# the full rules + cue list (empty reply, 2026-10-30 preview probe)    # Spark reasons first; tight budgets return empty
+PLANNER_MAX_TOKENS = 8000  # Spark reasons first; 2500 starved on the
+# preview prompt and 4000 starved on pipeline cue lists (empty reply
+# on all 3 Holmes graphics Shorts, 2026-10-30). One retry at a
+# doubled budget follows the Wonder/Spark-Open precedent (cap 16000).
+PLANNER_MAX_TOKENS_CAP = 16000
 
 FACE_MARGIN_PX = 28          # hard exclusion halo around the face
 FREE_OCCUPANCY_MAX = 0.04    # speaker present >4% of span frames = occupied
@@ -566,29 +569,57 @@ def plan_graphics(
     duration_s: float,
     ts: str = "",
 ) -> PlannerOutcome:
-    """One ledger-gated Spark call proposing graphic spans.
+    """Ledger-gated Spark call(s) proposing graphic spans.
 
     A planner failure degrades to an empty outcome with the error
     on the record: graphics are an additive layer, and a render
     must never die because an optional enhancement could not be
     planned. (The verifier still certifies whatever WAS placed.)
+
+    Empty replies get ONE retry at a doubled budget (cap
+    PLANNER_MAX_TOKENS_CAP), following the Wonder judge and
+    Spark-Open sweep precedent: reasoning models burn the budget on
+    reasoning first, and a tight budget returns empty stochastically.
+    A second empty reply degrades like any other planner failure.
+    Non-empty failures (HTTP errors, cap errors) are NOT retried.
     """
     transcript = " ".join(c.text for c in cues)
     timing = "\n".join(
         f"[{c.start_s:.2f}-{c.end_s:.2f}] {c.text}" for c in cues)
-    try:
-        result = spark.chat(
-            [{"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-             {"role": "user", "content":
-              f"Short length: {duration_s:.1f}s. Caption phrases "
-              f"with timings:\n{timing}"}],
-            max_tokens=PLANNER_MAX_TOKENS,
-            purpose="graphics-planner", ts=ts)
-    except Exception as exc:
-        return PlannerOutcome(error=f"planner call failed: {exc}"[:300])
+    messages = [
+        {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+        {"role": "user", "content":
+         f"Short length: {duration_s:.1f}s. Caption phrases "
+         f"with timings:\n{timing}"}]
+    budgets = [PLANNER_MAX_TOKENS]
+    doubled = min(PLANNER_MAX_TOKENS * 2, PLANNER_MAX_TOKENS_CAP)
+    if doubled > budgets[0]:
+        budgets.append(doubled)
+    result = None
+    empty_first = False
+    for budget in budgets:
+        try:
+            result = spark.chat(
+                messages, max_tokens=budget,
+                purpose="graphics-planner", ts=ts)
+            break
+        except SparkClientError as exc:
+            if "empty chat reply" not in str(exc):
+                return PlannerOutcome(
+                    error=f"planner call failed: {exc}"[:300])
+            empty_first = True
+            result = None
+        except Exception as exc:
+            return PlannerOutcome(error=f"planner call failed: {exc}"[:300])
+    if result is None:
+        return PlannerOutcome(
+            error="planner call failed: empty chat reply at every "
+                  "budget (base and doubled retry); no graphics "
+                  "planned")
     call = {"model": "muse-spark-1.3", "purpose": "graphics-planner",
             "cost_usd": result.cost_usd,
-            "request_id": result.request_id}
+            "request_id": result.request_id,
+            "empty_first_attempt": empty_first}
     spans, rejected = parse_planner_reply(
         result.text, transcript, duration_s=duration_s)
     return PlannerOutcome(spans=spans, rejected=rejected,
