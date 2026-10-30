@@ -659,12 +659,12 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     if graphics_enabled:
         _glyph_mask, glyph_bbox = hook_spec.glyph(canvas)
         build = build_graphics(
-            cues, canvas_alphas, fps=fps, canvas=canvas,
+            clients.spark, clients.image, cues, canvas_alphas,
+            fps=fps, canvas=canvas,
             caption_rect=cap_layout.rect,
             hook_glyph_bbox=glyph_bbox,
             hook_window=hook_spec.window, duration_s=length,
-            spark=clients.spark, image_client=clients.image, ts=ts,
-            purpose_prefix=f"pipeline-graphics-short{index}")
+            ts=ts, purpose_prefix=f"pipeline-graphics-short{index}")
         placed_graphics = build.specs
         graphics_report = build.to_dict()
         (short_dir / "graphics-plan.json").write_text(
