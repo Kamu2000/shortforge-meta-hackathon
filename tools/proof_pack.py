@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verifier proof pack: labelled fault-injection cases for F1-F7.
+"""Verifier proof pack: labelled fault-injection cases for F1-F8.
 
 Standalone runner (NOT part of the unit suite). It builds a set of
 labelled cases - for each deterministic check, fault injections
@@ -43,14 +43,19 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from spatial_director.caption_align import CaptionCue, EnergyProfile  # noqa: E402
+from spatial_director.compositor import (  # noqa: E402
+    _encode_video,
+    graphics_layer_at,
+)
+from spatial_director.graphics_layer import GraphicSpec  # noqa: E402
 from spatial_director.layout_law import initial_caption_rect  # noqa: E402
 from spatial_director.verifier import HookSpec, VerifyInputs, verify  # noqa: E402
 
 CANVAS = (1080, 1920)
 FPS = 4.0
 N = 16  # 4 seconds at 4 fps - mirrors tests/test_verifier.py fixtures
-CHECKS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7"]
-RUN_DATE = "2026-10-29"
+CHECKS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]
+RUN_DATE = "2026-10-30"
 
 
 # ---------------------------------------------------------------- fixtures
@@ -223,6 +228,63 @@ def _case(cid: str, target: str, description: str,
 
 def _std(video: Path, wonder_can: bool = True, **overrides):
     return base_inputs(video, **overrides), FakeWonder(can=wonder_can)
+
+
+# ---------------------------------------------------------------- F8 fixtures
+
+F8_N = 40  # 10 seconds at 4 fps - room for the spacing-rule cases
+F8_CUES = [CaptionCue("The band never rehearses.", 0.0, 3.5),
+           CaptionCue("It is just perfect.", 3.5, 7.0),
+           CaptionCue("And it keeps going on.", 7.0, 10.0)]
+
+
+def _f8_spec(box, start, end, color=(200, 60, 120)):
+    layer = np.zeros((CANVAS[1], CANVAS[0], 4), dtype=np.uint8)
+    x0, y0, x1, y1 = box
+    layer[y0:y1, x0:x1, 0] = color[0]
+    layer[y0:y1, x0:x1, 1] = color[1]
+    layer[y0:y1, x0:x1, 2] = color[2]
+    layer[y0:y1, x0:x1, 3] = 255
+    return GraphicSpec(
+        kind="card", start_s=start, end_s=end, box=box,
+        layer_rgba=layer, headline="PROOF CARD",
+        source_quote="the band never rehearses", motion="static")
+
+
+def _f8(shared_video: Path, name: str, specs, windows=None):
+    """An F8 case: a custom-rendered video (black + the graphic
+    plane) plus the 40-frame good fixture declared with ``specs``.
+    ``windows`` overrides where the render actually SHOWS each
+    graphic (default: its declared span)."""
+    windows = windows or [None] * len(specs)
+    entries = [
+        (spec.layer_at,
+         spec.start_s if w is None else w[0],
+         spec.end_s if w is None else w[1])
+        for spec, w in zip(specs, windows)
+    ]
+    video = shared_video.with_name(name)
+
+    def gen():
+        for i in range(F8_N):
+            t = i / FPS
+            frame = np.zeros((CANVAS[1], CANVAS[0], 3), dtype=np.uint8)
+            plane = graphics_layer_at(entries, t, CANVAS)
+            if plane is not None:
+                a = plane[..., 3:4].astype(np.float64) / 255.0
+                frame = np.clip(
+                    plane[..., :3].astype(np.float64) * a,
+                    0, 255).astype(np.uint8)
+            yield frame
+
+    _encode_video(gen(), video, fps=FPS, canvas=CANVAS)
+    inputs = VerifyInputs(
+        video_path=video, fps=FPS,
+        canvas_alphas=speaker_frames(F8_N),
+        audio=profile([(0.0, 10.0)], total_s=10.0),
+        hook=GOOD_HOOK, cues=F8_CUES,
+        caption_rect=initial_caption_rect(), graphics=specs)
+    return inputs, FakeWonder()
 
 
 CASES: list[Case] = [
@@ -446,6 +508,65 @@ CASES: list[Case] = [
               v, canvas_alphas=speaker_frames(
                   shift=0, x0_overrides={i: 241
                                          for i in range(6, 16)}))),
+
+    # ---- F8: context graphics (2026-10-30) ---------------------------
+    # F8 measures the render's own pixels, so these cases render
+    # CUSTOM videos (the shared 320x240 dummy cannot carry a
+    # graphic): black frames + the graphic plane, in a sibling file
+    # of the same tempdir, on the 10s/40-frame good fixture.
+    _case("control-graphics", "control",
+          "One graphic placed legally (clear of face, captions and "
+          "the hook window), present exactly inside its span: F8 "
+          "passes and F1-F7 are untouched.",
+          set(), lambda v: _f8(
+              v, "f8-control.mp4",
+              [_f8_spec((700, 300, 1000, 560), 3.5, 5.5)])),
+    _case("control-graphics-spaced-pair", "control",
+          "Two graphics 4.0s of clean screen apart (the kept "
+          "spacing ruling, exactly at its floor): both pass.",
+          set(), lambda v: _f8(
+              v, "f8-control-spaced.mp4",
+              [_f8_spec((700, 300, 1000, 560), 3.25, 4.75),
+               _f8_spec((60, 300, 360, 560), 8.75, 10.0,
+                        color=(60, 120, 200))])),
+    _case("f8-graphic-over-face", "F8",
+          "Graphic box overlapping the face band (rows 1050-1350 "
+          "across the head): F8's face-overlap sub-check fails; "
+          "placement quantities only, so F1-F7 stay clean.",
+          {"F8"}, lambda v: _f8(
+              v, "f8-over-face.mp4",
+              [_f8_spec((300, 1050, 700, 1350), 3.5, 5.5)])),
+    _case("f8-graphic-over-captions", "F8",
+          "Graphic box overlapping the caption block AND the lower "
+          "caption zone (rows 1500-1700): F8's caption-overlap "
+          "sub-check fails.",
+          {"F8"}, lambda v: _f8(
+              v, "f8-over-captions.mp4",
+              [_f8_spec((200, 1500, 800, 1700), 3.5, 5.5)])),
+    _case("f8-graphic-outside-span", "F8",
+          "Graphic declared at 3.5-5.5s but the render shows it at "
+          "0.5-2.0s: in-span presence match ~0 - F8's timing "
+          "sub-check fails (pixel-measured, not spec-trusted).",
+          {"F8"}, lambda v: _f8(
+              v, "f8-outside-span.mp4",
+              [_f8_spec((700, 300, 1000, 560), 3.5, 5.5)],
+              windows=[(0.5, 2.0)])),
+    _case("f8-graphic-in-hook-window", "F8",
+          "Graphic declared at 2.0-4.0s: it intrudes on the first "
+          "3.0s hook window, which the kept ruling forbids - F8 "
+          "fails on the declared span alone.",
+          {"F8"}, lambda v: _f8(
+              v, "f8-hook-window.mp4",
+              [_f8_spec((700, 300, 1000, 560), 2.0, 4.0)])),
+    _case("f8-spacing-violation", "F8",
+          "Two individually-legal graphics only 1.25s of clean "
+          "screen apart: the kept >=4s spacing ruling fails them "
+          "as a pair - F8's spacing sub-check.",
+          {"F8"}, lambda v: _f8(
+              v, "f8-spacing.mp4",
+              [_f8_spec((700, 300, 1000, 560), 3.25, 4.75),
+               _f8_spec((60, 300, 360, 560), 6.0, 7.5,
+                        color=(60, 120, 200))])),
 ]
 
 
