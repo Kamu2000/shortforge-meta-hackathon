@@ -50,12 +50,15 @@ disagree is reconciled in the BUILDLOG and in layout_law):
   > 120px/s in 0-1.5s, or clear inter-frame motion across 0-3s
   (mean mask IoU < 0.999 - a talking head passes on motion; a frozen
   frame fails every way it is measured).
-- F8 context graphics (only on renders the graphics layer was part
-  of): per graphic - zero overlap with the face region and the
-  caption block/zone, no presence inside the first 3.0s hook
-  window, pixel-measured presence inside its span and absence
-  outside it (+-0.5s); across graphics, >= 4s of clean screen
-  between consecutive spans. No count cap: the semantic bar limits
+- F8 context graphics (only on renders the graphics layer was
+  part of): per graphic - zero overlap with the face region plus
+  its 28px margin, the caption block/zone, and the hook glyph
+  zone while the hook is up; pixel-measured presence inside its
+  span and absence outside it (+-0.5s); across graphics, no two
+  graphics whose spans overlap in time may have intersecting
+  boxes. Timing is otherwise free (2026-10-31 ruling): graphics
+  may appear from 0s and back-to-back - there is no hook-window
+  ban and no minimum gap. No count cap: the semantic bar limits
   the number, F8 certifies what was placed.
 
 Written fresh in-repo on 2026-10-29.
@@ -73,11 +76,12 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
+from scipy import ndimage
 
 from .caption_align import CaptionCue, EnergyProfile, active_segments
 from .compositor import (DEFAULT_CANVAS, hook_layer, hook_slide_dx_at,
                          shift_layer_x)
-from .graphics_layer import HOOK_EXCLUSION_END_S, MIN_GAP_S, GraphicSpec
+from .graphics_layer import FACE_MARGIN_PX, GraphicSpec
 from .layout_law import (
     CAPTION_BOTTOM_MARGIN,
     GLYPH_OCCLUSION_CAP,
@@ -110,12 +114,18 @@ SLIDE_MIN_PX_S = 120.0
 MOTION_IOU_CEILING = 0.999  # mean IoU at/above this reads as frozen
 GHOSTING_DELTA = 0.05       # alpha-weighted minus geometric occlusion
 
-# F8 (context graphics) thresholds. The overlap and spacing rules
-# are hard (0 px / the kept MIN_GAP_S ruling); presence is measured
-# on the render's own pixels against the graphic's deterministic
-# layer_at(t) state, with H.264-tolerant matching.
+# F8 (context graphics) thresholds. The overlap rules are hard
+# (0 px: face + its margin, caption block/zone, hook glyph zone,
+# and pairwise box collisions between time-overlapping graphics);
+# presence is measured on the render's own pixels against the
+# graphic's deterministic layer_at(t) state, with H.264-tolerant
+# matching. Timing itself is NOT a rule since the 2026-10-31
+# ruling (no hook-window ban, no minimum gap).
 GRAPHIC_FACE_OVERLAP_MAX_PX = 0
 GRAPHIC_CAPTION_OVERLAP_MAX_PX = 0
+GRAPHIC_HOOK_GLYPH_OVERLAP_MAX_PX = 0
+GRAPHIC_COLLIDING_PAIRS_MAX = 0
+GRAPHIC_HOOK_ZONE_PAD_PX = 12  # mirrors placement's glyph-zone pad
 GRAPHIC_MATCH_MIN = 0.75        # in-span pixel match (visible part)
 GRAPHIC_ABSENT_MATCH_MAX = 0.5  # out-of-span: above this = present
 GRAPHIC_SPAN_TOLERANCE_S = 0.5  # presence window vs declared span
@@ -402,14 +412,19 @@ def _check_graphics(inputs: VerifyInputs,
                     alphas: Sequence[np.ndarray]) -> CheckResult:
     """F8: context graphics integrity, measured on the render.
 
-    Per graphic: zero overlap with the face region (sampled frames
-    of its span) and with the caption block/zone; no presence
-    during the first 3.0s hook window; present (pixel match) inside
-    its span and absent outside it, within the 0.5s tolerance. And
-    across graphics: at least MIN_GAP_S of clean screen between
-    consecutive spans - the kept spacing ruling. There is NO count
-    cap (2026-10-30 ruling): the semantic bar, not a number,
-    limits how many graphics a render carries.
+    Per graphic: zero overlap with the face region plus its
+    FACE_MARGIN_PX halo (the same zone placement enforces),
+    with the caption block/zone, and with the hook glyph zone
+    (glyph bbox + pad, slide-aware) whenever its span overlaps
+    the hook window; present (pixel match) inside its span and
+    absent outside it, within the 0.5s tolerance. Across
+    graphics: two graphics whose spans overlap in time must not
+    have intersecting boxes. Timing is otherwise FREE
+    (2026-10-31 ruling, reversing 2026-10-30): a graphic may sit
+    inside the hook window and graphics may run back-to-back -
+    collision, not spacing, is the discipline. There is NO count
+    cap: the semantic bar, not a number, limits how many
+    graphics a render carries.
     """
     specs = list(inputs.graphics or [])
     cw, ch = inputs.canvas
@@ -437,23 +452,59 @@ def _check_graphics(inputs: VerifyInputs,
     offending: list[int] = []
     for i, spec in enumerate(specs):
         gmask = spec.mask()
-        # Face + caption overlap from the spec's own mask (the
-        # layout quantities), sampled over the span's frames.
-        face_overlap = 0
+        # Face + margin overlap: the union of face pixels over
+        # the span's sampled frames, dilated by FACE_MARGIN_PX -
+        # exactly the exclusion zone placement enforces, so F8
+        # certifies the guarantee placement claims.
         f0 = max(0, int(spec.start_s * fps))
         f1 = min(n_frames, max(f0 + 1, int(np.ceil(spec.end_s * fps))))
         step = max(1, (f1 - f0) // 5)
+        face_union = np.zeros((ch, cw), dtype=bool)
         for f in range(f0, f1, step):
-            face_overlap = max(
-                face_overlap,
-                int((gmask & face_pixels(alphas[f])).sum()))
+            face_union |= face_pixels(alphas[f])
+        face_overlap = 0
+        if face_union.any():
+            dist = ndimage.distance_transform_edt(~face_union)
+            face_overlap = int(
+                (gmask & (dist <= FACE_MARGIN_PX)).sum())
         caption_overlap = (
             rect_overlap_px(gmask, inputs.caption_rect)
             if inputs.caption_rect is not None else 0)
         zone_overlap = int(gmask[zone_top:, :].sum())
-        hook_overlap = max(
-            0.0, min(spec.end_s, HOOK_EXCLUSION_END_S)
-            - max(spec.start_s, 0.0))
+        # Hook glyph zone: only while the hook is actually up
+        # (the span's intersection with the hook window). The
+        # zone is the union of the glyphs' slide-aware bboxes
+        # over the sampled frames, padded exactly as placement
+        # pads it. Outside the window there are no glyphs to hit.
+        hook_glyph_overlap = 0
+        if inputs.hook is not None:
+            w0, w1 = inputs.hook.window
+            lo_t, hi_t = max(spec.start_s, w0), min(spec.end_s, w1)
+            if lo_t < hi_t:
+                g0 = max(0, int(lo_t * fps))
+                g1 = min(n_frames,
+                         max(g0 + 1, int(np.ceil(hi_t * fps))))
+                gstep = max(1, (g1 - g0) // 5)
+                zone_rect = None
+                for f in range(g0, g1, gstep):
+                    try:
+                        _, gbbox = inputs.hook.glyph_at(
+                            f / fps, inputs.canvas)
+                    except ValueError:
+                        continue  # no glyphs = no zone to hit
+                    rect = (
+                        max(0, gbbox[0] - GRAPHIC_HOOK_ZONE_PAD_PX),
+                        max(0, gbbox[1] - GRAPHIC_HOOK_ZONE_PAD_PX),
+                        min(cw, gbbox[2] + GRAPHIC_HOOK_ZONE_PAD_PX),
+                        min(ch, gbbox[3] + GRAPHIC_HOOK_ZONE_PAD_PX))
+                    zone_rect = rect if zone_rect is None else (
+                        min(zone_rect[0], rect[0]),
+                        min(zone_rect[1], rect[1]),
+                        max(zone_rect[2], rect[2]),
+                        max(zone_rect[3], rect[3]))
+                if zone_rect is not None:
+                    hook_glyph_overlap = rect_overlap_px(
+                        gmask, zone_rect)
         # Presence: in-span samples sit >= 0.25s inside the edges
         # (past the fade); out-of-span samples sit TOLERANCE + 0.25s
         # beyond the edges, when the render has room there.
@@ -485,7 +536,7 @@ def _check_graphics(inputs: VerifyInputs,
             face_overlap <= GRAPHIC_FACE_OVERLAP_MAX_PX
             and caption_overlap <= GRAPHIC_CAPTION_OVERLAP_MAX_PX
             and zone_overlap <= GRAPHIC_CAPTION_OVERLAP_MAX_PX
-            and hook_overlap <= 0.0
+            and hook_glyph_overlap <= GRAPHIC_HOOK_GLYPH_OVERLAP_MAX_PX
             and presence is not None and presence >= GRAPHIC_MATCH_MIN
             and (absence is None or absence <= GRAPHIC_ABSENT_MATCH_MAX)
         )
@@ -498,7 +549,7 @@ def _check_graphics(inputs: VerifyInputs,
             "face_overlap_px": face_overlap,
             "caption_overlap_px": caption_overlap,
             "caption_zone_overlap_px": zone_overlap,
-            "hook_window_overlap_s": round(hook_overlap, 3),
+            "hook_glyph_overlap_px": hook_glyph_overlap,
             "presence_match_min": (None if presence is None
                                    else round(presence, 3)),
             "absence_match_max": (None if absence is None
@@ -506,16 +557,30 @@ def _check_graphics(inputs: VerifyInputs,
             "ok": ok,
         })
 
-    ordered = sorted(range(len(specs)), key=lambda i: specs[i].start_s)
-    spacing_violations: list[dict[str, Any]] = []
-    for a, b in zip(ordered, ordered[1:]):
-        gap = specs[b].start_s - specs[a].end_s
-        if gap < MIN_GAP_S - 1e-9:
-            spacing_violations.append({
-                "earlier_index": a, "later_index": b,
-                "gap_s": round(gap, 3),
-            })
-    passed = not offending and not spacing_violations
+    # Pairwise collision: spans overlapping in time AND boxes
+    # intersecting. Placement prevents this by construction
+    # (already-placed boxes are exclusions, dilated); F8 verifies
+    # it on the declared specs, because a renderer or a hand-built
+    # spec list owes the same guarantee. Pairs are reported with
+    # the earlier-starting graphic first, so a repair can drop
+    # the later one.
+    collision_violations: list[dict[str, Any]] = []
+    for i in range(len(specs)):
+        for j in range(i + 1, len(specs)):
+            a, b = specs[i], specs[j]
+            if not (a.start_s < b.end_s and b.start_s < a.end_s):
+                continue
+            ox = min(a.box[2], b.box[2]) - max(a.box[0], b.box[0])
+            oy = min(a.box[3], b.box[3]) - max(a.box[1], b.box[1])
+            if ox > 0 and oy > 0:
+                earlier, later = (
+                    (i, j) if (a.start_s, i) <= (b.start_s, j)
+                    else (j, i))
+                collision_violations.append({
+                    "earlier_index": earlier, "later_index": later,
+                    "overlap_px": int(ox * oy),
+                })
+    passed = not offending and not collision_violations
     return CheckResult(
         check_id="F8", name="context graphics integrity",
         passed=passed,
@@ -523,24 +588,28 @@ def _check_graphics(inputs: VerifyInputs,
             "count": len(specs),
             "graphics": per_graphic,
             "offending_indices": offending,
-            "spacing_violations": spacing_violations,
+            "collision_violations": collision_violations,
             "duration_s": round(duration, 3),
         },
         threshold={
             "face_overlap_max_px": GRAPHIC_FACE_OVERLAP_MAX_PX,
             "caption_overlap_max_px": GRAPHIC_CAPTION_OVERLAP_MAX_PX,
-            "hook_window_end_s": HOOK_EXCLUSION_END_S,
-            "min_gap_s": MIN_GAP_S,
+            "hook_glyph_overlap_max_px":
+                GRAPHIC_HOOK_GLYPH_OVERLAP_MAX_PX,
+            "colliding_pairs_max": GRAPHIC_COLLIDING_PAIRS_MAX,
             "presence_match_min": GRAPHIC_MATCH_MIN,
             "absence_match_max": GRAPHIC_ABSENT_MATCH_MAX,
             "span_tolerance_s": GRAPHIC_SPAN_TOLERANCE_S,
         },
-        note=("the count is uncapped by design (2026-10-30 "
-              "ruling): the semantic bar limits graphics, F8 "
-              "certifies placement, timing and spacing of whatever "
-              "was placed. Presence is measured on the render's "
-              "pixels against each graphic's deterministic "
-              "layer_at(t) state."),
+        note=("the count is uncapped by design and the timing is "
+              "free (2026-10-31 ruling, reversing 2026-10-30): "
+              "graphics may start at 0s and run back-to-back; the "
+              "semantic bar limits the number, and F8 certifies "
+              "collision-freedom (face + margin, captions, hook "
+              "glyphs, each other), presence and absence of "
+              "whatever was placed. Presence is measured on the "
+              "render's pixels against each graphic's "
+              "deterministic layer_at(t) state."),
     )
 
 

@@ -26,13 +26,19 @@ The layer's discipline mirrors the rest of the build:
   code (Kamlesh's rulings, 2026-10-30): NO count cap and NO
   screen-time ceiling - the number of graphics is whatever
   genuinely clears the semantic bar, each justified by its source
-  quote - but at least 4s of clean screen between graphics
-  ("sparse seconds") and no span touching the first 3.0s hook
-  window; spans run 2.5-6s anchored to caption-phrase timing.
-  Both spacing rules are ALSO verifier rules (F8), so a render
-  that breaks them fails certification, not just planning. An
-  empty list is a valid, common outcome - most speech earns no
-  graphic.
+  quote. Timing freedom is also his (rulings reversed
+  2026-10-31): NO minimum gap between graphics and NO
+  hook-window ban - spans may start at 0.0s and run back-to-back
+  or overlapping in time, for better engagement. What carries
+  the discipline instead is collision: placement keeps every
+  graphic clear of the face (+margin), the caption zone, the
+  hook glyph zone while the hook is up, and every other placed
+  graphic; a span with no collision-free placement is dropped.
+  Both collision rules are ALSO verifier rules (F8), so a render
+  whose graphics touch what they must not fails certification,
+  not just planning. Spans run 2.5-6s anchored to
+  caption-phrase timing. An empty list is a valid, common
+  outcome - most speech earns no graphic.
 - **Text never goes through the image model.** Cards (headlines,
   numbers, quotes, comparisons) are rendered by PIL in the brand
   palette - deterministic pixels the verifier can reproduce. Muse
@@ -82,11 +88,12 @@ from .spark_client import SparkClient, SparkClientError
 
 # ---------------------------------------------------------------- constants
 
-HOOK_EXCLUSION_END_S = 3.0   # spans may not touch the first 3.0s
 MIN_SPAN_S = 2.5
 MAX_SPAN_S = 6.0
-MIN_GAP_S = 4.0              # clean screen between graphics ("sparse
-                             # seconds" - a kept ruling, also an F8 rule)
+# Timing freedom (Kamlesh's ruling, 2026-10-31, reversing
+# 2026-10-30): there is NO minimum gap between graphics and NO
+# hook-window ban - spans may start at 0.0s and overlap in time.
+# Collision, not spacing, is the discipline: see placement + F8.
 REVEAL_MIN_SPAN_S = 3.5      # shorter quote/name cards stay static
 PLANNER_MAX_TOKENS = 8000  # Spark reasons first; 2500 starved on the
 # preview prompt and 4000 starved on pipeline cue lists (empty reply
@@ -148,9 +155,14 @@ PLANNER_SYSTEM_PROMPT = (
     "concept that is not a person: prompt describes the picture in "
     "one sentence with NO text, NO numbers, NO letters, NO people. "
     "Each span is the seconds where the topic is spoken (use the "
-    "caption timings given), lasts 2.5 to 6 seconds, starts at or "
-    "after 3.0s (the opening hook window is forbidden), and leaves "
-    "at least 4 seconds of clean screen before the next graphic. "
+    "caption timings given) and lasts 2.5 to 6 seconds. Graphics "
+    "may appear from the very start of the Short (0s), "
+    "back-to-back, or overlapping in time - no gap between "
+    "graphics is required. Placement keeps each graphic clear of "
+    "the speaker's face, the captions, the hook text and the "
+    "other graphics, and drops any graphic that cannot be placed "
+    "without colliding - so propose wherever the content earns "
+    "one, at whatever density the content supports. "
     "source_quote is the exact transcript words the graphic "
     "illustrates."
 )
@@ -419,7 +431,10 @@ def parse_planner_reply(
 
     Returns (accepted spans, rejected records). Validation is the
     product rule, not a courtesy: quotes verbatim, numbers by
-    value, people never images, frequency discipline enforced.
+    value, people never images. Timing is NOT policed here beyond
+    the span-length bounds (2026-10-31 ruling): spans may start at
+    0.0s and overlap each other freely - collision avoidance is
+    placement's job and collision verification is F8's.
     Anything malformed is rejected with its reason - never repaired
     into existence.
     """
@@ -460,9 +475,6 @@ def parse_planner_reply(
         reason = None
         if kind not in ("card", "image"):
             reason = f"unknown kind {kind!r}"
-        elif start < HOOK_EXCLUSION_END_S:
-            reason = (f"span starts at {start:.2f}s, inside the "
-                      f"first {HOOK_EXCLUSION_END_S:.1f}s hook window")
         elif end <= start:
             reason = "span end is not after its start"
         elif not (MIN_SPAN_S <= end - start <= MAX_SPAN_S):
@@ -507,28 +519,13 @@ def parse_planner_reply(
         accepted.append(span)
 
     accepted.sort(key=lambda s: (s.start_s, s.end_s))
-    deduped: list[GraphicSpan] = []
-    for span in accepted:
-        if any(span.start_s < kept.end_s and kept.start_s < span.end_s
-               for kept in deduped):
-            rejected.append(_reject(
-                span.to_dict(), "span overlaps an earlier accepted span"))
-            continue
-        deduped.append(span)
-    # Spacing discipline (kept rulings): >= MIN_GAP_S of clean
-    # screen between graphics. There is deliberately NO count cap
-    # and NO screen-time ceiling - the semantic bar is the only
-    # limit on how many graphics a Short carries.
-    kept: list[GraphicSpan] = []
-    for span in deduped:
-        if kept and span.start_s - kept[-1].end_s < MIN_GAP_S:
-            rejected.append(_reject(
-                span.to_dict(),
-                f"less than {MIN_GAP_S:.0f}s of clean screen after "
-                "the previous graphic"))
-            continue
-        kept.append(span)
-    return kept, rejected
+    # No spacing or overlap policing (2026-10-31 ruling): spans
+    # may be back-to-back or overlap in time, and there is
+    # deliberately NO count cap and NO screen-time ceiling - the
+    # semantic bar is the only limit on how many graphics a Short
+    # carries. Placement separates whatever overlaps in time onto
+    # disjoint boxes, or drops what fits nowhere legal.
+    return accepted, rejected
 
 
 def _validate_compare(compare: Any, transcript_words: list[str],

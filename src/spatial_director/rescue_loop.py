@@ -141,10 +141,11 @@ REPAIR_MENU: dict[str, RepairSpec] = {
     DROP_GRAPHICS: RepairSpec(
         DROP_GRAPHICS, ("F8",),
         "Drop the context graphic(s) the F8 check names as "
-        "offending (overlap, hook-window, timing or spacing) and "
-        "re-render from the cached artifacts without them. The "
-        "remaining graphics stay; a spacing violation drops the "
-        "later graphic of each violating pair."),
+        "offending (overlap with face/captions/hook glyphs, or "
+        "timing) and re-render from the cached artifacts without "
+        "them. The remaining graphics stay; a collision between "
+        "two graphics drops the later graphic of each colliding "
+        "pair."),
 }
 
 # Executor constants.
@@ -976,17 +977,22 @@ def _retime_graphics(
 def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
                         renderer, **_) -> RepairExecution:
     """DROP_GRAPHICS: remove exactly the graphics F8 names - its
-    offending indices, plus the later graphic of each spacing-
-    violating pair - and re-render from the cached artifacts. If
-    F8's measured block cannot name the offenders (defensive), the
-    repair drops ALL graphics: an empty graphics plane always
-    passes F8, and the Short keeps its certified F1-F7 layers."""
+    offending indices, plus the later graphic of each colliding
+    pair - and re-render from the cached artifacts. (Receipts
+    from before the 2026-10-31 ruling named spacing violations
+    instead of collisions; that key is still honoured so an old
+    chained receipt repairs the same way.) If F8's measured
+    block cannot name the offenders (defensive), the repair
+    drops ALL graphics: an empty graphics plane always passes
+    F8, and the Short keeps its certified F1-F7 layers."""
     if artifacts.graphics is None:
         raise RepairNotApplicable(
             "the draft carries no graphics - nothing to drop")
     f8 = next((c for c in receipt.checks if c.check_id == "F8"), None)
     measured = f8.measured if f8 is not None else {}
     drop = {int(i) for i in measured.get("offending_indices", [])}
+    for pair in measured.get("collision_violations", []):
+        drop.add(int(pair["later_index"]))
     for pair in measured.get("spacing_violations", []):
         drop.add(int(pair["later_index"]))
     if not drop:
