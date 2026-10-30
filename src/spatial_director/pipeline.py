@@ -665,12 +665,12 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             hook_glyph_bbox=glyph_bbox,
             hook_window=hook_spec.window, duration_s=length,
             ts=ts)
-        placed_graphics = build.specs
+        placed_graphics = build.placed
         graphics_report = build.to_dict()
         (short_dir / "graphics-plan.json").write_text(
             json.dumps(graphics_report, indent=2), encoding="utf-8")
         log(f"short {index}: graphics planned "
-            f"{len(build.specs)} placed, {len(build.dropped)} dropped"
+            f"{len(build.placed)} placed, {len(build.dropped)} dropped"
             f"{' (' + build.error + ')' if build.error else ''}")
 
     # Draft 1 render + verify.

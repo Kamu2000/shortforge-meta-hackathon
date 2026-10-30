@@ -88,7 +88,8 @@ MAX_SPAN_S = 6.0
 MIN_GAP_S = 4.0              # clean screen between graphics ("sparse
                              # seconds" - a kept ruling, also an F8 rule)
 REVEAL_MIN_SPAN_S = 3.5      # shorter quote/name cards stay static
-PLANNER_MAX_TOKENS = 2500    # Spark reasons first; tight budgets return empty
+PLANNER_MAX_TOKENS = 4000  # Spark reasons first; 2500 starved on
+# the full rules + cue list (empty reply, 2026-10-30 preview probe)    # Spark reasons first; tight budgets return empty
 
 FACE_MARGIN_PX = 28          # hard exclusion halo around the face
 FREE_OCCUPANCY_MAX = 0.04    # speaker present >4% of span frames = occupied
@@ -353,6 +354,20 @@ class GraphicsBuild:
     @property
     def total_cost_usd(self) -> float:
         return round(sum(g.cost_usd for g in self.placed), 4)
+
+    def to_dict(self) -> dict[str, Any]:
+        """The graphics plan JSON (written per Short by the pipeline
+        and quoted in receipts' neighbourhood): what was placed,
+        what was dropped and why, what the planner was told no
+        about, and what it all cost."""
+        return {
+            "placed": [g.to_dict() for g in self.placed],
+            "dropped": self.dropped,
+            "planner_rejected": self.planner_rejected,
+            "planner_call": self.planner_call,
+            "error": self.error,
+            "total_cost_usd": self.total_cost_usd,
+        }
 
 
 # ---------------------------------------------------------------- planner
