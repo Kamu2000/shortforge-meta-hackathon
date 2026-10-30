@@ -664,7 +664,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             caption_rect=cap_layout.rect,
             hook_glyph_bbox=glyph_bbox,
             hook_window=hook_spec.window, duration_s=length,
-            ts=ts, purpose_prefix=f"pipeline-graphics-short{index}")
+            ts=ts)
         placed_graphics = build.specs
         graphics_report = build.to_dict()
         (short_dir / "graphics-plan.json").write_text(
