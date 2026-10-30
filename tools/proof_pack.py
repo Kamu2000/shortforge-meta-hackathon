@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
+from PIL import Image
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
@@ -47,7 +48,14 @@ from spatial_director.compositor import (  # noqa: E402
     _encode_video,
     graphics_layer_at,
 )
-from spatial_director.graphics_layer import GraphicSpec  # noqa: E402
+from spatial_director.graphics_layer import (  # noqa: E402
+    GraphicSpan,
+    GraphicSpec,
+    _paste_layer_clipped,
+    path_box_at,
+    prepare_backdrop,
+    resolve_heroes,
+)
 from spatial_director.layout_law import initial_caption_rect  # noqa: E402
 from spatial_director.verifier import HookSpec, VerifyInputs, verify  # noqa: E402
 
@@ -55,7 +63,7 @@ CANVAS = (1080, 1920)
 FPS = 4.0
 N = 16  # 4 seconds at 4 fps - mirrors tests/test_verifier.py fixtures
 CHECKS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]
-RUN_DATE = "2026-10-30"
+RUN_DATE = "2026-10-31"
 
 
 # ---------------------------------------------------------------- fixtures
@@ -251,18 +259,11 @@ def _f8_spec(box, start, end, color=(200, 60, 120)):
         source_quote="the band never rehearses", motion="static")
 
 
-def _f8(shared_video: Path, name: str, specs, windows=None):
-    """An F8 case: a custom-rendered video (black + the graphic
-    plane) plus the 40-frame good fixture declared with ``specs``.
-    ``windows`` overrides where the render actually SHOWS each
-    graphic (default: its declared span)."""
-    windows = windows or [None] * len(specs)
-    entries = [
-        (spec.layer_at,
-         spec.start_s if w is None else w[0],
-         spec.end_s if w is None else w[1])
-        for spec, w in zip(specs, windows)
-    ]
+def _f8_render(shared_video: Path, name: str, specs, entries,
+               backdrops=None):
+    """Render ``entries`` (graphics plane providers) to a sibling
+    video and pair it with the 40-frame good fixture declaring
+    ``specs`` (and optionally backdrop-mode ``backdrops``)."""
     video = shared_video.with_name(name)
 
     def gen():
@@ -283,8 +284,113 @@ def _f8(shared_video: Path, name: str, specs, windows=None):
         canvas_alphas=speaker_frames(F8_N),
         audio=profile([(0.0, 10.0)], total_s=10.0),
         hook=GOOD_HOOK, cues=F8_CUES,
-        caption_rect=initial_caption_rect(), graphics=specs)
+        caption_rect=initial_caption_rect(), graphics=specs,
+        backdrops=backdrops)
     return inputs, FakeWonder()
+
+
+def _f8(shared_video: Path, name: str, specs, windows=None):
+    """An F8 case: a custom-rendered video (black + the graphic
+    plane) plus the 40-frame good fixture declared with ``specs``.
+    ``windows`` overrides where the render actually SHOWS each
+    graphic (default: its declared span)."""
+    windows = windows or [None] * len(specs)
+    entries = [
+        (spec.layer_at,
+         spec.start_s if w is None else w[0],
+         spec.end_s if w is None else w[1])
+        for spec, w in zip(specs, windows)
+    ]
+    return _f8_render(shared_video, name, specs, entries)
+
+
+def _f8_path_spec(box, start, end, path="glide_in",
+                  color=(200, 60, 120)):
+    """A GraphicSpec travelling its declared path, built from the
+    same geometry the renderer uses (mirrors the verifier tests)."""
+    w, h = box[2] - box[0], box[3] - box[1]
+    img = Image.new("RGBA", (w, h), color + (255,))
+
+    def state_fn(t, s, e, _img=img, _box=box, _path=path):
+        return _paste_layer_clipped(
+            _img, path_box_at(_box, _path, t, s, CANVAS), CANVAS)
+
+    return GraphicSpec(
+        kind="card", start_s=start, end_s=end, box=box,
+        layer_rgba=state_fn(end, start, end), headline="PATH CARD",
+        source_quote="the band never rehearses", motion="static",
+        path=path, _state_fn=state_fn)
+
+
+def _f8_parked(shared_video: Path, name: str, spec):
+    """Render a path-declared graphic PARKED at its resting box
+    for the whole span - the off-path fault F8's path leg exists
+    to catch."""
+    entries = [(lambda t, _s=spec: _s.layer_rgba,
+                spec.start_s, spec.end_s)]
+    return _f8_render(shared_video, name, [spec], entries)
+
+
+def _f8b_spec(start=3.5, end=6.5):
+    spec = prepare_backdrop(
+        Image.new("RGB", (240, 300), (200, 100, 50)), CANVAS)
+    spec.start_s, spec.end_s = start, end
+    spec.prompt = ("a stadium tunnel at night - no text, no "
+                   "letters, no numbers, no words")
+    spec.source_quote = "the band never rehearses"
+    spec.cost_usd = 0.01
+    return spec
+
+
+def _f8b(shared_video: Path, name: str, spec, *, leak=False):
+    """A backdrop-mode case: plain dark backdrop everywhere; the
+    declared treated scene inside its span (or everywhere, when
+    ``leak`` - the fault the backdrop leg exists to catch)."""
+    layer = spec.layer_at((spec.start_s + spec.end_s) / 2.0)
+    scene_px = tuple(int(v) for v in layer[0, 0])
+    alphas = speaker_frames(F8_N)
+    video = shared_video.with_name(name)
+
+    def gen():
+        for i in range(F8_N):
+            t = i / FPS
+            inside = leak or (spec.start_s <= t < spec.end_s)
+            frame = np.zeros((CANVAS[1], CANVAS[0], 3),
+                             dtype=np.uint8)
+            frame[:, :] = scene_px if inside else (10, 10, 10)
+            frame[alphas[i] > 0.5] = (250, 250, 250)
+            yield frame
+
+    _encode_video(gen(), video, fps=FPS, canvas=CANVAS)
+    inputs = VerifyInputs(
+        video_path=video, fps=FPS, canvas_alphas=alphas,
+        audio=profile([(0.0, 10.0)], total_s=10.0),
+        hook=GOOD_HOOK, cues=F8_CUES,
+        caption_rect=initial_caption_rect(), graphics=[],
+        backdrops=[spec])
+    return inputs, FakeWonder()
+
+
+def _heroes_case(shared_video: Path, name: str):
+    """Colliding hero claims, resolved at plan time: a card at
+    2.0-5.0s and a backdrop at 4.0-7.0s overlap, so the later
+    claim (the backdrop) must drop BEFORE any generation, and
+    the surviving plan verifies clean. A resolution regression
+    raises here - the runner records it as an ERROR finding,
+    never a silent pass."""
+    card = GraphicSpan(start_s=2.0, end_s=5.0, kind="card",
+                       headline="BIG NEWS",
+                       source_quote="the band never rehearses")
+    backdrop = GraphicSpan(start_s=4.0, end_s=7.0, kind="backdrop",
+                           prompt="a stadium tunnel at night",
+                           source_quote="the band never rehearses")
+    kept, drops = resolve_heroes([card, backdrop])
+    if kept != [card] or len(drops) != 1:
+        raise AssertionError(
+            f"hero resolution regressed: kept="
+            f"{[s.kind for s in kept]} drops={drops}")
+    return _f8(shared_video, name,
+               [_f8_spec((700, 300, 1000, 560), 2.0, 5.0)])
 
 
 CASES: list[Case] = [
@@ -583,6 +689,59 @@ CASES: list[Case] = [
               v, "f8-colliding.mp4",
               [_f8_spec((700, 300, 1000, 560), 3.5, 6.0),
                _f8_spec((880, 430, 1064, 660), 4.5, 7.0)])),
+
+    # ---- block 2 (2026-10-31): paths, SFX stem, backdrop, heroes ----
+    _case("control-graphics-path", "control",
+          "A glide_in graphic rendered exactly on its declared "
+          "path (same deterministic layer_at the compositor "
+          "draws): F8's path leg passes and nothing else moves.",
+          set(), lambda v: _f8(
+              v, "f8-path-control.mp4",
+              [_f8_path_spec((700, 300, 1000, 560), 3.5, 6.5)])),
+    _case("f8-motion-off-path", "F8",
+          "The plan declares glide_in but the render parks the "
+          "graphic at its resting box for the whole span: the "
+          "mid-travel sample (35% of the travel time) mismatches "
+          "the declared layer state - F8's path leg fails it.",
+          {"F8"}, lambda v: _f8_parked(
+              v, "f8-off-path.mp4",
+              _f8_path_spec((700, 300, 1000, 560), 3.5, 6.5))),
+    _case("control-backdrop", "control",
+          "A backdrop-mode scene present exactly inside its "
+          "declared span and nowhere else: F8's backdrop leg "
+          "passes; F1-F7 are untouched (the scene sits behind "
+          "the speaker).",
+          set(), lambda v: _f8b(v, "f8b-control.mp4",
+                                 _f8b_spec())),
+    _case("f8-backdrop-leaks", "F8",
+          "The backdrop scene fills the frame for the WHOLE "
+          "video, leaking far outside its declared 3.5-6.5s "
+          "span: the absence samples beyond the edges match the "
+          "scene - F8's backdrop leg fails it.",
+          {"F8"}, lambda v: _f8b(v, "f8b-leak.mp4", _f8b_spec(),
+                                 leak=True)),
+    _case("f5-sfx-filled-gap-stem", "F5",
+          "The shipped MIX is continuous (an effect fills the "
+          "gap), but the pre-mix SPEECH STEM carries a 1.5s "
+          "dead-air gap (1.2-2.7s): F5 must measure the stem "
+          "and fail - SFX energy never masks dead air.",
+          {"F5"}, lambda v: _std(
+              v, audio=profile([(0.0, 4.0)]),
+              speech_audio=profile([(0.0, 1.2), (2.7, 4.0)]))),
+    _case("control-sfx-stem-clean", "control",
+          "The same plumbing with a continuous stem: F5 "
+          "measures the stem, finds no gap, and everything "
+          "passes - the stem path does not false-fail.",
+          set(), lambda v: _std(
+              v, speech_audio=profile([(0.0, 4.0)]))),
+    _case("plan-colliding-heroes-resolved", "control",
+          "A card (2.0-5.0s) and a backdrop (4.0-7.0s) claim "
+          "the same moment: resolve_heroes drops the later "
+          "claim (the backdrop) at plan time, before any "
+          "generation spend, and the surviving plan renders "
+          "and verifies clean. If resolution regresses, the "
+          "builder raises and the runner records an ERROR.",
+          set(), lambda v: _heroes_case(v, "f8-heroes.mp4")),
 ]
 
 
