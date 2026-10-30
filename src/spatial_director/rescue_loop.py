@@ -41,6 +41,7 @@ Written fresh in-repo on 2026-10-29.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import subprocess
 import wave
