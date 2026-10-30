@@ -981,11 +981,13 @@ def _find_box(free: np.ndarray, edt: np.ndarray,
     """Best legal top-left position for a (w, h) graphic, or None.
 
     Legal = every pixel of the box inside the free mask. Ranking is
-    deterministic: greatest clearance (EDT at the box centre,
-    capped), then beside-the-head preference (vertically in the
-    head/shoulder band, horizontally adjacent to the face), then
-    smallest horizontal gap to the face, then topmost, then
-    leftmost.
+    deterministic: beside-the-head first (vertically in the
+    head/shoulder band, horizontally adjacent to the face - the
+    brief's target region; clearance is already guaranteed by the
+    free mask itself), then greatest clearance (EDT at the box
+    centre, capped), then smallest horizontal gap to the face,
+    then topmost, then leftmost. A non-beside position still wins
+    over dropping the graphic when no beside position is legal.
     """
     w, h = size
     rx0, ry0, rx1, ry1 = region
@@ -1021,7 +1023,7 @@ def _find_box(free: np.ndarray, edt: np.ndarray,
                 else:
                     gap = 0
                 beside = 0 if (in_band and gap > 0) else 1
-            key = (-clearance, beside, gap, y, x)
+            key = (beside, -clearance, gap, y, x)
             if best_key is None or key < best_key:
                 best_key = key
                 best = (x, y, x + w, y + h)

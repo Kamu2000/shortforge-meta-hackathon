@@ -236,10 +236,19 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual(dropped, [])
         self.assertEqual(len(placed), 1)
         x0, y0, x1, y1 = placed[0].box
-        # Face occupies x>=600 (plus 28px margin); caption zone y>1600.
-        self.assertLessEqual(x1, 600 - 28)
+        # The law: Euclidean clearance >= 28px from the FACE box
+        # (rows 900-1226, cols 600-1080 in this fixture), nothing in
+        # the caption zone (y > 1600), canvas margin respected, and
+        # the box sits beside the head/shoulders (centre in the
+        # band rows 840-1526) rather than drifting to a far corner.
+        fx0, fy0, fx1, fy1 = 600, 900, 1080, 1226
+        dx = max(fx0 - x1, x0 - fx1, 0)
+        dy = max(fy0 - y1, y0 - fy1, 0)
+        dist = (dx * dx + dy * dy) ** 0.5 if dx and dy else max(dx, dy)
+        self.assertGreaterEqual(dist, 28)
         self.assertLessEqual(y1, 1600)
         self.assertGreaterEqual(x0, 16)
+        self.assertTrue(fy0 - 60 <= (y0 + y1) // 2 <= fy1 + 300)
 
     def test_full_frame_speaker_drops_the_graphic(self):
         placed, dropped = place_prepared(
@@ -249,7 +258,10 @@ class PlacementTests(unittest.TestCase):
         self.assertIn("no legal placement", dropped[0]["reason"])
 
     def test_hook_glyph_zone_excluded_during_hook_window(self):
-        glyph = (16, 16, 556, 1584)  # the whole free (left) area
+        # The glyph zone covers everywhere a card could legally go
+        # (the whole canvas above the caption zone): during the
+        # hook window there is no placement left.
+        glyph = (16, 16, 1064, 1584)
         placed, dropped = place_prepared(
             [card_item(3.5, 6.0)], alphas_with_speaker(n=40), fps=4.0,
             hook_glyph_bbox=glyph, hook_window=(0.0, 6.0), canvas=CANVAS)
