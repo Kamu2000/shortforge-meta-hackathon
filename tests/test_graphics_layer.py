@@ -20,6 +20,7 @@ from spatial_director.caption_align import CaptionCue  # noqa: E402
 from spatial_director.spark_client import SparkClientError  # noqa: E402
 from spatial_director.graphics_layer import (  # noqa: E402
     GraphicSpan,
+    _find_box,
     _path_legal,
     build_graphics,
     parse_planner_reply,
@@ -757,6 +758,75 @@ class PathPlacementTests(unittest.TestCase):
             canvas=CANVAS, path_rejections=rejections2)
         self.assertEqual(placed2[0].path, "glide_in")
         self.assertEqual(rejections2, [])
+
+
+# ---------------------------------------------------------------- size + centrality
+
+
+class CentralityTests(unittest.TestCase):
+    def test_centrality_beats_the_corner(self):
+        # A fully free canvas: the old ranking (clearance capped,
+        # then topmost/leftmost) pinned the box to the top-left
+        # corner. Centrality must pull it to the middle instead.
+        from scipy import ndimage
+        free = np.ones((1920, 1080), dtype=bool)
+        edt = ndimage.distance_transform_edt(free)
+        box = _find_box(free, edt, (400, 300), None,
+                        (16, 16, 1064, 1600))
+        self.assertIsNotNone(box)
+        cx = (box[0] + box[2]) / 2
+        cy = (box[1] + box[3]) / 2
+        self.assertLess(abs(cx - 540), 120)
+        self.assertLess(abs(cy - 960), 160)
+        self.assertNotEqual((box[0], box[1]), (16, 16))
+
+
+class SizeToSpaceTests(unittest.TestCase):
+    def test_card_scales_up_to_the_legal_space(self):
+        placed, dropped = place_prepared(
+            [card_item()], alphas_with_speaker(n=28), fps=4.0,
+            caption_rect=(60, 1460, 980, 1600), canvas=CANVAS)
+        self.assertEqual(dropped, [])
+        spec = placed[0]
+        width = spec.box[2] - spec.box[0]
+        # The defect: a 470px card in a 1080px frame. The placed
+        # card must claim a substantial share of the width.
+        self.assertGreaterEqual(width, int(0.45 * 1080))
+        alpha = spec.layer_rgba[..., 3] > 0
+        ys, xs = np.nonzero(alpha)
+        self.assertEqual(
+            (int(xs.min()), int(ys.min()), int(xs.max()) + 1,
+             int(ys.max()) + 1), spec.box)
+
+    def test_card_re_render_at_width_keeps_type_proportional(self):
+        span = GraphicSpan(start_s=0.0, end_s=3.0, kind="card",
+                           headline="BIG NEWS", facts="",
+                           source_quote="q")
+        native = prepare_card(span)
+        self.assertEqual(native.size[0], 470)
+        big = prepare_card(span, width=940)
+        self.assertEqual(big.size[0], 940)
+        # Height grows with the type, not just the canvas: the
+        # scaled card is proportionally the same card.
+        self.assertGreater(big.size[1], native.size[1])
+
+    def test_image_upscale_cap_chooses_a_smaller_region(self):
+        # A 100x125 source may never render past 200x250 (2.0x).
+        src = Image.new("RGB", (100, 125), (90, 120, 160))
+        span = GraphicSpan(start_s=4.0, end_s=7.0, kind="image",
+                           prompt="a quiet harbour at dusk",
+                           source_quote="q", motion="ken_burns")
+        content = prepare_image(src, span)
+        self.assertEqual(content.max_size, (200, 250))
+        empty = [np.zeros((CANVAS[1], CANVAS[0]), dtype=np.float32)
+                 ] * 28
+        placed, dropped = place_prepared(
+            [(span, content)], empty, fps=4.0,
+            caption_rect=(60, 1460, 980, 1600), canvas=CANVAS)
+        self.assertEqual(dropped, [])
+        box = placed[0].box
+        self.assertLessEqual(box[2] - box[0], 200)
+        self.assertLessEqual(box[3] - box[1], 250)
 
 
 if __name__ == "__main__":

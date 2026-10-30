@@ -700,22 +700,26 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int,
     return lines
 
 
-def _card_layout(headline: str, facts: str, width: int):
+def _card_layout(headline: str, facts: str, width: int,
+                 font_scale: float = 1.0):
     """(head_lines, fact_lines, height) - the card's fixed layout.
 
     Layout is computed from the FINAL text and never changes across
     animation states: count-up swaps a token inside its line,
     reveal hides whole lines, but the box is constant.
+    ``font_scale`` grows the type with the card's width when the
+    card is re-rendered at a placed size (block 2 size-to-space);
+    at 1.0 the layout is byte-identical to the original renderer.
     """
     probe = Image.new("RGBA", (8, 8))
     draw = ImageDraw.Draw(probe)
-    head_font = _load_font(50)
-    fact_font = _load_font(38)
+    head_font = _load_font(round(50 * font_scale))
+    fact_font = _load_font(round(38 * font_scale))
     max_w = width - 2 * CARD_PAD
     head_lines = _wrap(draw, headline.upper(), head_font, max_w)[:3]
     fact_lines = _wrap(draw, facts, fact_font, max_w)[:2] if facts else []
-    head_h = int(50 * 1.18) * len(head_lines)
-    fact_h = int(38 * 1.18) * len(fact_lines)
+    head_h = int(50 * 1.18 * font_scale) * len(head_lines)
+    fact_h = int(38 * 1.18 * font_scale) * len(fact_lines)
     height = (CARD_PAD + 10 + 16 + head_h
               + (12 + fact_h if fact_lines else 0) + CARD_PAD)
     return head_lines, fact_lines, height
@@ -723,7 +727,8 @@ def _card_layout(headline: str, facts: str, width: int):
 
 def _draw_card(head_lines: list[list[str]], fact_lines: list[list[str]],
                height: int, width: int, *,
-               reveal_count: int | None = None) -> Image.Image:
+               reveal_count: int | None = None,
+               font_scale: float = 1.0) -> Image.Image:
     """Draw a card from word-lines; ``reveal_count`` caps how many
     lines (headline first, then facts) are visible."""
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -740,8 +745,8 @@ def _draw_card(head_lines: list[list[str]], fact_lines: list[list[str]],
             for i in range(3)) + (255,)
         sdraw.line([(x, 0), (x, 9)], fill=color)
     img.alpha_composite(strip, (CARD_PAD, CARD_PAD))
-    head_font = _load_font(50)
-    fact_font = _load_font(38)
+    head_font = _load_font(round(50 * font_scale))
+    fact_font = _load_font(round(38 * font_scale))
     shown = 0
     total = len(head_lines) + len(fact_lines)
     limit = total if reveal_count is None else max(0, reveal_count)
@@ -751,7 +756,7 @@ def _draw_card(head_lines: list[list[str]], fact_lines: list[list[str]],
             draw.text((CARD_PAD, y), " ".join(line), font=head_font,
                       fill=(255, 255, 255, 255))
         shown += 1
-        y += int(50 * 1.18)
+        y += int(50 * 1.18 * font_scale)
     if fact_lines:
         y += 12
         for line in fact_lines:
@@ -759,23 +764,27 @@ def _draw_card(head_lines: list[list[str]], fact_lines: list[list[str]],
                 draw.text((CARD_PAD, y), " ".join(line), font=fact_font,
                           fill=VIRAL_PINK + (255,))
             shown += 1
-            y += int(38 * 1.18)
+            y += int(38 * 1.18 * font_scale)
     return img
 
 
 def render_card_image(headline: str, facts: str = "", *,
-                      width: int = CARD_WIDTH) -> Image.Image:
+                      width: int = CARD_WIDTH,
+                      font_scale: float = 1.0) -> Image.Image:
     """One brand-palette card, final state (deterministic pixels)."""
-    head_lines, fact_lines, height = _card_layout(headline, facts, width)
-    return _draw_card(head_lines, fact_lines, height, width)
+    head_lines, fact_lines, height = _card_layout(
+        headline, facts, width, font_scale)
+    return _draw_card(head_lines, fact_lines, height, width,
+                      font_scale=font_scale)
 
 
 def _count_up_image(headline: str, facts: str, p: float,
-                      width: int) -> Image.Image:
+                    width: int, font_scale: float = 1.0) -> Image.Image:
     """The card at count-up progress ``p``: the first number token
     (headline first, then facts) eased from 0 to its stated value;
     every other word is already final."""
-    head_lines, fact_lines, height = _card_layout(headline, facts, width)
+    head_lines, fact_lines, height = _card_layout(
+        headline, facts, width, font_scale)
     eased = _ease_out_cubic(min(1.0, max(0.0, p)))
 
     def animate(lines: list[list[str]]) -> tuple[list[list[str]], bool]:
@@ -805,7 +814,8 @@ def _count_up_image(headline: str, facts: str, p: float,
     head_lines, done = animate(head_lines)
     if not done:
         fact_lines, _ = animate(fact_lines)
-    return _draw_card(head_lines, fact_lines, height, width)
+    return _draw_card(head_lines, fact_lines, height, width,
+                      font_scale=font_scale)
 
 
 def render_compare_card_image(
@@ -814,6 +824,7 @@ def render_compare_card_image(
     progresses: tuple[float, float],
     *,
     width: int = COMPARE_CARD_WIDTH,
+    font_scale: float = 1.0,
 ) -> Image.Image:
     """A two-bar comparison card at the given build progresses.
 
@@ -824,12 +835,12 @@ def render_compare_card_image(
     """
     probe = Image.new("RGBA", (8, 8))
     draw = ImageDraw.Draw(probe)
-    head_font = _load_font(46)
-    label_font = _load_font(36)
+    head_font = _load_font(round(46 * font_scale))
+    label_font = _load_font(round(36 * font_scale))
     max_w = width - 2 * CARD_PAD
     head_lines = _wrap(draw, headline.upper(), head_font, max_w)[:2]
-    head_h = int(46 * 1.18) * len(head_lines)
-    row_h = int(36 * 1.18) + 34 + 14
+    head_h = int(46 * 1.18 * font_scale) * len(head_lines)
+    row_h = int(36 * 1.18 * font_scale) + 34 + 14
     height = CARD_PAD + 10 + 16 + head_h + 10 + row_h * 2 + CARD_PAD
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -849,17 +860,17 @@ def render_compare_card_image(
     for line in head_lines:
         draw.text((CARD_PAD, y), " ".join(line), font=head_font,
                   fill=(255, 255, 255, 255))
-        y += int(46 * 1.18)
+        y += int(46 * 1.18 * font_scale)
     y += 10
     values = [float(it["value"]) for it in items]
     peak = max(values) if values and max(values) > 0 else 1.0
-    bar_area_w = width - 2 * CARD_PAD - 118
+    bar_area_w = width - 2 * CARD_PAD - round(118 * font_scale)
     colors = [FORGE_BLUE, VIRAL_PINK]
     for i, item in enumerate(items[:2]):
         label = str(item["label"]).upper()
         draw.text((CARD_PAD, y), label, font=label_font,
                   fill=(235, 235, 240, 255))
-        y += int(36 * 1.18)
+        y += int(36 * 1.18 * font_scale)
         track = [CARD_PAD, y, CARD_PAD + bar_area_w, y + 34]
         draw.rounded_rectangle(track, radius=17,
                                fill=(255, 255, 255, 36))
@@ -886,12 +897,22 @@ class GraphicContent:
     """Prepared content for one span: its fixed box size, its final
     state, and (when animated) a progress -> box-sized RGBA state
     function. States are pure functions of span progress - the same
-    image is produced whenever the same progress is asked for."""
+    image is produced whenever the same progress is asked for.
+
+    Block 2 size-to-space: ``resizer`` re-prepares the content at
+    another width (cards re-render with scaled type, so text stays
+    crisp; images re-fit from the source), and ``max_size`` caps
+    the box a resizer may be asked for - for images, twice the
+    generated source's dimensions, so a placement never upscales
+    a bitmap past 2.0x.
+    """
 
     size: tuple[int, int]
     final_image: Image.Image
     state_fn: Callable[[float], Image.Image] | None = None
     cost_usd: float = 0.0
+    max_size: tuple[int, int] | None = None
+    resizer: Callable[[int], "GraphicContent"] | None = None
 
 
 def _quantized(state_fn: Callable[[float], Image.Image],
@@ -908,20 +929,31 @@ def _quantized(state_fn: Callable[[float], Image.Image],
 
 
 def prepare_card(span: GraphicSpan,
-                 cues: Sequence[CaptionCue] = ()) -> GraphicContent:
-    """Render a card span's content (final state + animation)."""
+                 cues: Sequence[CaptionCue] = (),
+                 width: int | None = None) -> GraphicContent:
+    """Render a card span's content (final state + animation).
+
+    ``width`` re-renders the card at a placed size with the type
+    scaled to match (block 2 size-to-space); the default is the
+    native CARD_WIDTH / COMPARE_CARD_WIDTH rendering, unchanged.
+    """
     if span.compare:
-        return _prepare_compare_card(span, cues)
-    final = render_card_image(span.headline, span.facts)
+        return _prepare_compare_card(span, cues, width=width)
+    w = CARD_WIDTH if width is None else int(width)
+    fs = w / CARD_WIDTH
+    final = render_card_image(span.headline, span.facts, width=w,
+                              font_scale=fs)
+    resizer = lambda target_w: prepare_card(span, cues,  # noqa: E731
+                                            width=target_w)
     if span.motion == "count_up":
         state = _quantized(
             lambda p: _count_up_image(span.headline, span.facts, p,
-                                      CARD_WIDTH))
+                                      w, font_scale=fs))
         return GraphicContent(size=final.size, final_image=final,
-                              state_fn=state)
+                              state_fn=state, resizer=resizer)
     if span.motion == "reveal":
         head_lines, fact_lines, _ = _card_layout(
-            span.headline, span.facts, CARD_WIDTH)
+            span.headline, span.facts, w, fs)
         total = len(head_lines) + len(fact_lines)
 
         def reveal(p: float) -> Image.Image:
@@ -929,13 +961,15 @@ def prepare_card(span: GraphicSpan,
             count = int(min(total, (p / 0.8) * total + 1e-9)) \
                 if p > 0 else 0
             head, fact, height = _card_layout(
-                span.headline, span.facts, CARD_WIDTH)
-            return _draw_card(head, fact, height, CARD_WIDTH,
-                              reveal_count=count)
+                span.headline, span.facts, w, fs)
+            return _draw_card(head, fact, height, w,
+                              reveal_count=count, font_scale=fs)
 
         return GraphicContent(size=final.size, final_image=final,
-                              state_fn=_quantized(reveal))
-    return GraphicContent(size=final.size, final_image=final)
+                              state_fn=_quantized(reveal),
+                              resizer=resizer)
+    return GraphicContent(size=final.size, final_image=final,
+                          resizer=resizer)
 
 
 def _compare_triggers(span: GraphicSpan,
@@ -967,11 +1001,15 @@ def _compare_triggers(span: GraphicSpan,
 
 
 def _prepare_compare_card(span: GraphicSpan,
-                          cues: Sequence[CaptionCue]) -> GraphicContent:
+                          cues: Sequence[CaptionCue],
+                          width: int | None = None) -> GraphicContent:
     assert span.compare is not None
     headline = span.headline
     items = span.compare
-    final = render_compare_card_image(headline, items, (1.0, 1.0))
+    w = COMPARE_CARD_WIDTH if width is None else int(width)
+    fs = w / COMPARE_CARD_WIDTH
+    final = render_compare_card_image(headline, items, (1.0, 1.0),
+                                      width=w, font_scale=fs)
     fracs = _compare_triggers(span, cues)
     span_len = max(span.end_s - span.start_s, 1e-9)
     bar_window = min(0.45, 0.7 / span_len)  # ~0.7s of growth, in p units
@@ -980,10 +1018,14 @@ def _prepare_compare_card(span: GraphicSpan,
         progresses = tuple(
             min(1.0, max(0.0, (p - f) / bar_window)) if p >= f else 0.0
             for f in fracs)
-        return render_compare_card_image(headline, items, progresses)
+        return render_compare_card_image(headline, items, progresses,
+                                         width=w, font_scale=fs)
 
-    return GraphicContent(size=final.size, final_image=final,
-                          state_fn=_quantized(state))
+    return GraphicContent(
+        size=final.size, final_image=final,
+        state_fn=_quantized(state),
+        resizer=lambda target_w: _prepare_compare_card(  # noqa: E731
+            span, cues, width=target_w))
 
 
 def _cover_fit(image_rgb: Image.Image,
@@ -1014,10 +1056,12 @@ def _framed(image_rgb: Image.Image, size: tuple[int, int]) -> Image.Image:
 
 
 def prepare_image(image_rgb: Image.Image, span: GraphicSpan,
-                  ) -> GraphicContent:
+                  box: tuple[int, int] = IMAGE_BOX) -> GraphicContent:
     """Ken Burns content: zoom eases 1.00 -> 1.06 across the span
-    with a slow pan, all inside the fixed box."""
-    bw, bh = IMAGE_BOX
+    with a slow pan, all inside the fixed box. ``box`` is the
+    placed size (block 2 size-to-space re-fits from the source at
+    the placed box; the default is the native IMAGE_BOX)."""
+    bw, bh = box
     base = _cover_fit(image_rgb, (round(bw * 1.12), round(bh * 1.12)))
 
     def state(p: float) -> Image.Image:
@@ -1030,10 +1074,16 @@ def prepare_image(image_rgb: Image.Image, span: GraphicSpan,
         y = int(slack_y * (0.25 + 0.30 * p))
         crop = base.crop((x, y, x + win_w, y + win_h)).resize(
             (bw, bh), Image.BILINEAR)
-        return _framed(crop, IMAGE_BOX)
+        return _framed(crop, box)
 
-    return GraphicContent(size=IMAGE_BOX, final_image=state(1.0),
-                          state_fn=_quantized(state))
+    src_w, src_h = image_rgb.size
+    aspect = IMAGE_BOX[1] / IMAGE_BOX[0]
+    return GraphicContent(
+        size=box, final_image=state(1.0), state_fn=_quantized(state),
+        max_size=(2 * src_w, 2 * src_h),
+        resizer=lambda target_w: prepare_image(  # noqa: E731
+            image_rgb, span,
+            box=(int(target_w), max(1, round(target_w * aspect)))))
 
 
 def _paste_layer(content_image: Image.Image,
@@ -1160,7 +1210,8 @@ def _span_frame_indices(start_s: float, end_s: float, fps: float,
 def _find_box(free: np.ndarray, edt: np.ndarray,
               size: tuple[int, int],
               face_bbox: tuple[int, int, int, int] | None,
-              region: tuple[int, int, int, int]
+              region: tuple[int, int, int, int],
+              *, require_beside: bool = False
               ) -> tuple[int, int, int, int] | None:
     """Best legal top-left position for a (w, h) graphic, or None.
 
@@ -1168,10 +1219,16 @@ def _find_box(free: np.ndarray, edt: np.ndarray,
     deterministic: beside-the-head first (vertically in the
     head/shoulder band, horizontally adjacent to the face - the
     brief's target region; clearance is already guaranteed by the
-    free mask itself), then greatest clearance (EDT at the box
-    centre, capped), then smallest horizontal gap to the face,
-    then topmost, then leftmost. A non-beside position still wins
-    over dropping the graphic when no beside position is legal.
+    free mask itself), then CENTRALITY - distance from the box
+    centre to the centroid of the free region, in 24px buckets so
+    near-equal centrality falls through - then greatest clearance
+    (EDT at the box centre, capped), then smallest horizontal gap
+    to the face, and only as final tiebreakers topmost, then
+    leftmost. (Block 2: graphics used to hug corners because
+    clearance + topmost/leftmost decided almost every placement;
+    centrality now outranks both.) A non-beside position still
+    wins over dropping the graphic when no beside position is
+    legal.
     """
     w, h = size
     rx0, ry0, rx1, ry1 = region
@@ -1186,6 +1243,11 @@ def _find_box(free: np.ndarray, edt: np.ndarray,
         s = (integral[y + h, x + w] - integral[y, x + w]
              - integral[y + h, x] + integral[y, x])
         return s == w * h
+
+    free_ys, free_xs = np.nonzero(free)
+    centroid = None
+    if len(free_xs):
+        centroid = (float(free_xs.mean()), float(free_ys.mean()))
 
     best: tuple | None = None
     best_key: tuple | None = None
@@ -1207,11 +1269,88 @@ def _find_box(free: np.ndarray, edt: np.ndarray,
                 else:
                     gap = 0
                 beside = 0 if (in_band and gap > 0) else 1
-            key = (beside, -clearance, gap, y, x)
+            centrality = 0
+            if centroid is not None:
+                dx = x + w / 2.0 - centroid[0]
+                dy = y + h / 2.0 - centroid[1]
+                centrality = int((dx * dx + dy * dy) ** 0.5 // 24)
+            if require_beside and beside != 0:
+                continue
+            key = (beside, centrality, -clearance, gap, y, x)
             if best_key is None or key < best_key:
                 best_key = key
                 best = (x, y, x + w, y + h)
     return best
+
+
+# Size-to-space ladder (block 2): try the largest legal rendering
+# first - the aim is a graphic occupying a substantial share of
+# the canvas width whenever a legal region allows - then descend
+# geometrically until a legal box exists or the legibility floor.
+GRAPHIC_TARGET_WIDTH_FRAC = 0.60   # aim: 60% of canvas width
+GRAPHIC_LADDER_STEP = 0.85         # geometric descent per retry
+GRAPHIC_MIN_WIDTH_PX = 160         # below this, text is illegible
+
+
+def _candidate_widths(content: GraphicContent,
+                      canvas_w: int) -> list[int]:
+    native_w = content.size[0]
+    start = max(native_w,
+                int(round(GRAPHIC_TARGET_WIDTH_FRAC * canvas_w)))
+    if content.max_size is not None:
+        start = min(start, content.max_size[0])
+    floor = max(GRAPHIC_MIN_WIDTH_PX, int(round(native_w * 0.45)))
+    widths: list[int] = []
+    w = start
+    while w >= floor:
+        widths.append(w)
+        w = int(w * GRAPHIC_LADDER_STEP)
+    if floor <= native_w <= start and native_w not in widths:
+        widths.append(native_w)
+        widths.sort(reverse=True)
+    return widths or [native_w]
+
+
+def _place_sized(free: np.ndarray, edt: np.ndarray,
+                 content: GraphicContent,
+                 face_bbox: tuple[int, int, int, int] | None,
+                 region: tuple[int, int, int, int],
+                 canvas_w: int
+                 ) -> tuple[tuple[int, int, int, int],
+                            GraphicContent] | None:
+    """(box, content-at-that-size) for the largest legal size.
+
+    Two passes over the size ladder: beside-the-head placements
+    at any ladder size first (the brief's top soft preference
+    outranks raw size), then any legal placement. Content without
+    a resizer is tried at its native size only. A size whose
+    height would exceed the content's upscale cap (images: 2.0x
+    the source) is skipped - a smaller legal region that fits the
+    achievable size wins instead.
+    """
+    prepared: list[tuple[int, GraphicContent]] = []
+    for w in _candidate_widths(content, canvas_w):
+        if w == content.size[0]:
+            sized = content
+        elif content.resizer is not None:
+            sized = content.resizer(w)
+        else:
+            continue
+        if (content.max_size is not None
+                and sized.size[1] > content.max_size[1]):
+            continue
+        prepared.append((w, sized))
+    if face_bbox is not None:
+        for _w, sized in prepared:
+            box = _find_box(free, edt, sized.size, face_bbox, region,
+                            require_beside=True)
+            if box is not None:
+                return box, sized
+    for _w, sized in prepared:
+        box = _find_box(free, edt, sized.size, face_bbox, region)
+        if box is not None:
+            return box, sized
+    return None
 
 
 def place_prepared(
@@ -1298,8 +1437,9 @@ def place_prepared(
         edt = ndimage.distance_transform_edt(free)
         region = (CANVAS_MARGIN_PX, CANVAS_MARGIN_PX,
                   cw - CANVAS_MARGIN_PX, caption_top)
-        box = _find_box(free, edt, content.size, face_bbox, region)
-        if box is None:
+        sized = _place_sized(free, edt, content, face_bbox, region,
+                             cw)
+        if sized is None:
             dropped.append({
                 "span": span.to_dict(),
                 "reason": "no legal placement: every candidate "
@@ -1307,6 +1447,12 @@ def place_prepared(
                           "caption zone, the hook zone, or speaker "
                           "occupancy"})
             continue
+        box, sized_content = sized
+        if sized_content is not content:
+            # Re-preparation at the placed size must not lose the
+            # generation cost the caller recorded on the content.
+            sized_content.cost_usd = content.cost_usd
+            content = sized_content
 
         # Path validation: the declared travel must stay inside
         # the same free mask at every sampled instant. A refused
