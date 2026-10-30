@@ -2,16 +2,16 @@
   "generated": "2026-10-30",
   "runner": "tools/proof_pack.py",
   "judge": "FakeWonder (deterministic, no network, zero paid calls)",
-  "case_count": 33,
-  "fault_cases": 27,
-  "control_cases": 6,
+  "case_count": 34,
+  "fault_cases": 26,
+  "control_cases": 8,
   "scores": {
     "per_check": {
       "F1": {
         "tp": 4,
         "fp": 0,
         "fn": 0,
-        "tn": 29,
+        "tn": 30,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -19,7 +19,7 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 30,
+        "tn": 31,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -27,7 +27,7 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 30,
+        "tn": 31,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -35,7 +35,7 @@
         "tp": 4,
         "fp": 0,
         "fn": 0,
-        "tn": 29,
+        "tn": 30,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -43,7 +43,7 @@
         "tp": 4,
         "fp": 0,
         "fn": 0,
-        "tn": 29,
+        "tn": 30,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -51,7 +51,7 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 30,
+        "tn": 31,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -59,22 +59,22 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 30,
+        "tn": 31,
         "precision": 1.0,
         "recall": 1.0
       },
       "F8": {
-        "tp": 5,
+        "tp": 4,
         "fp": 0,
         "fn": 0,
-        "tn": 28,
+        "tn": 30,
         "precision": 1.0,
         "recall": 1.0
       }
     },
     "agreement": {
-      "exact_set_matches": 33,
-      "total_cases": 33
+      "exact_set_matches": 34,
+      "total_cases": 34
     },
     "findings": []
   },
@@ -2766,7 +2766,7 @@
     {
       "id": "control-graphics",
       "target": "control",
-      "description": "One graphic placed legally (clear of face, captions and the hook window), present exactly inside its span: F8 passes and F1-F7 are untouched.",
+      "description": "One graphic placed legally (clear of face, captions and the hook glyph zone), present exactly inside its span: F8 passes and F1-F7 are untouched.",
       "coupling": "",
       "expected_failed": [],
       "wonder_can_summarize": true,
@@ -2874,14 +2874,14 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
                 "absence_match_max": 0.0,
                 "ok": true
               }
             ],
             "offending_indices": [],
-            "spacing_violations": [],
+            "collision_violations": [],
             "duration_s": 10.0
           }
         }
@@ -2890,7 +2890,7 @@
     {
       "id": "control-graphics-spaced-pair",
       "target": "control",
-      "description": "Two graphics 4.0s of clean screen apart (the kept spacing ruling, exactly at its floor): both pass.",
+      "description": "Two graphics 4.0s of clean screen apart: both pass. (Timing has been free since the 2026-10-31 ruling; a well-spaced pair is simply the calm end of legal.)",
       "coupling": "",
       "expected_failed": [],
       "wonder_can_summarize": true,
@@ -2998,7 +2998,7 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
                 "absence_match_max": 0.0,
                 "ok": true
@@ -3010,14 +3010,14 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
                 "absence_match_max": 0.0,
                 "ok": true
               }
             ],
             "offending_indices": [],
-            "spacing_violations": [],
+            "collision_violations": [],
             "duration_s": 10.0
           }
         }
@@ -3135,10 +3135,10 @@
                 "index": 0,
                 "kind": "card",
                 "motion": "static",
-                "face_overlap_px": 97600,
+                "face_overlap_px": 108800,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
                 "absence_match_max": 0.0,
                 "ok": false
@@ -3147,7 +3147,7 @@
             "offending_indices": [
               0
             ],
-            "spacing_violations": [],
+            "collision_violations": [],
             "duration_s": 10.0
           }
         }
@@ -3268,7 +3268,7 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 60000,
                 "caption_zone_overlap_px": 60000,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
                 "absence_match_max": 0.0,
                 "ok": false
@@ -3277,7 +3277,7 @@
             "offending_indices": [
               0
             ],
-            "spacing_violations": [],
+            "collision_violations": [],
             "duration_s": 10.0
           }
         }
@@ -3398,7 +3398,7 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 0.0,
                 "absence_match_max": 0.0,
                 "ok": false
@@ -3407,25 +3407,21 @@
             "offending_indices": [
               0
             ],
-            "spacing_violations": [],
+            "collision_violations": [],
             "duration_s": 10.0
           }
         }
       }
     },
     {
-      "id": "f8-graphic-in-hook-window",
-      "target": "F8",
-      "description": "Graphic declared at 2.0-4.0s: it intrudes on the first 3.0s hook window, which the kept ruling forbids - F8 fails on the declared span alone.",
+      "id": "control-graphics-hook-window",
+      "target": "control",
+      "description": "One graphic at 1.0-3.5s, INSIDE the first 3.0s hook window - a fault under the 2026-10-30 ruling, legal since 2026-10-31 - placed top-left, clear of the hook glyph zone (glyph bbox (116,457)-(927,700) + 12px pad), the face and the captions: F8 passes.",
       "coupling": "",
-      "expected_failed": [
-        "F8"
-      ],
+      "expected_failed": [],
       "wonder_can_summarize": true,
-      "actual_failed": [
-        "F8"
-      ],
-      "verdict": "FAIL",
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
       "checks": {
         "F1": {
           "passed": true,
@@ -3517,7 +3513,7 @@
           }
         },
         "F8": {
-          "passed": false,
+          "passed": true,
           "measured": {
             "count": 1,
             "graphics": [
@@ -3528,25 +3524,159 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 1.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
                 "absence_match_max": 0.0,
-                "ok": false
+                "ok": true
               }
             ],
-            "offending_indices": [
-              0
-            ],
-            "spacing_violations": [],
+            "offending_indices": [],
+            "collision_violations": [],
             "duration_s": 10.0
           }
         }
       }
     },
     {
-      "id": "f8-spacing-violation",
+      "id": "control-graphics-close-pair",
+      "target": "control",
+      "description": "Two individually-legal graphics only 1.25s of clean screen apart - the exact geometry that FAILED F8 as f8-spacing-violation under the 2026-10-30 spacing ruling; since 2026-10-31 there is no minimum gap, so both pass.",
+      "coupling": "",
+      "expected_failed": [],
+      "wonder_can_summarize": true,
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                598.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 40,
+            "frames_total": 40
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses."
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F8": {
+          "passed": true,
+          "measured": {
+            "count": 2,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "static",
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 1.0,
+                "absence_match_max": 0.0,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "static",
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 1.0,
+                "absence_match_max": 0.0,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "duration_s": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": "f8-graphics-colliding",
       "target": "F8",
-      "description": "Two individually-legal graphics only 1.25s of clean screen apart: the kept >=4s spacing ruling fails them as a pair - F8's spacing sub-check.",
+      "description": "Two graphics whose spans overlap in time (3.5-6.0 and 4.5-7.0) AND whose boxes intersect (120x130 px): F8's collision sub-check fails them as a pair. Same colour on purpose - in the intersection both layers are identical pixels, so presence matches for both and only the collision leg can fail.",
       "coupling": "",
       "expected_failed": [
         "F8"
@@ -3658,9 +3788,9 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
-                "absence_match_max": 0.0,
+                "absence_match_max": 0.2,
                 "ok": true
               },
               {
@@ -3670,18 +3800,18 @@
                 "face_overlap_px": 0,
                 "caption_overlap_px": 0,
                 "caption_zone_overlap_px": 0,
-                "hook_window_overlap_s": 0.0,
+                "hook_glyph_overlap_px": 0,
                 "presence_match_min": 1.0,
-                "absence_match_max": 0.0,
+                "absence_match_max": 0.369,
                 "ok": true
               }
             ],
             "offending_indices": [],
-            "spacing_violations": [
+            "collision_violations": [
               {
                 "earlier_index": 0,
                 "later_index": 1,
-                "gap_s": 1.25
+                "overlap_px": 15600
               }
             ],
             "duration_s": 10.0

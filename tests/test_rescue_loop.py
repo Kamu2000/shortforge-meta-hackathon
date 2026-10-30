@@ -636,6 +636,9 @@ class DropGraphicsTests(unittest.TestCase):
             self.assertEqual(len(renderer.graphics_seen), 2)
 
     def test_spacing_violation_drops_the_later_graphic(self):
+        # Pre-2026-10-31 receipts named spacing violations; the
+        # executor still honours that key so an old chained
+        # receipt repairs the same way.
         with tempfile.TemporaryDirectory() as td:
             specs = [_spec(3.5, 5.5, "A"), _spec(7.0, 9.0, "B")]
             chain, _r, verify = self._run(
@@ -644,6 +647,20 @@ class DropGraphicsTests(unittest.TestCase):
                  "spacing_violations": [{"earlier_index": 0,
                                          "later_index": 1,
                                          "gap_s": 1.5}]})
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(
+                [g.headline for g in verify.executions[0].graphics],
+                ["A"])
+
+    def test_collision_violation_drops_the_later_graphic(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = [_spec(3.5, 6.0, "A"), _spec(4.5, 7.0, "B")]
+            chain, _r, verify = self._run(
+                td, specs,
+                {"offending_indices": [],
+                 "collision_violations": [{"earlier_index": 0,
+                                           "later_index": 1,
+                                           "overlap_px": 15600}]})
             self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
             self.assertEqual(
                 [g.headline for g in verify.executions[0].graphics],

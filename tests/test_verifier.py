@@ -440,7 +440,7 @@ class WonderClientTests(unittest.TestCase):
 
 # ---------------------------------------------------------------- F8
 
-F8_N = 40  # 10 seconds at 4 fps: room for spacing-rule fixtures
+F8_N = 40  # 10 seconds at 4 fps: room for multi-graphic fixtures
 
 
 def f8_inputs(video, graphics):
@@ -547,26 +547,85 @@ class GraphicsF8Tests(unittest.TestCase):
             self.assertLess(
                 f8.measured["graphics"][0]["presence_match_min"], 0.75)
 
-    def test_graphic_in_hook_window_fails_f8(self):
+    def test_graphic_inside_face_margin_fails_f8(self):
+        # The box never touches a face pixel, but its right edge
+        # sits 20px from the face's left edge across the span
+        # (face left edge is 282 at the span's first sampled
+        # frame) - inside the 28px margin zone placement
+        # guarantees and F8 certifies.
         with tempfile.TemporaryDirectory() as td:
-            spec = solid_spec((700, 300, 1000, 560), 2.0, 4.0)
+            spec = solid_spec((60, 1050, 262, 1300), 3.5, 5.5)
             receipt = self._run(td, [spec])
             self.assertEqual(receipt.failed, ["F8"])
             f8 = check(receipt, "F8")
-            self.assertEqual(
-                f8.measured["graphics"][0]["hook_window_overlap_s"], 1.0)
+            self.assertGreater(
+                f8.measured["graphics"][0]["face_overlap_px"], 0)
+            self.assertEqual(f8.measured["offending_indices"], [0])
 
-    def test_spacing_violation_fails_f8(self):
+    def test_graphic_in_hook_window_clear_of_glyphs_passes(self):
+        # 2026-10-31 ruling: the hook window is open to graphics;
+        # only the glyph zone is protected. This box sits in the
+        # top-left, clear of the glyph bbox ((116,457)-(927,700)
+        # for this fixture's hook, padded by 12) and of
+        # everything else.
         with tempfile.TemporaryDirectory() as td:
-            a = solid_spec((700, 300, 1000, 560), 3.25, 4.75)
-            b = solid_spec((60, 300, 360, 560), 6.0, 7.5,
-                           color=(60, 120, 200))
+            spec = solid_spec((60, 60, 360, 320), 1.0, 3.5)
+            receipt = self._run(td, [spec])
+            self.assertEqual(receipt.failed, [], msg=receipt.to_json())
+            f8 = check(receipt, "F8")
+            self.assertTrue(f8.passed)
+            self.assertEqual(
+                f8.measured["graphics"][0]["hook_glyph_overlap_px"], 0)
+
+    def test_graphic_over_hook_glyphs_fails_f8(self):
+        # Same window, but the box sits ON the hook glyphs:
+        # F8's glyph-overlap sub-check fails it even though the
+        # span's presence inside the hook window is itself legal.
+        with tempfile.TemporaryDirectory() as td:
+            spec = solid_spec((300, 500, 700, 650), 0.5, 3.0)
+            receipt = self._run(td, [spec])
+            self.assertEqual(receipt.failed, ["F8"])
+            f8 = check(receipt, "F8")
+            self.assertGreater(
+                f8.measured["graphics"][0]["hook_glyph_overlap_px"], 0)
+            self.assertEqual(f8.measured["offending_indices"], [0])
+
+    def test_colliding_pair_fails_f8(self):
+        # Spans overlap in time AND boxes intersect: F8's
+        # collision sub-check fails the pair. Same colour on
+        # purpose - in the intersection both layers are identical
+        # pixels, so presence matches for both and only the
+        # collision leg can fail.
+        with tempfile.TemporaryDirectory() as td:
+            a = solid_spec((700, 300, 1000, 560), 3.5, 6.0)
+            b = solid_spec((880, 430, 1064, 660), 4.5, 7.0)
             receipt = self._run(td, [a, b])
             self.assertEqual(receipt.failed, ["F8"])
             f8 = check(receipt, "F8")
-            self.assertEqual(len(f8.measured["spacing_violations"]), 1)
-            self.assertEqual(
-                f8.measured["spacing_violations"][0]["gap_s"], 1.25)
+            self.assertEqual(len(f8.measured["collision_violations"]), 1)
+            v = f8.measured["collision_violations"][0]
+            self.assertEqual((v["earlier_index"], v["later_index"]),
+                             (0, 1))
+            self.assertEqual(v["overlap_px"], 120 * 130)
+
+    def test_overlapping_spans_disjoint_boxes_pass(self):
+        with tempfile.TemporaryDirectory() as td:
+            a = solid_spec((700, 300, 1000, 560), 3.5, 6.0)
+            b = solid_spec((60, 300, 360, 560), 4.5, 7.0,
+                           color=(60, 120, 200))
+            receipt = self._run(td, [a, b])
+            self.assertEqual(receipt.failed, [], msg=receipt.to_json())
+            self.assertTrue(check(receipt, "F8").passed)
+
+    def test_back_to_back_pair_passes(self):
+        # Gap exactly 0.0s - legal since the 2026-10-31 ruling.
+        with tempfile.TemporaryDirectory() as td:
+            a = solid_spec((700, 300, 1000, 560), 3.25, 4.75)
+            b = solid_spec((60, 300, 360, 560), 4.75, 6.25,
+                           color=(60, 120, 200))
+            receipt = self._run(td, [a, b])
+            self.assertEqual(receipt.failed, [], msg=receipt.to_json())
+            self.assertTrue(check(receipt, "F8").passed)
 
     def test_spaced_pair_passes(self):
         with tempfile.TemporaryDirectory() as td:

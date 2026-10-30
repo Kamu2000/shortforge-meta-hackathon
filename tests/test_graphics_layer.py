@@ -84,10 +84,18 @@ class PlannerParseTests(unittest.TestCase):
         spans, rejected = self.parse({"graphics": []})
         self.assertEqual((spans, rejected), ([], []))
 
-    def test_hook_window_span_rejected(self):
+    def test_hook_window_span_accepted(self):
+        # 2026-10-31 ruling: no hook-window ban - a span may sit
+        # inside the first 3.0s. Collision with the hook glyphs
+        # is placement's and F8's job, not the parser's.
         spans, rejected = self.parse(span_json(start_s=2.5, end_s=5.0))
-        self.assertEqual(spans, [])
-        self.assertIn("hook window", rejected[0]["reason"])
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(rejected, [])
+
+    def test_span_starting_at_zero_accepted(self):
+        spans, rejected = self.parse(span_json(start_s=0.0, end_s=3.0))
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(rejected, [])
 
     def test_non_verbatim_quote_rejected(self):
         spans, rejected = self.parse(
@@ -117,33 +125,47 @@ class PlannerParseTests(unittest.TestCase):
         self.assertEqual(len(spans), 1)
         self.assertEqual(spans[0].kind, "image")
 
-    def test_overlapping_spans_deduped(self):
+    def test_overlapping_spans_accepted(self):
+        # 2026-10-31 ruling: time-overlapping spans are legal -
+        # placement separates them onto disjoint boxes (or drops
+        # what fits nowhere legal).
         payload = {"graphics": [
             span_json()["graphics"][0],
             span_json(start_s=5.0, end_s=8.0)["graphics"][0],
             span_json(start_s=13.0, end_s=16.0)["graphics"][0],
         ]}
         spans, rejected = self.parse(payload)
-        self.assertEqual(len(spans), 2)
-        self.assertTrue(any("overlaps" in r["reason"] for r in rejected))
+        self.assertEqual(len(spans), 3)
+        self.assertEqual(rejected, [])
 
-    def test_gap_under_four_seconds_rejected(self):
+    def test_gap_under_four_seconds_accepted(self):
+        # 2026-10-31 ruling: the >= 4s clean-screen rule is gone.
         payload = {"graphics": [
             span_json()["graphics"][0],                    # 4.0-7.0
             span_json(start_s=9.0, end_s=12.0)["graphics"][0],  # gap 2s
         ]}
         spans, rejected = self.parse(payload)
-        self.assertEqual(len(spans), 1)
-        self.assertTrue(any("clean screen" in r["reason"]
-                            for r in rejected))
+        self.assertEqual(len(spans), 2)
+        self.assertEqual(rejected, [])
+
+    def test_back_to_back_spans_accepted(self):
+        payload = {"graphics": [
+            span_json()["graphics"][0],                    # 4.0-7.0
+            span_json(start_s=7.0, end_s=10.0)["graphics"][0],
+        ]}
+        spans, rejected = self.parse(payload)
+        self.assertEqual(len(spans), 2)
+        self.assertEqual(rejected, [])
 
     def test_no_count_cap_and_no_screen_time_ceiling(self):
-        # Kamlesh's ruling (2026-10-30): the count is driven purely
-        # by content clearing the bar. Four well-spaced spans
-        # totalling 55% of a 40s Short all stand.
+        # Kamlesh's rulings (2026-10-30, timing extended
+        # 2026-10-31): the count is driven purely by content
+        # clearing the bar, and timing is free. Four back-to-back
+        # spans starting at 0.0s totalling 55% of a 40s Short all
+        # stand.
         payload = {"graphics": [
             span_json(start_s=s, end_s=s + 5.5)["graphics"][0]
-            for s in (4.0, 13.5, 23.0, 32.5)
+            for s in (0.0, 5.5, 11.0, 16.5)
         ]}
         spans, rejected = self.parse(payload, duration=40.0)
         self.assertEqual(len(spans), 4)
@@ -337,6 +359,37 @@ class PlacementTests(unittest.TestCase):
             hook_glyph_bbox=glyph, hook_window=(0.0, 6.0), canvas=CANVAS)
         self.assertEqual(dropped, [])
         self.assertEqual(len(placed), 1)
+
+    def test_hook_window_span_placed_clear_of_glyph_zone(self):
+        # A span inside the hook window is placeable (2026-10-31
+        # ruling) - as long as its box stays out of the padded
+        # glyph zone. The zone blocks the left-centre here; the
+        # card must land somewhere disjoint from it.
+        glyph = (60, 400, 700, 760)
+        placed, dropped = place_prepared(
+            [card_item(0.5, 3.0)], alphas_with_speaker(n=40), fps=4.0,
+            hook_glyph_bbox=glyph, hook_window=(0.0, 6.0),
+            canvas=CANVAS)
+        self.assertEqual(dropped, [])
+        self.assertEqual(len(placed), 1)
+        x0, y0, x1, y1 = placed[0].box
+        gx0, gy0, gx1, gy1 = glyph[0] - 12, glyph[1] - 12, \
+            glyph[2] + 12, glyph[3] + 12
+        overlap = (min(x1, gx1) - max(x0, gx0) > 0
+                   and min(y1, gy1) - max(y0, gy0) > 0)
+        self.assertFalse(overlap)
+
+    def test_time_overlapping_graphics_placed_on_disjoint_boxes(self):
+        placed, dropped = place_prepared(
+            [card_item(4.0, 7.0), card_item(5.0, 8.0)],
+            alphas_with_speaker(n=48), fps=4.0, canvas=CANVAS)
+        self.assertEqual(dropped, [])
+        self.assertEqual(len(placed), 2)
+        (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = \
+            placed[0].box, placed[1].box
+        overlap = (min(ax1, bx1) - max(ax0, bx0) > 0
+                   and min(ay1, by1) - max(ay0, by0) > 0)
+        self.assertFalse(overlap)
 
     def test_two_graphics_never_overlap(self):
         placed, dropped = place_prepared(

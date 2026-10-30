@@ -232,7 +232,7 @@ def _std(video: Path, wonder_can: bool = True, **overrides):
 
 # ---------------------------------------------------------------- F8 fixtures
 
-F8_N = 40  # 10 seconds at 4 fps - room for the spacing-rule cases
+F8_N = 40  # 10 seconds at 4 fps - room for the multi-graphic cases
 F8_CUES = [CaptionCue("The band never rehearses.", 0.0, 3.5),
            CaptionCue("It is just perfect.", 3.5, 7.0),
            CaptionCue("And it keeps going on.", 7.0, 10.0)]
@@ -516,14 +516,15 @@ CASES: list[Case] = [
     # of the same tempdir, on the 10s/40-frame good fixture.
     _case("control-graphics", "control",
           "One graphic placed legally (clear of face, captions and "
-          "the hook window), present exactly inside its span: F8 "
-          "passes and F1-F7 are untouched.",
+          "the hook glyph zone), present exactly inside its span: "
+          "F8 passes and F1-F7 are untouched.",
           set(), lambda v: _f8(
               v, "f8-control.mp4",
               [_f8_spec((700, 300, 1000, 560), 3.5, 5.5)])),
     _case("control-graphics-spaced-pair", "control",
-          "Two graphics 4.0s of clean screen apart (the kept "
-          "spacing ruling, exactly at its floor): both pass.",
+          "Two graphics 4.0s of clean screen apart: both pass. "
+          "(Timing has been free since the 2026-10-31 ruling; a "
+          "well-spaced pair is simply the calm end of legal.)",
           set(), lambda v: _f8(
               v, "f8-control-spaced.mp4",
               [_f8_spec((700, 300, 1000, 560), 3.25, 4.75),
@@ -551,22 +552,37 @@ CASES: list[Case] = [
               v, "f8-outside-span.mp4",
               [_f8_spec((700, 300, 1000, 560), 3.5, 5.5)],
               windows=[(0.5, 2.0)])),
-    _case("f8-graphic-in-hook-window", "F8",
-          "Graphic declared at 2.0-4.0s: it intrudes on the first "
-          "3.0s hook window, which the kept ruling forbids - F8 "
-          "fails on the declared span alone.",
-          {"F8"}, lambda v: _f8(
+    _case("control-graphics-hook-window", "control",
+          "One graphic at 1.0-3.5s, INSIDE the first 3.0s hook "
+          "window - a fault under the 2026-10-30 ruling, legal "
+          "since 2026-10-31 - placed top-left, clear of the hook "
+          "glyph zone (glyph bbox (116,457)-(927,700) + 12px pad), "
+          "the face and the captions: F8 passes.",
+          set(), lambda v: _f8(
               v, "f8-hook-window.mp4",
-              [_f8_spec((700, 300, 1000, 560), 2.0, 4.0)])),
-    _case("f8-spacing-violation", "F8",
+              [_f8_spec((60, 60, 360, 320), 1.0, 3.5)])),
+    _case("control-graphics-close-pair", "control",
           "Two individually-legal graphics only 1.25s of clean "
-          "screen apart: the kept >=4s spacing ruling fails them "
-          "as a pair - F8's spacing sub-check.",
-          {"F8"}, lambda v: _f8(
-              v, "f8-spacing.mp4",
+          "screen apart - the exact geometry that FAILED F8 as "
+          "f8-spacing-violation under the 2026-10-30 spacing "
+          "ruling; since 2026-10-31 there is no minimum gap, so "
+          "both pass.",
+          set(), lambda v: _f8(
+              v, "f8-close-pair.mp4",
               [_f8_spec((700, 300, 1000, 560), 3.25, 4.75),
                _f8_spec((60, 300, 360, 560), 6.0, 7.5,
                         color=(60, 120, 200))])),
+    _case("f8-graphics-colliding", "F8",
+          "Two graphics whose spans overlap in time (3.5-6.0 and "
+          "4.5-7.0) AND whose boxes intersect (120x130 px): F8's "
+          "collision sub-check fails them as a pair. Same colour "
+          "on purpose - in the intersection both layers are "
+          "identical pixels, so presence matches for both and "
+          "only the collision leg can fail.",
+          {"F8"}, lambda v: _f8(
+              v, "f8-colliding.mp4",
+              [_f8_spec((700, 300, 1000, 560), 3.5, 6.0),
+               _f8_spec((880, 430, 1064, 660), 4.5, 7.0)])),
 ]
 
 
