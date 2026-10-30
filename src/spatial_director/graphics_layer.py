@@ -95,6 +95,14 @@ MAX_SPAN_S = 6.0
 # hook-window ban - spans may start at 0.0s and overlap in time.
 # Collision, not spacing, is the discipline: see placement + F8.
 REVEAL_MIN_SPAN_S = 3.5      # shorter quote/name cards stay static
+# Path motions (block 2, 2026-10-31): a graphic may TRAVEL to its
+# placed box over this long at the span's start - glide/rise/fall
+# from off-canvas, or an approach scale settle. The path is code-
+# computed from the placed box, validated against the same
+# forbidden zones as static placement, declared on the plan and
+# the receipt, and measured by F8.
+PATH_TRAVEL_S = 0.9
+PATH_KINDS = ("glide_in", "rise_in", "fall_in", "approach")
 PLANNER_MAX_TOKENS = 8000  # Spark reasons first; 2500 starved on the
 # preview prompt and 4000 starved on pipeline cue lists (empty reply
 # on all 3 Holmes graphics Shorts, 2026-10-30). One retry at a
@@ -143,7 +151,14 @@ PLANNER_SYSTEM_PROMPT = (
     "content, as many as genuinely clear the bar and no more; "
     "when in doubt, leave it out. An "
     "empty list is a valid and common answer - most speech earns "
-    "no graphic. kind \"card\" is for numbers, quotes, names and "
+    "no graphic. Optionally, a card or image may carry \"path\": "
+    "one of \"glide_in\" (slides in from the nearer side edge), "
+    "\"rise_in\" (rises from below), \"fall_in\" (drops from "
+    "above) or \"approach\" (scales up and settles into place) - "
+    "use a path when the moment lands with emphasis; omit it for "
+    "a quiet in-place appearance. A path whose travel would cross "
+    "the speaker, the captions or another graphic is refused by "
+    "the placer and the graphic appears in place instead. kind \"card\" is for numbers, quotes, names and "
     "facts: headline at most 6 words, facts at most 12 words, both "
     "copied from the transcript - never invent a number, name or "
     "claim. For a comparison between two stated values, use kind "
@@ -277,13 +292,16 @@ class GraphicSpan:
 
     start_s: float
     end_s: float
-    kind: str  # "card" | "image"
+    kind: str  # "card" | "image" | "backdrop" | "speaker_forward"
     headline: str = ""
     facts: str = ""
     prompt: str = ""
     source_quote: str = ""
     compare: list[dict[str, Any]] | None = None
     motion: str = "static"
+    # Block 2: a path motion the planner selected for this graphic
+    # (one of PATH_KINDS) or None for an in-place appearance.
+    path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -292,6 +310,7 @@ class GraphicSpan:
             "facts": self.facts, "prompt": self.prompt,
             "source_quote": self.source_quote,
             "compare": self.compare, "motion": self.motion,
+            "path": self.path,
         }
 
 
@@ -323,6 +342,11 @@ class GraphicSpec:
     compare: list[dict[str, Any]] | None = None
     motion: str = "static"
     cost_usd: float = 0.0
+    # Block 2: the declared travel path (PATH_KINDS) or None. When
+    # set, layer_at(t) during the travel window returns the layer
+    # at the path's position for t, and mask() is the SWEPT union
+    # over the whole path - the superset F8's zone legs measure.
+    path: str | None = None
     _state_fn: LayerFn | None = field(default=None, repr=False,
                                        compare=False)
 
@@ -333,9 +357,27 @@ class GraphicSpec:
         return self.layer_rgba
 
     def mask(self) -> np.ndarray:
-        """Bool canvas of the graphic's opaque pixels (final state -
-        the superset every animated state stays inside)."""
-        return self.layer_rgba[..., 3] > 0
+        """Bool canvas of the graphic's opaque pixels.
+
+        Without a path this is the final state - the superset every
+        in-box animated state stays inside. With a path, the box
+        itself travels, so the mask is the SWEPT union: the opaque
+        pixels of layer_at sampled across the travel window plus
+        the final state. F8's zone legs measure this mask, so a
+        path that crosses a forbidden zone at any point is a
+        violation even though the resting box is legal.
+        """
+        base = self.layer_rgba[..., 3] > 0
+        if self.path is None or self._state_fn is None:
+            return base
+        swept = base
+        steps = 12
+        for k in range(steps + 1):
+            t = self.start_s + PATH_TRAVEL_S * k / steps
+            if t > self.end_s:
+                break
+            swept = swept | (self.layer_at(t)[..., 3] > 0)
+        return swept
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -353,6 +395,8 @@ class GraphicSpec:
                 out["compare"] = self.compare
         else:
             out["prompt"] = self.prompt
+        if self.path is not None:
+            out["path"] = self.path
         return out
 
 
@@ -472,9 +516,16 @@ def parse_planner_reply(
         prompt = str(item.get("prompt", "")).strip()
         quote = str(item.get("source_quote", "")).strip()
         compare = item.get("compare")
+        path = item.get("path")
+        if path is not None:
+            path = str(path).strip().lower() or None
         reason = None
         if kind not in ("card", "image"):
             reason = f"unknown kind {kind!r}"
+        elif path is not None and path not in PATH_KINDS:
+            reason = f"unknown motion path {path!r}"
+        elif path is not None and kind not in ("card", "image"):
+            reason = "motion path on a non-graphic span"
         elif end <= start:
             reason = "span end is not after its start"
         elif not (MIN_SPAN_S <= end - start <= MAX_SPAN_S):
@@ -514,7 +565,8 @@ def parse_planner_reply(
             start_s=round(start, 3), end_s=round(end, 3), kind=kind,
             headline=headline, facts=facts, prompt=prompt,
             source_quote=quote,
-            compare=compare if compare else None)
+            compare=compare if compare else None,
+            path=path)
         span.motion = _derive_motion(span)
         accepted.append(span)
 
@@ -985,6 +1037,99 @@ def _paste_layer(content_image: Image.Image,
     layer = Image.new("RGBA", (canvas[0], canvas[1]), (0, 0, 0, 0))
     layer.alpha_composite(content_image, (box[0], box[1]))
     return np.asarray(layer)
+
+
+# ---------------------------------------------------------------- paths
+
+APPROACH_START_SCALE = 0.7   # approach settles 0.7 -> 1.0 into the box
+PATH_SAMPLES = 17            # swept-area validation / mask resolution
+
+
+def path_progress(t_s: float, start_s: float) -> float:
+    """Eased travel progress at ``t_s``: 0 at the span's start,
+    1 once PATH_TRAVEL_S has elapsed, ease-out throughout."""
+    if t_s <= start_s:
+        return 0.0
+    return _ease_out_cubic(min(1.0, (t_s - start_s) / PATH_TRAVEL_S))
+
+
+def path_box_at(box: tuple[int, int, int, int], path: str,
+                t_s: float, start_s: float,
+                canvas: tuple[int, int]) -> tuple[int, int, int, int]:
+    """The graphic's box at time ``t_s`` under its declared path.
+
+    Pure geometry: glide enters from the nearer vertical edge at
+    the box's own height; rise/fall enter from the bottom/top edge
+    at the box's own column; approach scales about the box centre
+    (its swept area is inside the final box by construction). At
+    progress 1 every path returns the placed box itself.
+    """
+    x0, y0, x1, y1 = box
+    w, h = x1 - x0, y1 - y0
+    cw, ch = canvas
+    q = path_progress(t_s, start_s)
+    if path == "glide_in":
+        start_x = -w if (x0 + x1) / 2.0 < cw / 2.0 else cw
+        x = int(round(start_x + (x0 - start_x) * q))
+        return (x, y0, x + w, y1)
+    if path == "rise_in":
+        y = int(round(ch + (y0 - ch) * q))
+        return (x0, y, x1, y + h)
+    if path == "fall_in":
+        y = int(round(-h + (y0 + h) * q))
+        return (x0, y, x1, y + h)
+    if path == "approach":
+        k = APPROACH_START_SCALE + (1.0 - APPROACH_START_SCALE) * q
+        nw, nh = max(1, int(round(w * k))), max(1, int(round(h * k)))
+        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+        return (cx - nw // 2, cy - nh // 2,
+                cx - nw // 2 + nw, cy - nh // 2 + nh)
+    return box
+
+
+def _paste_layer_clipped(content_image: Image.Image,
+                         box: tuple[int, int, int, int],
+                         canvas: tuple[int, int]) -> np.ndarray:
+    """Paste a box-sized RGBA at a possibly off-canvas box.
+
+    Path travel positions the box partially or fully outside the
+    canvas; only the intersection is drawn. On a transparent
+    ground the visible result is the content itself, clipped -
+    identical to _paste_layer for in-canvas boxes.
+    """
+    cw, ch = canvas
+    layer = np.zeros((ch, cw, 4), dtype=np.uint8)
+    x0, y0, x1, y1 = box
+    cx0, cy0 = max(0, x0), max(0, y0)
+    cx1, cy1 = min(cw, x1), min(ch, y1)
+    if cx1 <= cx0 or cy1 <= cy0:
+        return layer
+    src = np.asarray(content_image)
+    layer[cy0:cy1, cx0:cx1] = src[cy0 - y0:cy1 - y0,
+                                  cx0 - x0:cx1 - x0]
+    return layer
+
+
+def _path_legal(free: np.ndarray, box: tuple[int, int, int, int],
+                path: str, start_s: float,
+                canvas: tuple[int, int]) -> bool:
+    """Every on-canvas pixel of the swept path inside ``free``.
+
+    Samples the travel at PATH_SAMPLES eased positions (plus the
+    resting box, which placement already proved); a box fully
+    off-canvas at a sample constrains nothing there.
+    """
+    cw, ch = canvas
+    for k in range(PATH_SAMPLES + 1):
+        t = start_s + PATH_TRAVEL_S * k / PATH_SAMPLES
+        bx0, by0, bx1, by1 = path_box_at(box, path, t, start_s, canvas)
+        cx0, cy0 = max(0, bx0), max(0, by0)
+        cx1, cy1 = min(cw, bx1), min(ch, by1)
+        if cx1 <= cx0 or cy1 <= cy0:
+            continue
+        if not bool(free[cy0:cy1, cx0:cx1].all()):
+            return False
+    return True
 
 
 # ---------------------------------------------------------------- placement

@@ -85,6 +85,7 @@ from .rescue_loop import (
 )
 from .sam_client import API_BASE as META_API_BASE
 from .sam_client import SamClient
+from .sfx import mix_to_file, plan_sfx
 from .spark_client import SparkClient
 from .spark_open_client import Candidate, SparkOpenClient
 from .spend_ledger import SpendLedger
@@ -656,6 +657,9 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     # Disabled = None everywhere below = the pre-graphics code path.
     placed_graphics = None
     graphics_report = None
+    sfx_plan_events = None
+    applied_sfx = None
+    draft1_audio = window_clip
     if graphics_enabled:
         _glyph_mask, glyph_bbox = hook_spec.glyph(canvas)
         build = build_graphics(
@@ -667,6 +671,19 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             ts=ts)
         placed_graphics = build.placed
         graphics_report = build.to_dict()
+        # SFX (block 2): effects derived deterministically from
+        # the placed graphics, mixed over the normalised window
+        # audio. The MIX is what ships; the window clip remains
+        # the speech stem the verifier's F5 measures.
+        sfx_plan_events = plan_sfx(placed_graphics)
+        graphics_report["sfx_plan"] = [
+            e.to_dict() for e in sfx_plan_events]
+        applied_sfx = []
+        if sfx_plan_events:
+            mix_path = short_dir / "sfx-mix.wav"
+            applied_sfx = mix_to_file(
+                window_clip, sfx_plan_events, mix_path)
+            draft1_audio = mix_path
         (short_dir / "graphics-plan.json").write_text(
             json.dumps(graphics_report, indent=2), encoding="utf-8")
         log(f"short {index}: graphics planned "
@@ -681,14 +698,16 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     render_composite_with_captions(
         frames, src_alphas, hook_rgba=hook_rgba,
         hook_window=hook_spec.window, cues=cues,
-        caption_rect=cap_layout.rect, audio_from=window_clip,
+        caption_rect=cap_layout.rect, audio_from=draft1_audio,
         out_path=draft1, fps=fps, canvas=canvas, **render_kwargs)
     receipt1 = verify(
         VerifyInputs(
             video_path=draft1, fps=fps, canvas_alphas=canvas_alphas,
             audio=load_energy(draft1), hook=hook_spec, cues=cues,
             caption_rect=cap_layout.rect, sam_response_path=sam_path,
-            graphics=placed_graphics),
+            graphics=placed_graphics,
+            speech_audio=energy if graphics_enabled else None,
+            sfx=applied_sfx),
         wonder=clients.wonder, draft=1, ts=ts)
     _annotate_effect(receipt1)
     log(f"short {index}: draft 1 verdict {receipt1.verdict} "
@@ -701,7 +720,8 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         make_canvas_alphas=make_canvas, fps=fps, hook=hook_spec,
         cues=cues, caption_rect=cap_layout.rect,
         sam_response_path=sam_path, transcript_text=excerpt,
-        work_dir=short_dir, canvas=canvas, graphics=placed_graphics)
+        work_dir=short_dir, canvas=canvas, graphics=placed_graphics,
+        sfx_plan=sfx_plan_events)
 
     def verify_fn(execution) -> Any:
         receipt2 = verify(
@@ -713,6 +733,11 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                 caption_rect=execution.caption_rect,
                 sam_response_path=sam_path,
                 graphics=execution.graphics,
+                speech_audio=(
+                    load_energy(execution.speech_audio_from)
+                    if execution.speech_audio_from is not None
+                    else None),
+                sfx=execution.sfx_events,
                 hook_slide_px_s=execution.hook_slide_px_s),
             wonder=clients.wonder, draft=2, ts=ts)
         _annotate_effect(receipt2)

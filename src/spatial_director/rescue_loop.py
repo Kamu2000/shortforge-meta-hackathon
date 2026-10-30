@@ -79,6 +79,7 @@ from .layout_law import (
     predict_occlusion,
 )
 from .graphics_layer import GraphicSpec
+from .sfx import SfxEvent, mix_to_file, plan_sfx
 from .spark_client import SparkClient
 from .verifier import MAX_WORD_GAP_S, HookSpec, Receipt, _content_words
 
@@ -211,6 +212,12 @@ class RenderArtifacts:
     # repairs carry them through, TRIM_SILENCE retimes them,
     # DROP_GRAPHICS removes the offending ones).
     graphics: list[GraphicSpec] | None = None
+    # SFX plan for draft 1 (block 2): the intended effects derived
+    # from the placed graphics, or None when the layer's SFX are
+    # not in play. Repairs re-mix the carried plan over their
+    # render's speech source; TRIM_SILENCE / DROP_GRAPHICS pass a
+    # plan re-derived from their retimed / kept graphics.
+    sfx_plan: list[SfxEvent] | None = None
 
 
 @dataclass
@@ -229,6 +236,12 @@ class RepairExecution:
     # The re-verify reads it back into VerifyInputs so F7's
     # measured slide is the speed this render actually carries.
     hook_slide_px_s: float = 0.0
+    # Block 2 audio plumbing: the SFX declarations as applied in
+    # THIS render's mix, and the pre-mix speech source the
+    # re-verify must profile for F5 (None = the render's audio is
+    # unmixed speech, the historic shape).
+    sfx_events: list[dict[str, Any]] | None = None
+    speech_audio_from: str | Path | None = None
 
 
 @dataclass
@@ -519,6 +532,7 @@ def _render_execution(
     speaker_scale: float = 1.0,
     graphics: list[GraphicSpec] | None = None,
     hook_slide: tuple[float, float] | None = None,
+    sfx_plan: list[SfxEvent] | None = None,
 ) -> RepairExecution:
     hook_rgba = hook.layer(artifacts.canvas) if hook.text else None
     out_path = Path(artifacts.work_dir) / out_name
@@ -533,11 +547,34 @@ def _render_execution(
         kwargs["graphics"] = graphics_entries(carried)
     if hook_slide is not None:
         kwargs["hook_slide"] = hook_slide
+    # SFX (block 2): when the layer's effects are in play, the
+    # render's audio is the speech source with the carried plan
+    # mixed over it, and the execution records the pre-mix source
+    # as the speech stem so the re-verify's F5 measures speech,
+    # never the mix. The plan travels explicitly: executors that
+    # change the graphic list (TRIM_SILENCE, DROP_GRAPHICS) pass
+    # a plan re-derived from their new list; everyone else carries
+    # draft 1's. With no layer in play none of this runs and the
+    # audio path is exactly the historic one.
+    render_audio = audio_from
+    speech_from: str | Path | None = None
+    applied_sfx: list[dict[str, Any]] | None = None
+    if artifacts.sfx_plan is not None or sfx_plan is not None:
+        effective_plan = artifacts.sfx_plan if sfx_plan is None \
+            else sfx_plan
+        speech_from = audio_from
+        applied_sfx = []
+        if effective_plan and audio_from is not None:
+            mix_path = Path(artifacts.work_dir) / \
+                f"sfx-mix-{out_name}.wav"
+            applied_sfx = mix_to_file(
+                audio_from, effective_plan, mix_path)
+            render_audio = mix_path
     renderer(
         frames, src_alphas,
         hook_rgba=hook_rgba, hook_window=hook.window,
         cues=cues, caption_rect=caption_rect,
-        audio_from=audio_from, out_path=out_path,
+        audio_from=render_audio, out_path=out_path,
         fps=artifacts.fps, canvas=artifacts.canvas,
         speaker_scale=speaker_scale, **kwargs,
     )
@@ -548,7 +585,8 @@ def _render_execution(
         render_path=out_path, hook=hook, cues=cues,
         caption_rect=caption_rect, canvas_alphas=canvas_alphas,
         detail=detail, graphics=carried,
-        hook_slide_px_s=slide_speed)
+        hook_slide_px_s=slide_speed,
+        sfx_events=applied_sfx, speech_audio_from=speech_from)
 
 
 def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
@@ -628,12 +666,19 @@ def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
         artifacts.graphics,
         lambda t: map_time(t, is_end=False),
         lambda t: map_time(t, is_end=True))
+    # SFX follow the graphics through the retime: the plan is
+    # re-derived from the retimed specs, so a graphic the trim
+    # annihilated takes its sounds with it.
+    retimed_sfx = plan_sfx(retimed_graphics) \
+        if artifacts.sfx_plan is not None \
+        and retimed_graphics is not None else None
     return _render_execution(
         artifacts, frames=frames, src_alphas=src_alphas,
         canvas_alphas=canvas_alphas, hook=hook, cues=cues,
         caption_rect=layout.rect, audio_from=audio_path,
         out_name="draft2-trim-silence.mp4", detail=detail,
-        renderer=renderer, graphics=retimed_graphics)
+        renderer=renderer, graphics=retimed_graphics,
+        sfx_plan=retimed_sfx)
 
 
 def _decode_samples(media_path: str | Path) -> np.ndarray:
@@ -999,6 +1044,10 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
         drop = set(range(len(artifacts.graphics)))
     kept = [g for i, g in enumerate(artifacts.graphics)
             if i not in drop]
+    # A dropped graphic's sounds drop with it: the SFX plan is
+    # re-derived from the kept list.
+    kept_sfx = plan_sfx(kept) if artifacts.sfx_plan is not None \
+        else None
     return _render_execution(
         artifacts, frames=artifacts.frames,
         src_alphas=artifacts.src_alphas,
@@ -1008,7 +1057,7 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
         out_name="draft2-drop-graphics.mp4",
         detail=(f"dropped graphic indices {sorted(drop)} of "
                 f"{len(artifacts.graphics)}; {len(kept)} kept"),
-        renderer=renderer, graphics=kept)
+        renderer=renderer, graphics=kept, sfx_plan=kept_sfx)
 
 
 _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {

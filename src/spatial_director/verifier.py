@@ -60,6 +60,14 @@ disagree is reconciled in the BUILDLOG and in layout_law):
   may appear from 0s and back-to-back - there is no hook-window
   ban and no minimum gap. No count cap: the semantic bar limits
   the number, F8 certifies what was placed.
+- Block 2 (2026-10-31): F8 additionally certifies path motions
+  (a travelling graphic is pixel-matched DURING its travel, and
+  its zone legs measure the swept path union), backdrop spans
+  (present only inside their declared span), and declared SFX
+  (an effect landing in a speech gap must measurably lift the
+  mix over the stem). F5 measures dead air on the pre-mix speech
+  stem whenever the shipped audio carries mixed SFX, so an
+  effect can never mask a gap.
 
 Written fresh in-repo on 2026-10-29.
 """
@@ -131,6 +139,13 @@ GRAPHIC_ABSENT_MATCH_MAX = 0.5  # out-of-span: above this = present
 GRAPHIC_SPAN_TOLERANCE_S = 0.5  # presence window vs declared span
 GRAPHIC_PIXEL_TOL = 28          # per-channel abs diff counting as same
 GRAPHIC_MIN_VISIBLE_PX = 50     # below this a sample is unmeasurable
+
+# F8 SFX leg (block 2): an effect declared at an instant where the
+# speech stem is at/below the floor must lift the shipped mix's
+# energy at that instant by at least this much - otherwise the
+# effect the receipt declares is not in the render.
+SFX_GAP_FLOOR_DB = -50.0
+SFX_GAP_LIFT_MIN_DB = 6.0
 
 _STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "in", "is", "it",
@@ -238,6 +253,18 @@ class VerifyInputs:
     # original F1-F7 shape). A list (possibly empty) = the layer
     # was enabled and these specs are what should be on the render.
     graphics: Sequence[GraphicSpec] | None = None
+    # Speech stem (block 2, 2026-10-31): the render's PRE-MIX
+    # speech audio profile. When the shipped audio carries mixed
+    # SFX, F5's dead-air measurement MUST read this stem, never
+    # the mix - an effect filling a gap must not mask dead air.
+    # None = the render's audio IS the speech (historic behaviour,
+    # measurement identical).
+    speech_audio: EnergyProfile | None = None
+    # Applied SFX declarations for this render (timestamp, recipe,
+    # gain, graphic index) as mixed - present only when the
+    # graphics layer's SFX were in play. F8 checks gap-landing
+    # effects are measurably present in the mix.
+    sfx: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -274,6 +301,9 @@ class Receipt:
     # source quote or prompt, cost) - present only on renders the
     # graphics layer was part of; None keeps the historic shape.
     graphics: list[dict[str, Any]] | None = None
+    # Applied SFX declarations (block 2) - present only on renders
+    # whose shipped audio mixes the graphics layer's effects.
+    sfx: list[dict[str, Any]] | None = None
 
     @property
     def failed(self) -> list[str]:
@@ -294,6 +324,8 @@ class Receipt:
         }
         if self.graphics is not None:
             out["graphics"] = self.graphics
+        if self.sfx is not None:
+            out["sfx"] = self.sfx
         return out
 
     def to_json(self) -> str:
@@ -356,6 +388,13 @@ def _speech_span(profile: EnergyProfile):
         return None, None, None
     gaps = [segs[i + 1][0] - segs[i][1] for i in range(len(segs) - 1)]
     return segs[0][0], segs[-1][1], (max(gaps) if gaps else 0.0)
+
+
+def _profile_db_at(profile: EnergyProfile, t_s: float) -> float:
+    """The profile's dB of the hop containing ``t_s``."""
+    idx = int(np.searchsorted(profile.times, t_s, side="right")) - 1
+    idx = min(max(idx, 0), len(profile.db) - 1)
+    return float(profile.db[idx])
 
 
 def _content_words(text: str) -> list[str]:
@@ -580,7 +619,43 @@ def _check_graphics(inputs: VerifyInputs,
                     "earlier_index": earlier, "later_index": later,
                     "overlap_px": int(ox * oy),
                 })
-    passed = not offending and not collision_violations
+    # SFX leg (block 2): every declared effect that lands where
+    # the speech stem is silent must be measurably present in the
+    # shipped mix - the mix's energy at the event instant must
+    # clear the stem's by SFX_GAP_LIFT_MIN_DB. Effects under
+    # speech are ducked below it by construction; they are
+    # declared on the receipt but not separately measurable, so
+    # they are counted, never failed. Without a stem there is
+    # nothing honest to measure against: the leg records that
+    # and does not fail (the pipeline always supplies the stem
+    # when SFX are in play).
+    sfx_measured: dict[str, Any] | None = None
+    sfx_violations: list[dict[str, Any]] = []
+    if inputs.sfx is not None:
+        gap_checked = 0
+        if inputs.speech_audio is not None:
+            for ev in inputs.sfx:
+                t_ev = float(ev.get("t_s", 0.0))
+                stem_db = _profile_db_at(inputs.speech_audio, t_ev)
+                if stem_db > SFX_GAP_FLOOR_DB:
+                    continue  # under speech: masked by design
+                gap_checked += 1
+                mix_db = _profile_db_at(inputs.audio, t_ev)
+                if mix_db < stem_db + SFX_GAP_LIFT_MIN_DB:
+                    sfx_violations.append({
+                        "t_s": round(t_ev, 3),
+                        "recipe": ev.get("recipe"),
+                        "stem_db": round(stem_db, 2),
+                        "mix_db": round(mix_db, 2),
+                    })
+        sfx_measured = {
+            "declared": len(inputs.sfx),
+            "gap_events_checked": gap_checked,
+            "stem_supplied": inputs.speech_audio is not None,
+            "violations": sfx_violations,
+        }
+    passed = not offending and not collision_violations \
+        and not sfx_violations
     return CheckResult(
         check_id="F8", name="context graphics integrity",
         passed=passed,
@@ -589,6 +664,7 @@ def _check_graphics(inputs: VerifyInputs,
             "graphics": per_graphic,
             "offending_indices": offending,
             "collision_violations": collision_violations,
+            "sfx": sfx_measured,
             "duration_s": round(duration, 3),
         },
         threshold={
@@ -600,6 +676,8 @@ def _check_graphics(inputs: VerifyInputs,
             "presence_match_min": GRAPHIC_MATCH_MIN,
             "absence_match_max": GRAPHIC_ABSENT_MATCH_MAX,
             "span_tolerance_s": GRAPHIC_SPAN_TOLERANCE_S,
+            "sfx_gap_lift_min_db": SFX_GAP_LIFT_MIN_DB,
+            "sfx_gap_floor_db": SFX_GAP_FLOOR_DB,
         },
         note=("the count is uncapped by design and the timing is "
               "free (2026-10-31 ruling, reversing 2026-10-30): "
@@ -837,12 +915,24 @@ def verify(inputs: VerifyInputs, *,
     ))
 
     # ---- F5: dead air / mute comprehension ---------------------------
-    _, _, max_gap = _speech_span(inputs.audio)
+    # Dead air is a property of the SPEECH. When the shipped audio
+    # mixes SFX over a speech stem (block 2), F5 measures the STEM
+    # (inputs.speech_audio), never the mix: an effect landing in a
+    # gap must not make the gap disappear from the measurement.
+    # Without a stem, the render's own profile is the speech and
+    # the measurement is exactly the historic one. Thresholds are
+    # unchanged either way.
+    if inputs.speech_audio is not None:
+        f5_onset, f5_offset, max_gap = _speech_span(inputs.speech_audio)
+    else:
+        f5_onset, f5_offset = onset, offset
+        _, _, max_gap = _speech_span(inputs.audio)
     speech_span = None
     coverage = 0.0
-    if onset is not None and offset is not None:
-        speech_span = offset - onset
-        covered = sum(max(0.0, min(c.end_s, offset) - max(c.start_s, onset))
+    if f5_onset is not None and f5_offset is not None:
+        speech_span = f5_offset - f5_onset
+        covered = sum(max(0.0, min(c.end_s, f5_offset)
+                          - max(c.start_s, f5_onset))
                       for c in inputs.cues)
         coverage = round(covered / speech_span, 3) if speech_span > 0 else 0.0
     captions_present = bool(inputs.cues) and coverage >= CAPTION_COVERAGE_MIN
@@ -865,18 +955,20 @@ def verify(inputs: VerifyInputs, *,
     can_summarize = bool(judgment and judgment.can_summarize)
     f5_pass = bool(
         max_gap is not None and max_gap <= MAX_WORD_GAP_S
-        and onset is not None and onset <= SPEECH_ONSET_DEADLINE_S
+        and f5_onset is not None and f5_onset <= SPEECH_ONSET_DEADLINE_S
         and captions_present and can_summarize
     )
     checks.append(CheckResult(
         check_id="F5", name="dead air / mute comprehension", passed=f5_pass,
         measured={
             "max_silence_gap_s": None if max_gap is None else round(max_gap, 3),
-            "first_speech_onset_s": None if onset is None else round(onset, 3),
+            "first_speech_onset_s": None if f5_onset is None else round(f5_onset, 3),
             "captions_present": bool(inputs.cues),
             "caption_coverage_of_speech": coverage,
             "wonder_can_summarize_muted_hook": can_summarize,
             "wonder_summary": judgment.summary if judgment else None,
+            "measured_on": ("speech_stem" if inputs.speech_audio
+                            is not None else "render_audio"),
         },
         threshold={
             "max_silence_gap_max_s": MAX_WORD_GAP_S,
@@ -976,6 +1068,7 @@ def verify(inputs: VerifyInputs, *,
         checks=checks,
         meta_calls=meta_calls,
         graphics=graphics_section,
+        sfx=inputs.sfx,
         inputs_sha256={
             "video": _sha256_file(inputs.video_path)
             if Path(inputs.video_path).exists() else None,
