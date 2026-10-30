@@ -26,9 +26,11 @@ from spatial_director.layout_law import (  # noqa: E402
     to_canvas_alpha,
 )
 from spatial_director.rescue_loop import (  # noqa: E402
+    ENGAGE_HOOK_SLIDE,
     REFRAME_SPEAKER,
     REPAIR_MENU,
     RenderArtifacts,
+    _exec_engage_hook_slide,
     rescue,
 )
 from spatial_director.verifier import (  # noqa: E402
@@ -248,9 +250,79 @@ class MenuEnforcementTests(unittest.TestCase):
         self.assertEqual(REPAIR_MENU["REFIT_HOOK_INK"].target_checks, ("F3",))
         self.assertEqual(REPAIR_MENU["RESCALE_SPEAKER"].target_checks, ("F4",))
         self.assertEqual(REPAIR_MENU["REGENERATE_HOOK_TEXT"].target_checks,
-                         ("F1", "F6", "F7"))
+                         ("F1", "F6"))
         self.assertEqual(REPAIR_MENU["DROP_GRAPHICS"].target_checks,
                          ("F8",))
+        # Defect B (2026-10-30): text cannot fix a motion failure;
+        # F7 belongs to the slide repair alone.
+        self.assertEqual(REPAIR_MENU[ENGAGE_HOOK_SLIDE].target_checks,
+                         ("F7",))
+
+
+class SlideRenderer(FakeRenderer):
+    """FakeRenderer that also records the hook_slide kwarg."""
+
+    def __call__(self, frames, src_alphas, *, hook_slide=None, **kwargs):
+        self.hook_slide_seen = hook_slide
+        return super().__call__(frames, src_alphas, **kwargs)
+
+
+class EngageHookSlideTests(unittest.TestCase):
+    """Defect B (2026-10-30 Holmes graphics run, short-2): a
+    genuinely static window failed F7 alone and the text repair
+    left every F7 measurement identical. The slide repair must
+    produce designed motion by construction, at 200 px/s."""
+
+    def test_slide_uses_room_and_reports_200_px_s(self):
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            renderer = SlideRenderer()
+            execution = _exec_engage_hook_slide(
+                artifacts, make_receipt(("F7",)), renderer)
+            dx, duration = execution.hook.slide
+            self.assertEqual(execution.hook_slide_px_s, 200.0)
+            self.assertEqual(renderer.hook_slide_seen, (dx, duration))
+            self.assertAlmostEqual(abs(dx) / duration, 200.0)
+            self.assertLessEqual(abs(dx), 240.0)
+            self.assertEqual(execution.hook.text,
+                             artifacts.hook.text)
+            self.assertIn("200 px/s", execution.detail)
+
+    def test_slide_direction_follows_the_roomier_side(self):
+        # A hook whose glyphs hug the left edge must slide in
+        # from the right (positive dx); the executor reads the
+        # glyph bbox, not a fixed direction.
+        with tempfile.TemporaryDirectory() as td:
+            hook = HookSpec("THE BAND NEVER REHEARSES", (0.0, 6.0),
+                            0.30, layout_rendered=True)
+            _mask, bbox = hook.glyph()
+            artifacts = make_artifacts(Path(td), hook=hook)
+            execution = _exec_engage_hook_slide(
+                artifacts, make_receipt(("F7",)), SlideRenderer())
+            dx, _duration = execution.hook.slide
+            left_room, right_room = bbox[0], 1080 - bbox[2]
+            if left_room >= right_room:
+                self.assertLess(dx, 0)
+            else:
+                self.assertGreater(dx, 0)
+
+    def test_slide_repair_flows_through_rescue_loop(self):
+        # Model picks ENGAGE_HOOK_SLIDE for an F7-only failure;
+        # the loop executes it and the execution carries the
+        # slide speed for the re-verify.
+        with tempfile.TemporaryDirectory() as td:
+            artifacts = make_artifacts(Path(td))
+            spark = FakeSpark([
+                '{"repair": "ENGAGE_HOOK_SLIDE", '
+                '"reason": "static opening needs designed motion"}',
+            ])
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(make_receipt(("F7",)), artifacts,
+                           spark=spark, verify_fn=verify,
+                           renderer=SlideRenderer(), ts="2026-10-30")
+            self.assertEqual(chain.repair.menu_id, ENGAGE_HOOK_SLIDE)
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(verify.executions[0].hook_slide_px_s, 200.0)
 
 
 class TrimSilenceTests(unittest.TestCase):

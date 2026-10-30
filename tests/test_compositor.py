@@ -23,10 +23,12 @@ from spatial_director.compositor import (  # noqa: E402
     graphic_alpha_scale,
     graphics_layer_at,
     hook_layer,
+    hook_slide_dx_at,
     hook_visible_at,
     make_backdrop,
     render_composite_video,
     separation_at,
+    shift_layer_x,
     speaker_layer,
     treated_background_layer,
     xray_frame,
@@ -287,6 +289,36 @@ class VideoRenderTests(unittest.TestCase):
                 capture_output=True, text=True, check=True)
             self.assertIn("h264", probe.stdout)
             self.assertIn("270,480", probe.stdout)
+
+
+class HookSlideTests(unittest.TestCase):
+    """F7 slide repair (2026-10-30): the shift helpers the
+    repair and the verifier share, so render and measurement
+    can never disagree about where the glyphs are."""
+
+    def test_shift_never_wraps(self):
+        layer = np.zeros((4, 10, 4), dtype=np.uint8)
+        layer[:, 2:5] = 255
+        right = shift_layer_x(layer, 3)
+        self.assertTrue((right[:, 5:8] == 255).all())
+        self.assertTrue((right[:, :5] == 0).all())
+        left = shift_layer_x(layer, -3)
+        # Original cols 2-4 move to -1,0,1: col -1 clips, 0-1 stay.
+        self.assertTrue((left[:, :2] == 255).all())
+        self.assertTrue((left[:, 2:] == 0).all())
+        # Columns shifted off the edge are gone, not wrapped.
+        self.assertEqual(int(left[:, -1].sum()), 0)
+        self.assertTrue((shift_layer_x(layer, 0) == layer).all())
+
+    def test_slide_offset_eases_to_zero(self):
+        slide = (-240.0, 1.2)
+        window = (0.0, 6.0)
+        self.assertEqual(hook_slide_dx_at(0.0, window, slide), -240.0)
+        self.assertAlmostEqual(hook_slide_dx_at(0.6, window, slide),
+                               -120.0)
+        self.assertEqual(hook_slide_dx_at(1.2, window, slide), 0.0)
+        self.assertEqual(hook_slide_dx_at(3.0, window, slide), 0.0)
+        self.assertEqual(hook_slide_dx_at(0.5, window, None), 0.0)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ from pathlib import Path  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from spatial_director.caption_align import CaptionCue  # noqa: E402
+from spatial_director.spark_client import SparkClientError  # noqa: E402
 from spatial_director.graphics_layer import (  # noqa: E402
     GraphicSpan,
     build_graphics,
@@ -182,6 +183,67 @@ class PlanGraphicsTests(unittest.TestCase):
         self.assertEqual(len(outcome.spans), 1)
         self.assertEqual(outcome.spark_call["purpose"], "graphics-planner")
         self.assertEqual(outcome.spark_call["cost_usd"], 0.004)
+
+
+class BudgetFakeSpark:
+    """Scripted Spark that records the max_tokens of every call."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def chat(self, messages, *, max_tokens=1500, purpose="", ts=""):
+        self.calls.append({"max_tokens": max_tokens, "purpose": purpose})
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return FakeChatResult(reply)
+
+
+class PlannerRetryTests(unittest.TestCase):
+    """Defect A (2026-10-30 Holmes graphics run): the planner
+    starved at 4000 tokens on pipeline cue lists. Base budget is
+    now 8000 with ONE retry at a doubled budget (cap 16000)."""
+
+    def _cues(self):
+        return [CaptionCue("one million dollars apart per year",
+                           4.0, 7.0)]
+
+    def test_base_budget_is_8000(self):
+        spark = BudgetFakeSpark([json.dumps(span_json())])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(len(outcome.spans), 1)
+        self.assertEqual(spark.calls[0]["max_tokens"], 8000)
+
+    def test_empty_reply_retried_once_at_doubled_budget(self):
+        spark = BudgetFakeSpark([
+            SparkClientError(
+                "empty chat reply: the token budget was consumed "
+                "by reasoning; raise max_tokens"),
+            json.dumps(span_json())])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(len(outcome.spans), 1)
+        self.assertEqual(
+            [c["max_tokens"] for c in spark.calls], [8000, 16000])
+        self.assertTrue(outcome.spark_call["empty_first_attempt"])
+        self.assertIsNone(outcome.error)
+
+    def test_double_empty_degrades_gracefully(self):
+        err = SparkClientError(
+            "empty chat reply: the token budget was consumed "
+            "by reasoning; raise max_tokens")
+        spark = BudgetFakeSpark([err, SparkClientError(str(err))])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(outcome.spans, [])
+        self.assertIn("empty chat reply", outcome.error)
+        self.assertEqual(len(spark.calls), 2)
+
+    def test_non_empty_failure_is_not_retried(self):
+        spark = BudgetFakeSpark([RuntimeError("HTTP 500")])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(outcome.spans, [])
+        self.assertIn("planner call failed", outcome.error)
+        self.assertEqual(len(spark.calls), 1)
 
 
 # ---------------------------------------------------------------- cards

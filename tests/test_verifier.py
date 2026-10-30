@@ -205,6 +205,58 @@ class VerifierFailTests(unittest.TestCase):
         self.assertFalse(f7.passed)
         self.assertAlmostEqual(f7.measured["mean_mask_iou_0_3s"], 1.0)
 
+    def test_hook_slide_passes_f7_on_static_opening(self):
+        # Defect B (2026-10-30): a genuinely static window fails
+        # F7 on all three measurements; the slide repair's
+        # designed motion must pass it, at the speed the render
+        # actually carries - not via a text change.
+        hook = HookSpec("HE NEVER REHEARSES", (0.0, 3.0), 0.30,
+                        layout_rendered=True, slide=(-240.0, 1.2))
+        inputs = good_inputs(self.video,
+                             canvas_alphas=speaker(x_shift=0),
+                             hook=hook)
+        receipt = verify(inputs, wonder=FakeWonder())
+        f7 = check(receipt, "F7")
+        self.assertTrue(f7.passed)
+        self.assertEqual(f7.measured["hook_slide_px_s"], 200.0)
+        self.assertAlmostEqual(f7.measured["mean_mask_iou_0_3s"], 1.0)
+
+    def test_glyph_at_follows_the_slide(self):
+        from spatial_director.compositor import shift_layer_x
+        hook = HookSpec("HE NEVER REHEARSES", (0.0, 3.0), 0.30,
+                        layout_rendered=True, slide=(-240.0, 1.2))
+        static_mask, static_bbox = hook.glyph()
+        at_start, _ = hook.glyph_at(0.0)
+        at_end, end_bbox = hook.glyph_at(1.2)
+        self.assertTrue((at_end == static_mask).all())
+        self.assertEqual(end_bbox, static_bbox)
+        # At t=0 the glyphs sit exactly the renderer's shift
+        # function left of final (edge clipping included); the
+        # mask differs from static.
+        self.assertTrue(
+            (at_start == shift_layer_x(static_mask, -240)).all())
+        self.assertFalse((at_start == static_mask).all())
+        self.assertEqual(hook.slide_px_s, 200.0)
+
+    def test_f2_measures_the_slid_glyph_position(self):
+        # Speaker overlapping the hook band: a static hook's
+        # occlusion is the full overlap, but a hook sliding in
+        # from the left spends its opening frames further from
+        # the speaker - F2 must report the smaller slid value,
+        # not the static one.
+        alphas = speaker(top=500, x_shift=0)
+        static_inputs = good_inputs(self.video, canvas_alphas=alphas)
+        slid_hook = HookSpec("HE NEVER REHEARSES", (0.0, 3.0), 0.30,
+                             layout_rendered=True, slide=(-240.0, 1.2))
+        slid_inputs = good_inputs(self.video, canvas_alphas=alphas,
+                                  hook=slid_hook)
+        static_f2 = check(verify(static_inputs, wonder=FakeWonder()),
+                          "F2")
+        slid_f2 = check(verify(slid_inputs, wonder=FakeWonder()), "F2")
+        self.assertLess(
+            slid_f2.measured["glyph_occlusion_mean"],
+            static_f2.measured["glyph_occlusion_mean"])
+
     def test_low_head_margin_fails_f4(self):
         inputs = good_inputs(self.video,
                              canvas_alphas=speaker(top=50, x_shift=0))
