@@ -55,7 +55,9 @@ from .caption_align import CaptionCue, active_segments, load_energy
 from .compositor import (
     DEFAULT_BACKDROP,
     DEFAULT_CANVAS,
+    GraphicEntry,
     composite_frame,
+    graphics_layer_at,
     hook_visible_at,
 )
 from .layout_law import (
@@ -300,12 +302,15 @@ def render_composite_with_captions(
     canvas: tuple[int, int] = DEFAULT_CANVAS,
     speaker_scale: float = 1.0,
     backdrop: str = DEFAULT_BACKDROP,
+    graphics: Sequence[GraphicEntry] | None = None,
 ) -> Path:
     """The shared render path: composite + captions IN FRONT.
 
     Draft 1 (pipeline) and every repair render go through this one
     function, so a repair differs from the draft only in the inputs
-    its executor changed - never in the renderer.
+    its executor changed - never in the renderer. ``graphics`` is
+    the context graphics plane (compositor entries); None renders
+    exactly the pre-graphics stack.
     """
     from .compositor import _encode_video
 
@@ -321,8 +326,10 @@ def render_composite_with_captions(
         for i, (frame, alpha) in enumerate(zip(frames, src_alphas)):
             t = i / fps
             hook = hook_rgba if hook_visible_at(t, hook_window) else None
+            plane = graphics_layer_at(graphics, t, canvas) \
+                if graphics else None
             out = composite_frame(frame, alpha, hook, canvas,
-                                  backdrop=backdrop)
+                                  backdrop=backdrop, graphics_rgba=plane)
             for j, cue in enumerate(cues):
                 if cue.start_s <= t < cue.end_s:
                     cap = cue_layers[j].astype(np.float64)

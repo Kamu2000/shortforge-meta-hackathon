@@ -11,11 +11,16 @@ The Director's signature frame, back to front:
    near-black brand gradient as a selectable alternative and the
    naive scale-blur kept for comparison. See ``background_layer``
    and the 2026-10-29 BUILDLOG entry for the ghost-test numbers.
-2. **Middle** - the hook text, rendered programmatically (Pillow)
+2. **Graphics plane** (optional, flag-gated, 2026-10-30) - the
+   context graphics layer's timed cards/images, sitting on the
+   backdrop and under everything else: they are occluded by the
+   hook and the speaker exactly like the backdrop is. See
+   ``graphics_layer_at``.
+3. **Middle** - the hook text, rendered programmatically (Pillow)
    and positioned BEHIND the speaker. This layer is the whole point:
    the speaker occludes the words, which is the depth effect editors
    build by hand in After Effects.
-3. **Front** - the speaker cutout, composited with the finished
+4. **Front** - the speaker cutout, composited with the finished
    alpha from ``mask_decode`` (SAM -> primary selection -> temporal
    smoothing -> matte refinement).
 
@@ -276,9 +281,19 @@ def composite_from_layers(
     hook_rgba: np.ndarray | None,
     fg_rgb: np.ndarray,
     alpha: np.ndarray,
+    graphics_rgba: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Blend the three canvas-sized layers: back, hook, speaker."""
+    """Blend the canvas-sized layers: back, graphics, hook, speaker.
+
+    ``graphics_rgba`` (the context graphics plane) is optional and
+    defaults to None - with it absent the blend is byte-for-byte
+    the original three-layer stack.
+    """
     out = bg_rgb.astype(np.float64)
+    if graphics_rgba is not None:
+        ga = graphics_rgba[..., 3:4].astype(np.float64) / 255.0
+        out = graphics_rgba[..., :3].astype(np.float64) * ga \
+            + out * (1.0 - ga)
     if hook_rgba is not None:
         ha = hook_rgba[..., 3:4].astype(np.float64) / 255.0
         out = hook_rgba[..., :3].astype(np.float64) * ha + out * (1.0 - ha)
@@ -295,12 +310,14 @@ def composite_frame(
     *,
     blur_radius: int = DEFAULT_BLUR_RADIUS,
     backdrop: str = DEFAULT_BACKDROP,
+    graphics_rgba: np.ndarray | None = None,
 ) -> np.ndarray:
     """One composited frame from a source frame + finished alpha."""
     bg = make_backdrop(frame_rgb, canvas, backdrop=backdrop,
                        blur_radius=blur_radius)
     fg, a = speaker_layer(frame_rgb, alpha, canvas)
-    return composite_from_layers(bg, hook_rgba, fg, a)
+    return composite_from_layers(bg, hook_rgba, fg, a,
+                                 graphics_rgba=graphics_rgba)
 
 
 def hook_visible_at(t_s: float, window: tuple[float, float] | None) -> bool:
@@ -308,6 +325,74 @@ def hook_visible_at(t_s: float, window: tuple[float, float] | None) -> bool:
     if window is None:
         return False
     return window[0] <= t_s < window[1]
+
+
+# ---------------------------------------------------------------- graphics
+
+GRAPHIC_FADE_S = 0.2  # fade in/out ceiling for context graphics
+
+# One graphics entry: (layer provider, start_s, end_s). The provider
+# is either a canvas-sized RGBA array (a static graphic) or a
+# callable t_s -> RGBA (an animated graphic - graphics_layer's
+# GraphicSpec.layer_at). The compositor treats providers as opaque:
+# it owns WHEN a graphic is on the backdrop plane (window + fade),
+# the graphics layer owns WHAT it looks like at that instant.
+GraphicEntry = tuple[object, float, float]
+
+
+def graphic_alpha_scale(t_s: float, start_s: float, end_s: float,
+                        fade_s: float = GRAPHIC_FADE_S) -> float:
+    """A graphic's opacity envelope: 0 outside [start, end), ramping
+    linearly over ``fade_s`` at both edges, 1 in between."""
+    if t_s < start_s or t_s >= end_s:
+        return 0.0
+    if fade_s <= 0:
+        return 1.0
+    scale = 1.0
+    if t_s < start_s + fade_s:
+        scale = min(scale, (t_s - start_s) / fade_s)
+    if t_s > end_s - fade_s:
+        scale = min(scale, (end_s - t_s) / fade_s)
+    return min(1.0, max(0.0, scale))
+
+
+def graphics_layer_at(entries: Sequence[GraphicEntry] | None,
+                      t_s: float,
+                      canvas: tuple[int, int] = DEFAULT_CANVAS,
+                      ) -> np.ndarray | None:
+    """The combined graphics plane at time ``t_s``, or None.
+
+    Entries are alpha-composited in order over a transparent canvas
+    with the fade envelope applied. Graphics are placed so they
+    never overlap (graphics_layer's placement law), so the order
+    only matters for the fade edges. None when no entry is active -
+    callers then composite exactly the pre-graphics stack.
+    """
+    if not entries:
+        return None
+    acc: np.ndarray | None = None
+    for provider, start_s, end_s in entries:
+        scale = graphic_alpha_scale(t_s, float(start_s), float(end_s))
+        if scale <= 0.0:
+            continue
+        layer = provider(t_s) if callable(provider) else provider
+        rgba = np.asarray(layer, dtype=np.float64)
+        if scale < 1.0:
+            rgba = rgba.copy()
+            rgba[..., 3] *= scale
+        if acc is None:
+            acc = rgba
+            continue
+        a = rgba[..., 3:4] / 255.0
+        acc_a = acc[..., 3:4] / 255.0
+        out_a = a + acc_a * (1.0 - a)
+        safe = np.maximum(out_a, 1e-9)
+        rgb = (rgba[..., :3] * a + acc[..., :3] * acc_a * (1.0 - a)) / safe
+        acc = np.concatenate(
+            [np.where(out_a > 0, rgb, 0.0), out_a * 255.0], axis=2)
+    if acc is None:
+        return None
+    return np.clip(acc, 0, 255).astype(np.uint8)
 
 
 # ---------------------------------------------------------------- xray
@@ -438,23 +523,29 @@ def render_composite_video(
     audio_from: str | Path | None = None,
     blur_radius: int = DEFAULT_BLUR_RADIUS,
     backdrop: str = DEFAULT_BACKDROP,
+    graphics: Sequence[GraphicEntry] | None = None,
 ) -> None:
     """Render the composite over a whole clip.
 
     ``source_frames`` / ``alphas`` are source-resolution and aligned
     1:1. The hook layer (pre-rendered once - the text is static)
-    appears only inside ``hook_window`` seconds.
+    appears only inside ``hook_window`` seconds. ``graphics`` (the
+    context graphics plane) defaults to None: no graphics entries,
+    the original stack, byte-identical output.
     """
     if len(source_frames) != len(alphas):
         raise ValueError("source_frames and alphas must align 1:1")
 
     def gen() -> Iterator[np.ndarray]:
         for i, (frame, alpha) in enumerate(zip(source_frames, alphas)):
-            hook = hook_rgba if hook_visible_at(i / fps, hook_window) \
+            t = i / fps
+            hook = hook_rgba if hook_visible_at(t, hook_window) \
                 else None
+            plane = graphics_layer_at(graphics, t, canvas) \
+                if graphics else None
             yield composite_frame(
                 frame, alpha, hook, canvas, blur_radius=blur_radius,
-                backdrop=backdrop)
+                backdrop=backdrop, graphics_rgba=plane)
 
     _encode_video(gen(), out_path, fps=fps, canvas=canvas,
                   audio_from=audio_from)

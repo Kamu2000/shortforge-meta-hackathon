@@ -20,6 +20,8 @@ from spatial_director.compositor import (  # noqa: E402
     background_layer,
     brand_background_layer,
     composite_frame,
+    graphic_alpha_scale,
+    graphics_layer_at,
     hook_layer,
     hook_visible_at,
     make_backdrop,
@@ -84,6 +86,67 @@ class LayerOrderTests(unittest.TestCase):
             backdrop="naive")
         px = out[400, 230].astype(int)
         self.assertGreater(px[2], 120)  # blurred blue background
+
+
+class GraphicsPlaneTests(unittest.TestCase):
+    """The context graphics plane: under the hook and the speaker,
+    over the backdrop, present only inside its window + fades."""
+
+    def _magenta(self):
+        layer = np.zeros((CANVAS[1], CANVAS[0], 4), dtype=np.uint8)
+        layer[..., 0] = 220
+        layer[..., 2] = 180
+        layer[..., 3] = 255
+        return layer
+
+    def test_fade_envelope(self):
+        self.assertEqual(graphic_alpha_scale(1.9, 2.0, 6.0), 0.0)
+        self.assertEqual(graphic_alpha_scale(2.0, 2.0, 6.0), 0.0)
+        self.assertAlmostEqual(graphic_alpha_scale(2.1, 2.0, 6.0), 0.5)
+        self.assertEqual(graphic_alpha_scale(4.0, 2.0, 6.0), 1.0)
+        self.assertAlmostEqual(graphic_alpha_scale(5.9, 2.0, 6.0), 0.5)
+        self.assertEqual(graphic_alpha_scale(6.0, 2.0, 6.0), 0.0)
+
+    def test_layer_at_window_and_callable_provider(self):
+        calls = []
+
+        def provider(t):
+            calls.append(t)
+            return self._magenta()
+
+        entries = [(provider, 2.0, 6.0)]
+        self.assertIsNone(graphics_layer_at(entries, 1.0, CANVAS))
+        self.assertEqual(calls, [])  # provider not consulted outside
+        plane = graphics_layer_at(entries, 4.0, CANVAS)
+        self.assertIsNotNone(plane)
+        self.assertEqual(int(plane[100, 100, 0]), 220)
+        self.assertEqual(calls, [4.0])
+
+    def test_no_entries_is_none(self):
+        self.assertIsNone(graphics_layer_at(None, 1.0, CANVAS))
+        self.assertIsNone(graphics_layer_at([], 1.0, CANVAS))
+
+    def test_graphics_under_hook_and_speaker(self):
+        frame, alpha = source_frame(), speaker_alpha()
+        hook = np.zeros((CANVAS[1], CANVAS[0], 4), dtype=np.uint8)
+        hook[..., 1] = 190
+        hook[..., 3] = 255
+        out = composite_frame(frame, alpha, hook, CANVAS, blur_radius=4,
+                              graphics_rgba=self._magenta())
+        # Right side, no speaker: the hook (green) covers the graphic.
+        px = out[400, 230].astype(int)
+        self.assertGreater(px[1], 150)
+        self.assertLess(px[0], 90)
+        # Without the hook, the graphic covers the backdrop there.
+        out2 = composite_frame(frame, alpha, None, CANVAS,
+                               blur_radius=4,
+                               graphics_rgba=self._magenta())
+        px2 = out2[400, 230].astype(int)
+        self.assertGreater(px2[0], 150)  # magenta over blurred blue
+        # Speaker side: the speaker covers the graphic everywhere.
+        px3 = out2[400, 40].astype(int)
+        self.assertGreater(px3[0], 150)
+        self.assertLess(px3[2], 90)  # speaker red, not magenta's blue
 
 
 class BackdropTests(unittest.TestCase):
