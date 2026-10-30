@@ -20,6 +20,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from spatial_director.caption_align import CaptionCue  # noqa: E402
+from spatial_director.graphics_layer import GraphicSpec  # noqa: E402
 from spatial_director.layout_law import (  # noqa: E402
     frame_geometry,
     to_canvas_alpha,
@@ -85,6 +86,15 @@ class FakeRenderer:
         })
         Path(out_path).write_bytes(b"fake-render")
         return Path(out_path)
+
+
+class GraphicsRenderer(FakeRenderer):
+    """Accepts the graphics kwarg the shared render path passes
+    when a render carries graphics, and records the entries."""
+
+    def __call__(self, frames, src_alphas, *, graphics=None, **kwargs):
+        self.graphics_seen = graphics
+        return super().__call__(frames, src_alphas, **kwargs)
 
 
 class FakeVerify:
@@ -239,6 +249,8 @@ class MenuEnforcementTests(unittest.TestCase):
         self.assertEqual(REPAIR_MENU["RESCALE_SPEAKER"].target_checks, ("F4",))
         self.assertEqual(REPAIR_MENU["REGENERATE_HOOK_TEXT"].target_checks,
                          ("F1", "F6", "F7"))
+        self.assertEqual(REPAIR_MENU["DROP_GRAPHICS"].target_checks,
+                         ("F8",))
 
 
 class TrimSilenceTests(unittest.TestCase):
@@ -504,6 +516,98 @@ class ReframeSpeakerRepairTests(unittest.TestCase):
             self.assertEqual(chain.final_verdict, "FAIL")
             self.assertEqual(chain.repair.status, "not_applicable")
             self.assertEqual(verify.executions, [])
+
+
+# ---------------------------------------------------------------- graphics
+
+
+def _spec(start, end, headline="CARD"):
+    return GraphicSpec(
+        kind="card", start_s=start, end_s=end, box=(0, 0, 10, 10),
+        layer_rgba=np.zeros((1920, 1080, 4), dtype=np.uint8),
+        headline=headline)
+
+
+def f8_receipt(measured):
+    receipt = make_receipt(())
+    receipt.checks.append(CheckResult(
+        check_id="F8", name="context graphics integrity", passed=False,
+        measured=measured, threshold={}))
+    receipt.verdict = "FAIL"
+    return receipt
+
+
+class DropGraphicsTests(unittest.TestCase):
+    def _run(self, td, graphics, measured):
+        artifacts = make_artifacts(Path(td))
+        artifacts.graphics = graphics
+        spark = FakeSpark([
+            '{"repair": "DROP_GRAPHICS", "reason": "f8 named it"}'])
+        renderer = GraphicsRenderer()
+        verify = FakeVerify([make_receipt((), draft=2)])
+        chain = rescue(f8_receipt(measured), artifacts, spark=spark,
+                       verify_fn=verify, renderer=renderer,
+                       ts="2026-10-30")
+        return chain, renderer, verify
+
+    def test_drops_exactly_the_offending_graphic(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = [_spec(3.5, 5.5, "A"), _spec(9.5, 11.5, "B"),
+                     _spec(15.5, 17.5, "C")]
+            chain, renderer, verify = self._run(
+                td, specs, {"offending_indices": [1],
+                            "spacing_violations": []})
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(chain.repair.menu_id, "DROP_GRAPHICS")
+            kept = verify.executions[0].graphics
+            self.assertEqual([g.headline for g in kept], ["A", "C"])
+            self.assertEqual(len(renderer.graphics_seen), 2)
+
+    def test_spacing_violation_drops_the_later_graphic(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = [_spec(3.5, 5.5, "A"), _spec(7.0, 9.0, "B")]
+            chain, _r, verify = self._run(
+                td, specs,
+                {"offending_indices": [],
+                 "spacing_violations": [{"earlier_index": 0,
+                                         "later_index": 1,
+                                         "gap_s": 1.5}]})
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(
+                [g.headline for g in verify.executions[0].graphics],
+                ["A"])
+
+    def test_unnamed_offenders_drop_everything(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = [_spec(3.5, 5.5, "A")]
+            chain, _r, verify = self._run(td, specs, {})
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            self.assertEqual(verify.executions[0].graphics, [])
+
+    def test_trim_silence_retimes_and_drops_collapsed_graphics(self):
+        with tempfile.TemporaryDirectory() as td:
+            wav = write_wav(Path(td) / "window.wav",
+                            [(1.0, 0.4), (0.8, 0.0), (1.2, 0.4)])
+            artifacts = make_artifacts(Path(td), window_clip=wav)
+            artifacts.graphics = [
+                _spec(0.2, 0.9, "BEFORE"),     # untouched by the cut
+                _spec(1.2, 1.6, "IN GAP"),     # inside the removal
+                _spec(1.9, 2.6, "AFTER"),      # shifts 0.5s earlier
+            ]
+            spark = FakeSpark([
+                '{"repair": "TRIM_SILENCE", "reason": "gap"}'])
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(
+                make_receipt(("F5",), {"F5": {"max_silence_gap_s": 0.68}}),
+                artifacts, spark=spark, verify_fn=verify,
+                renderer=GraphicsRenderer(), ts="2026-10-30")
+            self.assertEqual(chain.final_verdict, "PASSED_AFTER_REPAIR")
+            kept = verify.executions[0].graphics
+            self.assertEqual([g.headline for g in kept],
+                             ["BEFORE", "AFTER"])
+            after = kept[1]
+            self.assertAlmostEqual(after.start_s, 1.4)
+            self.assertAlmostEqual(after.end_s, 2.1)
 
 
 if __name__ == "__main__":

@@ -64,6 +64,8 @@ from .caption_align import (
     plan_audio_normalisation,
 )
 from .compositor import DEFAULT_CANVAS, read_video_frames, video_fps
+from .graphics_layer import build_graphics
+from .image_client import ImageClient
 from .layout_law import (
     EFFECT_OCCLUSION_BAND,
     apply_speaker_reframe,
@@ -75,7 +77,12 @@ from .layout_law import (
     to_canvas_alpha,
 )
 from .mask_decode import finished_alpha, parse_sam_response
-from .rescue_loop import RenderArtifacts, render_composite_with_captions, rescue
+from .rescue_loop import (
+    RenderArtifacts,
+    graphics_entries,
+    render_composite_with_captions,
+    rescue,
+)
 from .sam_client import API_BASE as META_API_BASE
 from .sam_client import SamClient
 from .spark_client import SparkClient
@@ -451,6 +458,9 @@ class _Clients:
     wonder: WonderClient
     ledger: SpendLedger
     upload_file: Callable[[str | Path], str]
+    # Muse Image, for the context graphics layer only; consulted
+    # solely when a run enables graphics.
+    image: ImageClient | None = None
 
 
 def _transcribe_all(video: Path, work_dir: Path, clients: _Clients,
@@ -506,7 +516,8 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                    video: Path, turns: list[TranscriptTurn],
                    out_dir: Path, clients: _Clients, *, ts: str,
                    canvas: tuple[int, int],
-                   log: Callable[[str], None]) -> dict[str, Any]:
+                   log: Callable[[str], None],
+                   graphics_enabled: bool = False) -> dict[str, Any]:
     ledger = clients.ledger
     cost_before = ledger.total_usd()
     short_dir = out_dir / f"short-{index}"
@@ -638,18 +649,46 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     hook_rgba = render_hook_layer(
         hook_text, canvas, y_center_frac=placement.y_center_frac)
 
+    # Context graphics (flag-gated, default OFF - Kamlesh's
+    # 2026-10-30 feature): planned from the caption phrases against
+    # the reframed geometry, placed on the backdrop plane, and
+    # carried through render, verify (F8) and the rescue artifacts.
+    # Disabled = None everywhere below = the pre-graphics code path.
+    placed_graphics = None
+    graphics_report = None
+    if graphics_enabled:
+        _glyph_mask, glyph_bbox = hook_spec.glyph(canvas)
+        build = build_graphics(
+            cues, canvas_alphas, fps=fps, canvas=canvas,
+            caption_rect=cap_layout.rect,
+            hook_glyph_bbox=glyph_bbox,
+            hook_window=hook_spec.window, duration_s=length,
+            spark=clients.spark, image_client=clients.image, ts=ts,
+            purpose_prefix=f"pipeline-graphics-short{index}")
+        placed_graphics = build.specs
+        graphics_report = build.to_dict()
+        (short_dir / "graphics-plan.json").write_text(
+            json.dumps(graphics_report, indent=2), encoding="utf-8")
+        log(f"short {index}: graphics planned "
+            f"{len(build.specs)} placed, {len(build.dropped)} dropped"
+            f"{' (' + build.error + ')' if build.error else ''}")
+
     # Draft 1 render + verify.
     draft1 = short_dir / "draft-1.mp4"
+    render_kwargs: dict[str, Any] = {}
+    if placed_graphics is not None:
+        render_kwargs["graphics"] = graphics_entries(placed_graphics)
     render_composite_with_captions(
         frames, src_alphas, hook_rgba=hook_rgba,
         hook_window=hook_spec.window, cues=cues,
         caption_rect=cap_layout.rect, audio_from=window_clip,
-        out_path=draft1, fps=fps, canvas=canvas)
+        out_path=draft1, fps=fps, canvas=canvas, **render_kwargs)
     receipt1 = verify(
         VerifyInputs(
             video_path=draft1, fps=fps, canvas_alphas=canvas_alphas,
             audio=load_energy(draft1), hook=hook_spec, cues=cues,
-            caption_rect=cap_layout.rect, sam_response_path=sam_path),
+            caption_rect=cap_layout.rect, sam_response_path=sam_path,
+            graphics=placed_graphics),
         wonder=clients.wonder, draft=1, ts=ts)
     _annotate_effect(receipt1)
     log(f"short {index}: draft 1 verdict {receipt1.verdict} "
@@ -662,7 +701,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         make_canvas_alphas=make_canvas, fps=fps, hook=hook_spec,
         cues=cues, caption_rect=cap_layout.rect,
         sam_response_path=sam_path, transcript_text=excerpt,
-        work_dir=short_dir, canvas=canvas)
+        work_dir=short_dir, canvas=canvas, graphics=placed_graphics)
 
     def verify_fn(execution) -> Any:
         receipt2 = verify(
@@ -672,7 +711,8 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                 audio=load_energy(execution.render_path),
                 hook=execution.hook, cues=execution.cues,
                 caption_rect=execution.caption_rect,
-                sam_response_path=sam_path),
+                sam_response_path=sam_path,
+                graphics=execution.graphics),
             wonder=clients.wonder, draft=2, ts=ts)
         _annotate_effect(receipt2)
         return receipt2
@@ -688,7 +728,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     (short_dir / "receipt.json").write_text(chain.to_json(),
                                             encoding="utf-8")
     cost = round(ledger.total_usd() - cost_before, 4)
-    return {
+    report: dict[str, Any] = {
         "index": index,
         "window": {"start_s": w0, "end_s": w1},
         "candidate": {"score": cand.score, "reason": cand.reason},
@@ -725,6 +765,9 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         "files": {"final": str(final_path),
                   "receipt": str(short_dir / "receipt.json")},
     }
+    if graphics_report is not None:
+        report["graphics"] = graphics_report
+    return report
 
 
 def run_pipeline(video_path: str | Path, out_dir: str | Path, *,
@@ -734,15 +777,21 @@ def run_pipeline(video_path: str | Path, out_dir: str | Path, *,
                  upload_file: Callable[[str | Path], str],
                  ts: str = "", max_shorts: int = 3,
                  canvas: tuple[int, int] = DEFAULT_CANVAS,
-                 log: Callable[[str], None] = print) -> dict[str, Any]:
-    """Run the whole pipeline on one long video; returns the summary."""
+                 log: Callable[[str], None] = print,
+                 image: ImageClient | None = None,
+                 graphics: bool = False) -> dict[str, Any]:
+    """Run the whole pipeline on one long video; returns the summary.
+
+    ``graphics`` (default False) enables the context graphics layer
+    per Short; False runs exactly the pre-graphics pipeline.
+    """
     started = time.monotonic()
     video = Path(video_path)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     clients = _Clients(sam=sam, spark_open=spark_open, spark=spark,
                        vt=vt, wonder=wonder, ledger=ledger,
-                       upload_file=upload_file)
+                       upload_file=upload_file, image=image)
     total_before = ledger.total_usd()
     summary: dict[str, Any] = {
         "source": str(video), "created": ts, "max_shorts": max_shorts,
@@ -778,10 +827,13 @@ def run_pipeline(video_path: str | Path, out_dir: str | Path, *,
             shared_before_sweep - total_before, 4)
         chosen = select_windows(sweep.candidates, duration, max_shorts)
         log(f"selected {len(chosen)} windows")
+        if graphics:
+            summary["graphics_enabled"] = True
         for i, (cand, w0, w1) in enumerate(chosen, start=1):
             summary["shorts"].append(_process_short(
                 i, cand, w0, w1, video, turns, out, clients,
-                ts=ts, canvas=canvas, log=log))
+                ts=ts, canvas=canvas, log=log,
+                graphics_enabled=graphics))
     except Exception as exc:
         summary["error"] = f"{type(exc).__name__}: {exc}"
         summary["door_to_door_s"] = round(time.monotonic() - started, 1)
@@ -842,6 +894,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("video", type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--max-shorts", type=int, default=3)
+    parser.add_argument(
+        "--graphics", action="store_true",
+        help="enable the context graphics layer (timed cards/images "
+             "on the backdrop plane, F8-verified; also enabled by "
+             "GRAPHICS_LAYER=1). Default off.")
     parser.add_argument("--ts", default="2026-10-29")
     parser.add_argument(
         "--ledger", type=Path,
@@ -867,10 +924,14 @@ def main(argv: list[str] | None = None) -> int:
                                  transport=_vt_transport),
         wonder=WonderClient(api_key_provider=meta_key, ledger=ledger,
                             transport=_no_redirect_transport),
+        image=ImageClient(api_key_provider=meta_key, ledger=ledger,
+                          transport=_no_redirect_transport),
         ledger=ledger,
         upload_file=lambda p: upload_media_file(
             p, api_key_provider=meta_key),
-        ts=args.ts, max_shorts=args.max_shorts)
+        ts=args.ts, max_shorts=args.max_shorts,
+        graphics=args.graphics
+        or os.environ.get("GRAPHICS_LAYER") == "1")
     print(json.dumps({
         "shorts": len(summary["shorts"]),
         "verdicts": [s["final_verdict"] for s in summary["shorts"]],

@@ -75,6 +75,7 @@ from .layout_law import (
     plan_speaker_reframe,
     predict_occlusion,
 )
+from .graphics_layer import GraphicSpec
 from .spark_client import SparkClient
 from .verifier import MAX_WORD_GAP_S, HookSpec, Receipt, _content_words
 
@@ -86,6 +87,7 @@ REFIT_HOOK_INK = "REFIT_HOOK_INK"
 RESCALE_SPEAKER = "RESCALE_SPEAKER"
 REGENERATE_HOOK_TEXT = "REGENERATE_HOOK_TEXT"
 REFRAME_SPEAKER = "REFRAME_SPEAKER"
+DROP_GRAPHICS = "DROP_GRAPHICS"
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,13 @@ REPAIR_MENU: dict[str, RepairSpec] = {
         "inside the central band (bottom-edge pad/crop of the "
         "source frame), then re-plan the hook and captions on the "
         "new geometry."),
+    DROP_GRAPHICS: RepairSpec(
+        DROP_GRAPHICS, ("F8",),
+        "Drop the context graphic(s) the F8 check names as "
+        "offending (overlap, hook-window, timing or spacing) and "
+        "re-render from the cached artifacts without them. The "
+        "remaining graphics stay; a spacing violation drops the "
+        "later graphic of each violating pair."),
 }
 
 # Executor constants.
@@ -184,6 +193,10 @@ class RenderArtifacts:
     transcript_text: str = ""        # the moment's transcript (hook regen)
     work_dir: str | Path = "."       # repaired renders land here
     canvas: tuple[int, int] = DEFAULT_CANVAS
+    # Context graphics placed on draft 1 (None = layer not in play;
+    # repairs carry them through, TRIM_SILENCE retimes them,
+    # DROP_GRAPHICS removes the offending ones).
+    graphics: list[GraphicSpec] | None = None
 
 
 @dataclass
@@ -197,6 +210,7 @@ class RepairExecution:
     caption_rect: tuple[int, int, int, int] | None
     canvas_alphas: Sequence[np.ndarray]
     detail: str = ""
+    graphics: list[GraphicSpec] | None = None
 
 
 @dataclass
@@ -477,21 +491,31 @@ def _render_execution(
     detail: str,
     renderer: Callable[..., Path],
     speaker_scale: float = 1.0,
+    graphics: list[GraphicSpec] | None = None,
 ) -> RepairExecution:
     hook_rgba = hook.layer(artifacts.canvas) if hook.text else None
     out_path = Path(artifacts.work_dir) / out_name
+    # Graphics carry through a repair untouched unless the caller
+    # passes ``graphics`` (TRIM_SILENCE passes its retimed list,
+    # DROP_GRAPHICS its kept list). The renderer only sees the
+    # kwarg when a render actually carries graphics, so the
+    # historic call signature is preserved byte-for-byte otherwise.
+    carried = artifacts.graphics if graphics is None else graphics
+    kwargs: dict[str, Any] = {}
+    if carried is not None:
+        kwargs["graphics"] = graphics_entries(carried)
     renderer(
         frames, src_alphas,
         hook_rgba=hook_rgba, hook_window=hook.window,
         cues=cues, caption_rect=caption_rect,
         audio_from=audio_from, out_path=out_path,
         fps=artifacts.fps, canvas=artifacts.canvas,
-        speaker_scale=speaker_scale,
+        speaker_scale=speaker_scale, **kwargs,
     )
     return RepairExecution(
         render_path=out_path, hook=hook, cues=cues,
         caption_rect=caption_rect, canvas_alphas=canvas_alphas,
-        detail=detail)
+        detail=detail, graphics=carried)
 
 
 def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
@@ -567,12 +591,16 @@ def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
         "trimmed " + ", ".join(
             f"{r1 - r0:.2f}s at {r0:.2f}s" for r0, r1 in removals)
         + f"; {len(artifacts.frames)} -> {len(frames)} frames")
+    retimed_graphics = _retime_graphics(
+        artifacts.graphics,
+        lambda t: map_time(t, is_end=False),
+        lambda t: map_time(t, is_end=True))
     return _render_execution(
         artifacts, frames=frames, src_alphas=src_alphas,
         canvas_alphas=canvas_alphas, hook=hook, cues=cues,
         caption_rect=layout.rect, audio_from=audio_path,
         out_name="draft2-trim-silence.mp4", detail=detail,
-        renderer=renderer)
+        renderer=renderer, graphics=retimed_graphics)
 
 
 def _decode_samples(media_path: str | Path) -> np.ndarray:
@@ -826,6 +854,70 @@ def _exec_regenerate_hook(artifacts: RenderArtifacts, receipt: Receipt,
         renderer=renderer)
 
 
+def graphics_entries(
+    graphics: Sequence[GraphicSpec] | None,
+) -> list[GraphicEntry] | None:
+    """Renderer entries for placed graphics (None in, None out, so
+    a graphics-free render path keeps its historic call shape)."""
+    if graphics is None:
+        return None
+    return [(g.layer_at, g.start_s, g.end_s) for g in graphics]
+
+
+def _retime_graphics(
+    graphics: list[GraphicSpec] | None,
+    map_start: Callable[[float], float],
+    map_end: Callable[[float], float],
+) -> list[GraphicSpec] | None:
+    """Carry graphics across a TRIM_SILENCE retime: spans follow
+    the audio map; a span the trim ANNIHILATES (its whole length
+    sat inside a cut - start and end map to the same instant) is
+    dropped, since the speech that justified it no longer exists.
+    A span merely shortened by an edge cut keeps its remaining
+    length."""
+    if graphics is None:
+        return None
+    out: list[GraphicSpec] = []
+    for g in graphics:
+        start, end = map_start(g.start_s), map_end(g.end_s)
+        if end - start < 0.05:
+            continue
+        out.append(dataclasses.replace(g, start_s=start, end_s=end))
+    return out
+
+
+def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
+                        renderer, **_) -> RepairExecution:
+    """DROP_GRAPHICS: remove exactly the graphics F8 names - its
+    offending indices, plus the later graphic of each spacing-
+    violating pair - and re-render from the cached artifacts. If
+    F8's measured block cannot name the offenders (defensive), the
+    repair drops ALL graphics: an empty graphics plane always
+    passes F8, and the Short keeps its certified F1-F7 layers."""
+    if artifacts.graphics is None:
+        raise RepairNotApplicable(
+            "the draft carries no graphics - nothing to drop")
+    f8 = next((c for c in receipt.checks if c.check_id == "F8"), None)
+    measured = f8.measured if f8 is not None else {}
+    drop = {int(i) for i in measured.get("offending_indices", [])}
+    for pair in measured.get("spacing_violations", []):
+        drop.add(int(pair["later_index"]))
+    if not drop:
+        drop = set(range(len(artifacts.graphics)))
+    kept = [g for i, g in enumerate(artifacts.graphics)
+            if i not in drop]
+    return _render_execution(
+        artifacts, frames=artifacts.frames,
+        src_alphas=artifacts.src_alphas,
+        canvas_alphas=artifacts.canvas_alphas, hook=artifacts.hook,
+        cues=artifacts.cues, caption_rect=artifacts.caption_rect,
+        audio_from=artifacts.window_clip,
+        out_name="draft2-drop-graphics.mp4",
+        detail=(f"dropped graphic indices {sorted(drop)} of "
+                f"{len(artifacts.graphics)}; {len(kept)} kept"),
+        renderer=renderer, graphics=kept)
+
+
 _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {
     TRIM_SILENCE: _exec_trim_silence,
     REPOSITION_HOOK: _exec_reposition_hook,
@@ -833,6 +925,7 @@ _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {
     RESCALE_SPEAKER: _exec_rescale_speaker,
     REGENERATE_HOOK_TEXT: _exec_regenerate_hook,
     REFRAME_SPEAKER: _exec_reframe_speaker,
+    DROP_GRAPHICS: _exec_drop_graphics,
 }
 
 
