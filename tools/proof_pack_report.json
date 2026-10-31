@@ -2,16 +2,16 @@
   "generated": "2026-10-31",
   "runner": "tools/proof_pack.py",
   "judge": "FakeWonder (deterministic, no network, zero paid calls)",
-  "case_count": 41,
-  "fault_cases": 29,
-  "control_cases": 12,
+  "case_count": 44,
+  "fault_cases": 31,
+  "control_cases": 13,
   "scores": {
     "per_check": {
       "F1": {
         "tp": 4,
         "fp": 0,
         "fn": 0,
-        "tn": 37,
+        "tn": 40,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -19,7 +19,7 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 38,
+        "tn": 41,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -27,7 +27,7 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 38,
+        "tn": 41,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -35,7 +35,7 @@
         "tp": 4,
         "fp": 0,
         "fn": 0,
-        "tn": 37,
+        "tn": 40,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -43,7 +43,7 @@
         "tp": 5,
         "fp": 0,
         "fn": 0,
-        "tn": 36,
+        "tn": 39,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -51,7 +51,7 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 38,
+        "tn": 41,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -59,7 +59,7 @@
         "tp": 3,
         "fp": 0,
         "fn": 0,
-        "tn": 38,
+        "tn": 41,
         "precision": 1.0,
         "recall": 1.0
       },
@@ -67,14 +67,22 @@
         "tp": 6,
         "fp": 0,
         "fn": 0,
-        "tn": 35,
+        "tn": 38,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "F9": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "tn": 42,
         "precision": 1.0,
         "recall": 1.0
       }
     },
     "agreement": {
-      "exact_set_matches": 41,
-      "total_cases": 41
+      "exact_set_matches": 44,
+      "total_cases": 44
     },
     "findings": []
   },
@@ -177,6 +185,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -285,6 +302,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.9802
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -386,6 +412,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 200.0,
             "mean_mask_iou_0_3s": 1.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -494,6 +529,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -600,6 +644,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -700,6 +753,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -807,6 +869,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -912,6 +983,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -1019,6 +1099,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -1125,6 +1214,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -1224,6 +1322,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -1331,6 +1438,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -1436,6 +1552,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -1543,6 +1668,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.8984
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -1648,6 +1782,15 @@
             "speaker_scale_change_0_1p5s": -0.0151,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.9949
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -1755,6 +1898,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.9028
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -1860,6 +2012,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -1967,6 +2128,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -2072,6 +2242,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -2181,6 +2360,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -2275,6 +2463,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -2371,6 +2568,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -2465,6 +2671,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -2571,6 +2786,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 1.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -2680,6 +2904,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 1.0
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -2785,6 +3018,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.9997
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -2915,6 +3157,15 @@
             "offending_backdrop_indices": [],
             "sfx": null,
             "duration_s": 10.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
           }
         }
       }
@@ -3060,6 +3311,15 @@
             "sfx": null,
             "duration_s": 10.0
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -3195,6 +3455,15 @@
             "offending_backdrop_indices": [],
             "sfx": null,
             "duration_s": 10.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
           }
         }
       }
@@ -3332,6 +3601,15 @@
             "sfx": null,
             "duration_s": 10.0
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -3468,6 +3746,15 @@
             "sfx": null,
             "duration_s": 10.0
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -3597,6 +3884,15 @@
             "offending_backdrop_indices": [],
             "sfx": null,
             "duration_s": 10.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
           }
         }
       }
@@ -3741,6 +4037,15 @@
             "offending_backdrop_indices": [],
             "sfx": null,
             "duration_s": 10.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
           }
         }
       }
@@ -3896,6 +4201,15 @@
             "sfx": null,
             "duration_s": 10.0
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -4025,6 +4339,15 @@
             "offending_backdrop_indices": [],
             "sfx": null,
             "duration_s": 10.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
           }
         }
       }
@@ -4162,6 +4485,15 @@
             "sfx": null,
             "duration_s": 10.0
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -4285,6 +4617,15 @@
             "offending_backdrop_indices": [],
             "sfx": null,
             "duration_s": 10.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
           }
         }
       }
@@ -4416,6 +4757,15 @@
             "sfx": null,
             "duration_s": 10.0
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -4522,6 +4872,15 @@
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
           }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
         }
       }
     },
@@ -4623,6 +4982,15 @@
             "speaker_scale_change_0_1p5s": 0.0,
             "hook_slide_px_s": 0.0,
             "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -13.96,
+            "true_peak_dbtp": -4.15,
+            "lra_lu": 0.0,
+            "measurement_error": null
           }
         }
       }
@@ -4753,6 +5121,356 @@
             "offending_backdrop_indices": [],
             "sfx": null,
             "duration_s": 10.0
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.04,
+            "true_peak_dbtp": -5.68,
+            "lra_lu": 0.1,
+            "measurement_error": null
+          }
+        }
+      }
+    },
+    {
+      "id": "f9-too-quiet-render",
+      "target": "F9",
+      "description": "The render file's audio measures integrated -24.0 LUFS, 9 LU below the -15.0 floor of the -14 +/-1 band (true peak -19.9 dBTP is clean): F9's integrated leg fails it. A render can pass every geometry and speech check and still arrive at the platform 10 dB quiet.",
+      "coupling": "",
+      "expected_failed": [
+        "F9"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F9"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses.",
+            "measured_on": "render_audio"
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": false,
+          "measured": {
+            "integrated_lufs": -23.96,
+            "true_peak_dbtp": -19.85,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
+        }
+      }
+    },
+    {
+      "id": "f9-hot-render-true-peak",
+      "target": "F9",
+      "description": "The render file's audio is driven into clipping: true peak +1.5 dBTP, above the -1.0 ceiling (the integrated reading, -4.4 LUFS, is also above the band - both of F9's legs read the same hot file; the label is the single check either way).",
+      "coupling": "",
+      "expected_failed": [
+        "F9"
+      ],
+      "wonder_can_summarize": true,
+      "actual_failed": [
+        "F9"
+      ],
+      "verdict": "FAIL",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses.",
+            "measured_on": "render_audio"
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": false,
+          "measured": {
+            "integrated_lufs": -4.38,
+            "true_peak_dbtp": 1.51,
+            "lra_lu": 0.0,
+            "measurement_error": null
+          }
+        }
+      }
+    },
+    {
+      "id": "control-loudness-compliant",
+      "target": "control",
+      "description": "The render file's audio measures integrated -14.0 LUFS with true peak -4.9 dBTP - dead centre of the F9 band: everything passes, F9 included.",
+      "coupling": "",
+      "expected_failed": [],
+      "wonder_can_summarize": true,
+      "actual_failed": [],
+      "verdict": "PASSED_FIRST_DRAFT",
+      "checks": {
+        "F1": {
+          "passed": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.0,
+            "first_speech_onset_s": 0.0
+          }
+        },
+        "F2": {
+          "passed": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.0,
+            "glyph_occlusion_max": 0.0,
+            "glyph_occlusion_alpha_weighted_mean": 0.0,
+            "caption_face_overlap_max_px": 0
+          }
+        },
+        "F3": {
+          "passed": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                562.0,
+                1146.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          }
+        },
+        "F4": {
+          "passed": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1000,
+            "frames_with_speaker": 16,
+            "frames_total": 16
+          }
+        },
+        "F5": {
+          "passed": true,
+          "measured": {
+            "max_silence_gap_s": 0.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A musician explains his band never rehearses.",
+            "measured_on": "render_audio"
+          }
+        },
+        "F6": {
+          "passed": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "HE NEVER REHEARSES [never]"
+              },
+              {
+                "pattern": "conflict",
+                "source": "caption",
+                "evidence": "The band never rehearses. [never]"
+              }
+            ]
+          }
+        },
+        "F7": {
+          "passed": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.99
+          }
+        },
+        "F9": {
+          "passed": true,
+          "measured": {
+            "integrated_lufs": -14.03,
+            "true_peak_dbtp": -4.86,
+            "lra_lu": 0.1,
+            "measurement_error": null
           }
         }
       }

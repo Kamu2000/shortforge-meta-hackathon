@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verifier proof pack: labelled fault-injection cases for F1-F8.
+"""Verifier proof pack: labelled fault-injection cases for F1-F9.
 
 Standalone runner (NOT part of the unit suite). It builds a set of
 labelled cases - for each deterministic check, fault injections
@@ -62,7 +62,7 @@ from spatial_director.verifier import HookSpec, VerifyInputs, verify  # noqa: E4
 CANVAS = (1080, 1920)
 FPS = 4.0
 N = 16  # 4 seconds at 4 fps - mirrors tests/test_verifier.py fixtures
-CHECKS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]
+CHECKS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9"]
 RUN_DATE = "2026-10-31"
 
 
@@ -72,14 +72,33 @@ RUN_DATE = "2026-10-31"
 
 
 def make_video(path: Path) -> Path:
+    # The shared dummy's audio is a tone at integrated -14 LUFS
+    # (volume=2.45 on ffmpeg's -18 dBTP sine source, calibrated):
+    # F9 measures the artifact FILE on every verify(), so a
+    # silent dummy would fail F9 on every case in the pack. The
+    # 10s companion tone.wav is the audio track for the custom
+    # F8 renders, which are encoded from raw frames.
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error",
          "-f", "lavfi", "-i", "color=black:s=320x240:r=10:d=1",
-         "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
+         "-f", "lavfi", "-i",
+         "sine=frequency=440:sample_rate=44100:duration=1",
+         "-af", "volume=2.45",
          "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
          "-c:a", "aac", str(path)],
         check=True)
+    tone = path.with_name("tone.wav")
+    if not tone.exists():
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+             "sine=frequency=440:sample_rate=44100:duration=10",
+             "-af", "volume=2.45", "-c:a", "pcm_s16le", str(tone)],
+            check=True)
     return path
+
+
+def _tone_for(shared_video: Path) -> Path:
+    return shared_video.with_name("tone.wav")
 
 
 def speaker_frames(n: int = N, *, top: int = 1000, x0: int = 240,
@@ -278,7 +297,8 @@ def _f8_render(shared_video: Path, name: str, specs, entries,
                     0, 255).astype(np.uint8)
             yield frame
 
-    _encode_video(gen(), video, fps=FPS, canvas=CANVAS)
+    _encode_video(gen(), video, fps=FPS, canvas=CANVAS,
+                  audio_from=_tone_for(shared_video))
     inputs = VerifyInputs(
         video_path=video, fps=FPS,
         canvas_alphas=speaker_frames(F8_N),
@@ -361,7 +381,8 @@ def _f8b(shared_video: Path, name: str, spec, *, leak=False):
             frame[alphas[i] > 0.5] = (250, 250, 250)
             yield frame
 
-    _encode_video(gen(), video, fps=FPS, canvas=CANVAS)
+    _encode_video(gen(), video, fps=FPS, canvas=CANVAS,
+                  audio_from=_tone_for(shared_video))
     inputs = VerifyInputs(
         video_path=video, fps=FPS, canvas_alphas=alphas,
         audio=profile([(0.0, 10.0)], total_s=10.0),
@@ -394,6 +415,31 @@ def _heroes_case(shared_video: Path, name: str):
             f"{[s.kind for s in kept]} drops={drops}")
     return _f8(shared_video, name,
                [_f8_spec((700, 300, 1000, 560), 3.5, 6.0)])
+
+
+# ---------------------------------------------------------------- F9 fixtures
+
+def _f9(shared_video: Path, name: str, volume: float):
+    """An F9 case: the all-pass structured fixture, but the video
+    FILE's audio is a tone at a calibrated loudness (ffmpeg's sine
+    source peaks at -18 dBTP; the volumes are loudnorm-measured
+    on the encoded files: 2.45 -> integrated -14.0 LUFS,
+    0.78 -> -24.0 LUFS, 10 -> -4.4 LUFS / true peak +1.5 dBTP).
+    F9 measures the artifact file, so the fault lives exactly
+    where the check reads - the structured audio profile stays
+    the good one, and F1/F5 (which read the profile) stay clean.
+    """
+    video = shared_video.with_name(name)
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i", "color=black:s=320x240:r=10:d=4",
+         "-f", "lavfi", "-i",
+         "sine=frequency=440:sample_rate=44100:duration=4",
+         "-af", f"volume={volume}",
+         "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", str(video)],
+        check=True)
+    return _std(video)
 
 
 CASES: list[Case] = [
@@ -745,6 +791,31 @@ CASES: list[Case] = [
           "and verifies clean. If resolution regresses, the "
           "builder raises and the runner records an ERROR.",
           set(), lambda v: _heroes_case(v, "f8-heroes.mp4")),
+
+    # ---- F9: platform loudness (2026-10-31) ----------------------
+    # F9 measures the artifact FILE's audio (ffmpeg loudnorm), so
+    # these cases carry custom files at calibrated loudness; the
+    # structured fixture (profile, alphas, hook, cues) stays the
+    # all-pass one throughout.
+    _case("f9-too-quiet-render", "F9",
+          "The render file's audio measures integrated -24.0 "
+          "LUFS, 9 LU below the -15.0 floor of the -14 +/-1 band "
+          "(true peak -19.9 dBTP is clean): F9's integrated leg "
+          "fails it. A render can pass every geometry and speech "
+          "check and still arrive at the platform 10 dB quiet.",
+          {"F9"}, lambda v: _f9(v, "f9-quiet.mp4", 0.78)),
+    _case("f9-hot-render-true-peak", "F9",
+          "The render file's audio is driven into clipping: "
+          "true peak +1.5 dBTP, above the -1.0 ceiling (the "
+          "integrated reading, -4.4 LUFS, is also above the "
+          "band - both of F9's legs read the same hot file; "
+          "the label is the single check either way).",
+          {"F9"}, lambda v: _f9(v, "f9-hot.mp4", 10)),
+    _case("control-loudness-compliant", "control",
+          "The render file's audio measures integrated -14.0 "
+          "LUFS with true peak -4.9 dBTP - dead centre of the "
+          "F9 band: everything passes, F9 included.",
+          set(), lambda v: _f9(v, "f9-ok.mp4", 2.45)),
 ]
 
 
