@@ -99,13 +99,21 @@ class LazyCanvasAlphasTests(unittest.TestCase):
 
 
 def make_source(path: Path) -> None:
-    """12s 160x90 @10fps clip: tone audio with one 1.2s hole at 4-5.2s."""
+    """12s 160x90 @10fps clip: tone audio with one 1.2s hole at 4-5.2s.
+
+    The tone is gained to integrated -14 LUFS (volume=2.45 on
+    ffmpeg's -18 dBTP sine source, calibrated): F9 measures every
+    render's file audio, and this smoke's subject is F5/TRIM -
+    its renders must be platform-loudness compliant so F9 passes
+    on both drafts (the pipeline's up-only normalisation leaves
+    an already-louder-than-target window untouched, gain 0).
+    """
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error",
          "-f", "lavfi", "-i", "color=c=0x335577:s=160x90:r=10:d=12",
          "-f", "lavfi",
          "-i", "sine=frequency=440:sample_rate=44100:duration=12",
-         "-af", "volume=enable='between(t,4,5.2)':volume=0",
+         "-af", "volume=2.45,volume=enable='between(t,4,5.2)':volume=0",
          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
          "-shortest", str(path)],
         check=True)

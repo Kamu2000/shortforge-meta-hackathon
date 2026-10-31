@@ -9,6 +9,7 @@ no SAM anywhere in the loop, and the chained receipt's shape.
 """
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -27,12 +28,17 @@ from spatial_director.layout_law import (  # noqa: E402
 )
 from spatial_director.rescue_loop import (  # noqa: E402
     ENGAGE_HOOK_SLIDE,
+    NORMALIZE_LOUDNESS,
     REFRAME_SPEAKER,
     REPAIR_MENU,
     RenderArtifacts,
+    RepairNotApplicable,
     _exec_engage_hook_slide,
+    _exec_normalize_loudness,
     rescue,
 )
+from spatial_director.sfx import SfxEvent  # noqa: E402
+from spatial_director.verifier import measure_loudness  # noqa: E402
 from spatial_director.verifier import (  # noqa: E402
     CheckResult,
     HookSpec,
@@ -697,6 +703,145 @@ class DropGraphicsTests(unittest.TestCase):
             after = kept[1]
             self.assertAlmostEqual(after.start_s, 1.4)
             self.assertAlmostEqual(after.end_s, 2.1)
+
+
+# ---------------------------------------------------------------- F9 repair
+
+
+def make_loud_render(path: Path, volume: float) -> Path:
+    """A real render file at a calibrated loudness (the sine
+    volumes are measured values - see test_verifier.loud_video):
+    0.78 -> integrated -24 LUFS, 2.45 -> -14 LUFS."""
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i", "color=c=0x335577:s=320x240:r=10:d=4",
+         "-f", "lavfi", "-i",
+         "sine=frequency=440:sample_rate=44100:duration=4",
+         "-af", f"volume={volume}",
+         "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", str(path)],
+        check=True)
+    return path
+
+
+def video_stream_hash(path: Path) -> str:
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v",
+         "-c", "copy", "-f", "hash", "-hash", "md5", "-"],
+        capture_output=True, text=True, check=True)
+    return proc.stdout.strip()
+
+
+def f9_receipt(integrated=-23.96, true_peak=-19.85):
+    receipt = make_receipt(())
+    receipt.checks.append(CheckResult(
+        check_id="F9", name="platform loudness", passed=False,
+        measured={"integrated_lufs": integrated,
+                  "true_peak_dbtp": true_peak, "lra_lu": 0.0,
+                  "measurement_error": None},
+        threshold={"integrated_target_lufs": -14.0,
+                   "integrated_min_lufs": -15.0,
+                   "integrated_max_lufs": -13.0,
+                   "true_peak_max_dbtp": -1.0}))
+    receipt.verdict = "FAIL"
+    return receipt
+
+
+class NormalizeLoudnessTests(unittest.TestCase):
+    def test_menu_targets_f9(self):
+        self.assertEqual(
+            REPAIR_MENU[NORMALIZE_LOUDNESS].target_checks, ("F9",))
+
+    def test_executor_normalizes_quiet_render_video_untouched(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            src = make_loud_render(td / "draft1.mp4", 0.78)
+            artifacts = make_artifacts(td)
+            artifacts.render_path = src
+            before = measure_loudness(src)
+            self.assertLess(before.integrated_lufs, -15.0)
+            execution = _exec_normalize_loudness(
+                artifacts, f9_receipt(), FakeRenderer())
+            after = measure_loudness(execution.render_path)
+            self.assertGreaterEqual(after.integrated_lufs, -15.0)
+            self.assertLessEqual(after.integrated_lufs, -13.0)
+            self.assertLessEqual(after.true_peak_dbtp, -1.0)
+            # The video stream is copied, not re-encoded.
+            self.assertEqual(video_stream_hash(src),
+                             video_stream_hash(execution.render_path))
+            self.assertIn("loudnorm", execution.detail)
+
+    def test_executor_tames_hot_render(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            src = make_loud_render(td / "draft1.mp4", 10)
+            self.assertGreater(
+                measure_loudness(src).true_peak_dbtp, -1.0)
+            artifacts = make_artifacts(td)
+            artifacts.render_path = src
+            execution = _exec_normalize_loudness(
+                artifacts, f9_receipt(-4.38, 1.51), FakeRenderer())
+            after = measure_loudness(execution.render_path)
+            self.assertLessEqual(after.true_peak_dbtp, -1.0)
+            self.assertGreaterEqual(after.integrated_lufs, -15.0)
+            self.assertLessEqual(after.integrated_lufs, -13.0)
+
+    def test_executor_leaves_the_speech_stem_untouched(self):
+        # F5 interaction, proven: the repair must not modify the
+        # pre-mix stem F5 measures, and the execution must carry
+        # the stem's identity so draft-2 F5 reads the same signal.
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            stem = write_wav(td / "stem.wav",
+                             [(1.0, 0.4), (0.8, 0.0), (1.2, 0.4)])
+            stem_bytes = stem.read_bytes()
+            src = make_loud_render(td / "draft1.mp4", 0.78)
+            artifacts = make_artifacts(td, window_clip=stem)
+            artifacts.render_path = src
+            artifacts.sfx_plan = [SfxEvent(1.4, "ding", 0)]
+            execution = _exec_normalize_loudness(
+                artifacts, f9_receipt(), FakeRenderer())
+            self.assertEqual(stem.read_bytes(), stem_bytes)
+            self.assertEqual(execution.speech_audio_from, stem)
+            self.assertEqual(len(execution.sfx_events), 1)
+            self.assertEqual(execution.sfx_events[0]["recipe"],
+                             "ding")
+
+    def test_executor_not_applicable_when_already_compliant(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            src = make_loud_render(td / "draft1.mp4", 2.45)
+            artifacts = make_artifacts(td)
+            artifacts.render_path = src
+            with self.assertRaises(RepairNotApplicable):
+                _exec_normalize_loudness(
+                    artifacts, f9_receipt(-14.0, -5.0), FakeRenderer())
+
+    def test_repair_flows_through_the_rescue_loop(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            src = make_loud_render(td / "draft1.mp4", 0.78)
+            artifacts = make_artifacts(td)
+            artifacts.render_path = src
+            spark = FakeSpark([
+                '{"repair": "NORMALIZE_LOUDNESS", "reason": '
+                '"integrated -23.96 LUFS is below the -15 floor"}'])
+            renderer = FakeRenderer()
+            verify = FakeVerify([make_receipt((), draft=2)])
+            chain = rescue(f9_receipt(), artifacts, spark=spark,
+                           verify_fn=verify, renderer=renderer,
+                           ts="2026-10-31")
+            self.assertEqual(chain.final_verdict,
+                             "PASSED_AFTER_REPAIR")
+            self.assertEqual(chain.repair.menu_id,
+                             NORMALIZE_LOUDNESS)
+            self.assertEqual(chain.repair.target_check, "F9")
+            # Loudnorm operates on the artifact file: the frame
+            # renderer is never invoked.
+            self.assertEqual(renderer.calls, [])
+            out = verify.executions[0].render_path
+            self.assertGreaterEqual(
+                measure_loudness(out).integrated_lufs, -15.0)
 
 
 if __name__ == "__main__":

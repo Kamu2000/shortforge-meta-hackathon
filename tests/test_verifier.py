@@ -34,6 +34,7 @@ from spatial_director.spend_ledger import SpendLedger  # noqa: E402
 from spatial_director.verifier import (  # noqa: E402
     HookSpec,
     VerifyInputs,
+    measure_loudness,
     verify,
 )
 from spatial_director.wonder_client import (  # noqa: E402
@@ -49,13 +50,33 @@ N = 16  # 4 seconds
 
 
 def make_video(path: Path) -> Path:
+    # The tone is calibrated to integrated -14 LUFS (ffmpeg's sine
+    # source sits at -18 dBTP peak; volume=2.45 lands it on the F9
+    # target, measured -14.03 LUFS / -4.9 dBTP): F9 measures the
+    # artifact FILE, so the all-pass fixture's file must itself be
+    # at platform loudness. Silence here would fail F9 everywhere.
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error",
          "-f", "lavfi", "-i", "color=black:s=320x240:r=10:d=1",
-         "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
+         "-f", "lavfi", "-i",
+         "sine=frequency=440:sample_rate=44100:duration=1",
+         "-af", "volume=2.45",
          "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
          "-c:a", "aac", str(path)],
         check=True)
+    return path
+
+
+def tone_wav(path: Path) -> Path:
+    """A 10s -14 LUFS tone WAV: the audio track for the custom
+    F8 renders (which are encoded from raw frames and would
+    otherwise carry NO audio - an automatic F9 failure)."""
+    if not path.exists():
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+             "sine=frequency=440:sample_rate=44100:duration=10",
+             "-af", "volume=2.45", "-c:a", "pcm_s16le", str(path)],
+            check=True)
     return path
 
 
@@ -141,7 +162,8 @@ class VerifierPassTests(unittest.TestCase):
         receipt = verify(good_inputs(self.video), wonder=FakeWonder())
         data = json.loads(receipt.to_json())
         self.assertEqual(len(data["inputs_sha256"]["video"]), 64)
-        self.assertEqual(len(data["checks"]), 7)
+        # F1-F7 + F9 (F8 runs only when graphics are supplied).
+        self.assertEqual(len(data["checks"]), 8)
 
 
 class VerifierFailTests(unittest.TestCase):
@@ -509,7 +531,8 @@ def render_graphics_video(path, entries, n=F8_N):
                     0, 255).astype(np.uint8)
             yield frame
 
-    _encode_video(gen(), path, fps=FPS, canvas=CANVAS)
+    _encode_video(gen(), path, fps=FPS, canvas=CANVAS,
+                  audio_from=tone_wav(path.with_name("tone.wav")))
     return path
 
 
@@ -688,7 +711,10 @@ class GraphicsF8Tests(unittest.TestCase):
     def test_no_graphics_means_no_f8_and_no_section(self):
         receipt = verify(good_inputs(self._dummy()), wonder=FakeWonder())
         data = json.loads(receipt.to_json())
-        self.assertEqual(len(data["checks"]), 7)
+        # F8 absent without graphics; F9 is present on every render.
+        self.assertEqual(len(data["checks"]), 8)
+        self.assertNotIn("F8", [c["id"] for c in data["checks"]])
+        self.assertIn("F9", [c["id"] for c in data["checks"]])
         self.assertNotIn("graphics", data)
 
     @classmethod
@@ -733,7 +759,8 @@ def render_backdrop_video(path, spec, *, leak=False, n=F8_N):
             frame[alphas[i] > 0.5] = (250, 250, 250)
             yield frame
 
-    _encode_video(gen(), path, fps=FPS, canvas=CANVAS)
+    _encode_video(gen(), path, fps=FPS, canvas=CANVAS,
+                  audio_from=tone_wav(path.with_name("tone.wav")))
     return path
 
 
@@ -794,6 +821,103 @@ class BackdropF8Tests(unittest.TestCase):
             self.assertLess(
                 check(receipt, "F8")
                 .measured["backdrops"][0]["presence_match"], 0.75)
+
+
+# ---------------------------------------------------------------- F9
+
+
+def loud_video(path: Path, volume: float, duration: int = 4) -> Path:
+    """A render whose FILE audio sits at a known loudness.
+
+    ffmpeg's sine source peaks at -18 dBTP, so the volume values
+    are calibrated measurements, not guesses (loudnorm analysis
+    of the encoded files): 2.45 -> integrated -14.0 LUFS,
+    0.78 -> -24.0 LUFS, 10 -> -4.4 LUFS with true peak +1.5 dBTP
+    (the waveform clips; that is the hot fault). F9 measures the
+    file, so these cases are honest end-to-end measurements -
+    the structured inputs stay the all-pass fixture throughout.
+    """
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i",
+         f"color=black:s=320x240:r=10:d={duration}",
+         "-f", "lavfi", "-i",
+         f"sine=frequency=440:sample_rate=44100:duration={duration}",
+         "-af", f"volume={volume}",
+         "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", str(path)],
+        check=True)
+    return path
+
+
+class LoudnessF9Tests(unittest.TestCase):
+    def test_compliant_render_passes_f9_with_measurement_recorded(self):
+        with tempfile.TemporaryDirectory() as td:
+            video = loud_video(Path(td) / "ok.mp4", 2.45)
+            receipt = verify(good_inputs(video), wonder=FakeWonder())
+            self.assertEqual(receipt.failed, [],
+                             msg=receipt.to_json())
+            f9 = check(receipt, "F9")
+            self.assertTrue(f9.passed)
+            self.assertGreaterEqual(f9.measured["integrated_lufs"],
+                                    -15.0)
+            self.assertLessEqual(f9.measured["integrated_lufs"],
+                                 -13.0)
+            self.assertLessEqual(f9.measured["true_peak_dbtp"], -1.0)
+            self.assertIsNotNone(f9.measured["lra_lu"])
+            self.assertIsNone(f9.measured["measurement_error"])
+            self.assertEqual(f9.threshold["integrated_target_lufs"],
+                             -14.0)
+            self.assertEqual(f9.threshold["integrated_min_lufs"],
+                             -15.0)
+            self.assertEqual(f9.threshold["integrated_max_lufs"],
+                             -13.0)
+            self.assertEqual(f9.threshold["true_peak_max_dbtp"], -1.0)
+
+    def test_quiet_render_fails_f9_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            video = loud_video(Path(td) / "quiet.mp4", 0.78)
+            receipt = verify(good_inputs(video), wonder=FakeWonder())
+            self.assertEqual(receipt.failed, ["F9"])
+            f9 = check(receipt, "F9")
+            self.assertAlmostEqual(f9.measured["integrated_lufs"],
+                                   -24.0, delta=1.5)
+            # The true-peak leg is clean: the failure is the
+            # integrated band alone, as labelled.
+            self.assertLessEqual(f9.measured["true_peak_dbtp"], -1.0)
+
+    def test_hot_render_fails_f9_on_true_peak(self):
+        with tempfile.TemporaryDirectory() as td:
+            video = loud_video(Path(td) / "hot.mp4", 10)
+            receipt = verify(good_inputs(video), wonder=FakeWonder())
+            self.assertEqual(receipt.failed, ["F9"])
+            f9 = check(receipt, "F9")
+            self.assertGreater(f9.measured["true_peak_dbtp"], -1.0)
+
+    def test_silent_render_fails_f9_with_null_measurement(self):
+        with tempfile.TemporaryDirectory() as td:
+            video = Path(td) / "silent.mp4"
+            subprocess.run(
+                ["ffmpeg", "-y", "-v", "error",
+                 "-f", "lavfi", "-i", "color=black:s=320x240:r=10:d=1",
+                 "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
+                 "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                 "-c:a", "aac", str(video)],
+                check=True)
+            receipt = verify(good_inputs(video), wonder=FakeWonder())
+            self.assertEqual(receipt.failed, ["F9"])
+            f9 = check(receipt, "F9")
+            # -inf is not strict JSON: silence records nulls, and
+            # the receipt still serialises.
+            self.assertIsNone(f9.measured["integrated_lufs"])
+            self.assertIn("silence", f9.note)
+            json.loads(receipt.to_json())
+
+    def test_measure_loudness_never_raises(self):
+        m = measure_loudness("/nonexistent/definitely-missing.mp4")
+        self.assertIsNone(m.integrated_lufs)
+        self.assertIsNone(m.true_peak_dbtp)
+        self.assertIsNotNone(m.error)
 
 
 if __name__ == "__main__":

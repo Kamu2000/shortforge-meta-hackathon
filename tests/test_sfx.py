@@ -36,10 +36,15 @@ N = 16
 
 
 def make_video(path: Path) -> Path:
+    # Tone at integrated -14 LUFS (calibrated; see test_verifier):
+    # F9 measures the artifact file on every verify(), so this
+    # module's all-pass case needs a compliant file, not silence.
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error",
          "-f", "lavfi", "-i", "color=black:s=320x240:r=10:d=1",
-         "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
+         "-f", "lavfi", "-i",
+         "sine=frequency=440:sample_rate=44100:duration=1",
+         "-af", "volume=2.45",
          "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
          "-c:a", "aac", str(path)],
         check=True)
