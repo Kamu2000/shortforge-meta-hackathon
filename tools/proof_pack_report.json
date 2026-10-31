@@ -5475,5 +5475,74 @@
         }
       }
     }
-  ]
+  ],
+  "reverify": {
+    "agreement": {
+      "exact_matches": 4,
+      "total_scored": 4
+    },
+    "skipped": [],
+    "findings": [],
+    "cases": [
+      {
+        "id": "reverify-genuine",
+        "description": "a genuine all-pass receipt, issued by verify() itself, re-verified clean by the tool",
+        "expected": "clean",
+        "actual": "clean",
+        "detail": {
+          "chain_ok": true,
+          "check_statuses": {
+            "F1": "MATCH",
+            "F2": "MATCH",
+            "F3": "MATCH",
+            "F4": "MATCH",
+            "F5": "MATCH",
+            "F6": "MATCH",
+            "F7": "MATCH",
+            "F9": "MATCH"
+          }
+        }
+      },
+      {
+        "id": "reverify-tampered",
+        "description": "one recorded measurement edited (F1 RMS +5 dB) must flag MISMATCH",
+        "expected": "mismatch_detected",
+        "actual": "mismatch_detected",
+        "detail": {
+          "f1_status": "MISMATCH"
+        }
+      },
+      {
+        "id": "reverify-swapped",
+        "description": "the receipt's artifact replaced by a different render must fail on hashes",
+        "expected": "mismatch_detected",
+        "actual": "mismatch_detected",
+        "detail": {
+          "report_ok": false,
+          "chain_findings": [
+            {
+              "kind": "hash",
+              "draft": 1,
+              "status": "MISMATCH",
+              "detail": "artifact hash 5005cfc93b38ac89... != recorded df5f6f21ab9f2235...: the file on disk is not the file the receipt was issued for"
+            }
+          ]
+        }
+      },
+      {
+        "id": "reverify-real-committed",
+        "description": "committed holmes4 short-1 receipt re-verified against its real artifact and run directory",
+        "expected": "clean",
+        "actual": "clean",
+        "detail": {
+          "report_ok": true,
+          "chain_ok": true,
+          "draft_statuses": {
+            "1": "MATCH",
+            "2": "MATCH"
+          }
+        }
+      }
+    ]
+  }
 }

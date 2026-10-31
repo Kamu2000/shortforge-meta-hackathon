@@ -915,6 +915,9 @@ def main(argv: list[str] | None = None) -> int:
 
     results = run_cases(only=args.only)
     scored = [r for r in results if r.get("actual_failed") is not None]
+    reverify_entries = []
+    if not args.only or args.only.startswith("reverify"):
+        reverify_entries = run_reverify_cases(only=args.only)
     report = {
         "generated": RUN_DATE,
         "runner": "tools/proof_pack.py",
@@ -925,11 +928,206 @@ def main(argv: list[str] | None = None) -> int:
                              if not r["expected_failed"]),
         "scores": score_cases(scored),
         "cases": results,
+        "reverify": reverify_summary(reverify_entries),
     }
     args.out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(markdown_summary(report))
+    if reverify_entries:
+        rv_summary = report["reverify"]
+        print("")
+        print("## Re-verifier cases (tools/reverify.py, scored "
+              "separately)")
+        print("")
+        print(f"Exact agreement: "
+              f"{rv_summary['agreement']['exact_matches']}/"
+              f"{rv_summary['agreement']['total_scored']} scored "
+              f"cases"
+              + (f" ({len(rv_summary['skipped'])} skipped: "
+                 f"{', '.join(rv_summary['skipped'])})"
+                 if rv_summary["skipped"] else "") + ".")
+        for f in rv_summary["findings"]:
+            print(f"- **{f['case']}**: expected {f['expected']}, "
+                  f"got {f['actual']}")
+        if not rv_summary["findings"]:
+            print("- None: the re-verifier agreed on every scored case.")
     print(f"\nReport written to {args.out}", file=sys.stderr)
     return 0
+
+
+# ---------------------------------------------------------------- reverify cases
+# Separate from the verifier fault-injection pack above: these cases
+# test tools/reverify.py itself. Their outcomes are reverify
+# verdicts (clean / mismatch detected / skip), NOT verifier check
+# failures, so they are scored separately and never folded into
+# the per-check precision/recall. Zero paid calls throughout: the
+# synthetic cases reuse this pack's fixtures, and the real case
+# replays a committed receipt against files already on disk.
+
+
+def _load_reverify():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "reverify", REPO / "tools" / "reverify.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _quieter_video(src: Path, out: Path) -> Path:
+    """A byte-different render of the same dummy (quieter audio)."""
+    proc = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(src),
+         "-af", "volume=0.5", "-c:v", "copy", str(out)],
+        capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError("could not build the swapped video fixture")
+    return out
+
+
+def run_reverify_cases(only: str = "") -> list[dict[str, Any]]:
+    """Run the reverify cases. Each entry carries ``expected`` and
+    ``actual`` outcome labels; agreement means they match exactly.
+    The real-committed case SKIPs (not a pass, not a finding) when
+    its artifact is absent from this checkout — it is the one case
+    that depends on files outside the repo."""
+    rv = _load_reverify()
+    results: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        video = make_video(td / "render.mp4")
+        if not only or "reverify-genuine".startswith(only):
+            inputs, wonder = _std(video)
+            receipt = verify(inputs, wonder=wonder, ts=RUN_DATE)
+            draft = receipt.to_dict()
+            fresh = verify(inputs, wonder=None, draft=1, ts=RUN_DATE)
+            comp = rv.compare_draft(
+                draft, [c.to_dict() for c in fresh.checks],
+                inputs, None, {})
+            chain = rv.verify_chain(
+                {"drafts": [draft], "artifact": str(video),
+                 "final_verdict": draft["verdict"],
+                 "repair": {"status": "not_needed"}},
+                {1: video, "top": video})
+            clean = chain["ok"] and all(
+                c["status"] == "MATCH" for c in comp["checks"])
+            results.append({
+                "id": "reverify-genuine",
+                "description": "a genuine all-pass receipt, issued "
+                               "by verify() itself, re-verified "
+                               "clean by the tool",
+                "expected": "clean", "actual": "clean" if clean else "fail",
+                "detail": {
+                    "chain_ok": chain["ok"],
+                    "check_statuses": {
+                        c["check"]: c["status"]
+                        for c in comp["checks"]},
+                },
+            })
+        if not only or "reverify-tampered".startswith(only):
+            inputs, wonder = _std(video)
+            receipt = verify(inputs, wonder=wonder, ts=RUN_DATE)
+            draft = receipt.to_dict()
+            # Tamper exactly one recorded value, the way a forged
+            # receipt would: F1's opening RMS, +5 dB.
+            for c in draft["checks"]:
+                if c["id"] == "F1":
+                    c["measured"]["audio_rms_db_0_2s"] += 5.0
+            fresh = verify(inputs, wonder=None, draft=1, ts=RUN_DATE)
+            comp = rv.compare_draft(
+                draft, [c.to_dict() for c in fresh.checks],
+                inputs, None, {})
+            f1 = next(c for c in comp["checks"] if c["check"] == "F1")
+            detected = f1["status"] == "MISMATCH"
+            results.append({
+                "id": "reverify-tampered",
+                "description": "one recorded measurement edited "
+                               "(F1 RMS +5 dB) must flag MISMATCH",
+                "expected": "mismatch_detected",
+                "actual": "mismatch_detected" if detected else "missed",
+                "detail": {"f1_status": f1["status"]},
+            })
+        if not only or "reverify-swapped".startswith(only):
+            inputs, wonder = _std(video)
+            receipt = verify(inputs, wonder=wonder, ts=RUN_DATE)
+            draft = receipt.to_dict()
+            swapped = _quieter_video(video, td / "swapped.mp4")
+            (td / "receipt.json").write_text(
+                json.dumps({"drafts": [draft], "artifact": str(video),
+                            "final_verdict": draft["verdict"],
+                            "repair": {"status": "not_needed"}}),
+                encoding="utf-8")
+            report = rv.reverify(td / "receipt.json",
+                                 artifact=swapped, evidence_dir=td)
+            chain_bad = any(
+                f["status"] == "MISMATCH"
+                for f in report["chain"]["findings"])
+            detected = (not report["ok"]) and chain_bad
+            results.append({
+                "id": "reverify-swapped",
+                "description": "the receipt's artifact replaced by a "
+                               "different render must fail on hashes",
+                "expected": "mismatch_detected",
+                "actual": "mismatch_detected" if detected else "missed",
+                "detail": {"report_ok": report["ok"],
+                           "chain_findings": report["chain"]["findings"]},
+            })
+        if not only or "reverify-real-committed".startswith(only):
+            committed = REPO / "receipts" / \
+                "receipt-pipeline-holmes4-short1.json"
+            entry: dict[str, Any] = {
+                "id": "reverify-real-committed",
+                "description": "committed holmes4 short-1 receipt "
+                               "re-verified against its real artifact "
+                               "and run directory",
+                "expected": "clean",
+            }
+            try:
+                data = json.loads(
+                    committed.read_text(encoding="utf-8"))
+                final_art = Path(
+                    data["drafts"][-1]["artifact"])
+                if not final_art.exists():
+                    entry["actual"] = "skip"
+                    entry["detail"] = {
+                        "reason": "artifact absent from this checkout",
+                    }
+                else:
+                    report = rv.reverify(
+                        committed, evidence_dir=final_art.parent)
+                    entry["actual"] = "clean" if report["ok"] else "fail"
+                    entry["detail"] = {
+                        "report_ok": report["ok"],
+                        "chain_ok": report["chain"]["ok"],
+                        "draft_statuses": {
+                            d["draft"]: d["status"]
+                            for d in report["drafts"]},
+                    }
+            except (OSError, json.JSONDecodeError, KeyError) as exc:
+                entry["actual"] = "skip"
+                entry["detail"] = {"reason": f"{type(exc).__name__}: {exc}"}
+            results.append(entry)
+    return results
+
+
+def reverify_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """Exact-agreement scoring for the reverify section.
+
+    Skips are reported separately: they are neither agreements nor
+    findings (the case could not run here), and they never inflate
+    the agreement count.
+    """
+    scored = [e for e in entries if e["actual"] != "skip"]
+    exact = sum(1 for e in scored if e["expected"] == e["actual"])
+    return {
+        "agreement": {"exact_matches": exact,
+                      "total_scored": len(scored)},
+        "skipped": [e["id"] for e in entries if e["actual"] == "skip"],
+        "findings": [
+            {"case": e["id"], "expected": e["expected"],
+             "actual": e["actual"], "detail": e.get("detail")}
+            for e in scored if e["expected"] != e["actual"]],
+        "cases": entries,
+    }
 
 
 if __name__ == "__main__":
