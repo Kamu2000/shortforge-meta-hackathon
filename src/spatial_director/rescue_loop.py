@@ -19,8 +19,8 @@ module acts on exactly one such failure, exactly once:
    is never re-bought for a repair. New Spark/Wonder calls are
    allowed (the planner itself, a hook regeneration, the re-verify
    judge) and are ledger-logged by their clients.
-3. **Re-verify.** The repaired render goes through the full F1-F7
-   verifier again (draft 2), judge included.
+3. **Re-verify.** The repaired render goes through the full
+   verifier again (draft 2, F1-F9), judge included.
 4. **Chain.** The emitted receipt chains draft 1 -> repair (menu id,
    Spark's stated reason, the planner call's cost + request id) ->
    draft 2, with the final verdict. ONE repair max, hard-coded by
@@ -81,7 +81,17 @@ from .layout_law import (
 from .graphics_layer import BackdropSpec, GraphicSpec
 from .sfx import SfxEvent, mix_to_file, plan_sfx
 from .spark_client import SparkClient
-from .verifier import MAX_WORD_GAP_S, HookSpec, Receipt, _content_words
+from .verifier import (
+    LOUDNESS_LRA_LU,
+    LOUDNESS_TARGET_LUFS,
+    LOUDNESS_TOLERANCE_LU,
+    MAX_WORD_GAP_S,
+    TRUE_PEAK_MAX_DBTP,
+    HookSpec,
+    Receipt,
+    _content_words,
+    measure_loudness,
+)
 
 # ---------------------------------------------------------------- the menu
 
@@ -93,6 +103,7 @@ REGENERATE_HOOK_TEXT = "REGENERATE_HOOK_TEXT"
 REFRAME_SPEAKER = "REFRAME_SPEAKER"
 DROP_GRAPHICS = "DROP_GRAPHICS"
 ENGAGE_HOOK_SLIDE = "ENGAGE_HOOK_SLIDE"
+NORMALIZE_LOUDNESS = "NORMALIZE_LOUDNESS"
 
 
 @dataclass(frozen=True)
@@ -147,6 +158,16 @@ REPAIR_MENU: dict[str, RepairSpec] = {
         "them. The remaining graphics stay; a collision between "
         "two graphics drops the later graphic of each colliding "
         "pair."),
+    NORMALIZE_LOUDNESS: RepairSpec(
+        NORMALIZE_LOUDNESS, ("F9",),
+        "Bring the finished render to platform loudness with a "
+        "two-pass loudnorm of its FINAL audio mix (integrated "
+        "-14 LUFS, true peak <= -1 dBTP). The video stream is "
+        "copied untouched and the graphics/SFX already in the "
+        "mix are preserved; the pre-mix speech stem F5 measures "
+        "is not modified, so this repair cannot change F5's "
+        "measurement - pick it when F9's integrated loudness or "
+        "true peak misses its band."),
 }
 
 # Executor constants.
@@ -1134,6 +1155,109 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
         else None)
 
 
+def _exec_normalize_loudness(artifacts: RenderArtifacts,
+                             receipt: Receipt,
+                             renderer, **_) -> RepairExecution:
+    """NORMALIZE_LOUDNESS: two-pass loudnorm of the FINAL artifact.
+
+    The one repair that does not re-render: it operates on the
+    draft-1 render file itself, because F9 is a property of the
+    finished mix (graphics/SFX included), not of any layer.
+    Pass 1 is the verifier's own measurement
+    (``measure_loudness``); pass 2 applies ffmpeg's loudnorm
+    with the measured values fed back, per the two-pass recipe.
+    Linear mode is used when the measurement allows it - the
+    required gain applied to the measured true peak stays under
+    the ceiling - and dynamic mode otherwise (a hot render's
+    peaks would clip under a linear lift). The video stream is
+    copied untouched (``-c:v copy``); the audio is the only
+    thing re-encoded. The pre-mix speech stem is never opened
+    for writing: F5 re-measures the same stem file on draft 2,
+    so this repair cannot launder a dead-air failure, and the
+    stem's identity is carried into the execution exactly as
+    the other executors carry it.
+    """
+    src = Path(artifacts.render_path)
+    if not src.exists():
+        raise RepairNotApplicable(
+            f"the draft render {src} is gone; loudnorm has no "
+            "final artifact to operate on")
+    before = measure_loudness(src)
+    if before.error or before.integrated_lufs is None:
+        raise RepairNotApplicable(
+            "the draft's loudness cannot be measured "
+            f"({before.error or 'no measurable loudness'}); "
+            "loudnorm has nothing to aim at")
+    lo = LOUDNESS_TARGET_LUFS - LOUDNESS_TOLERANCE_LU
+    hi = LOUDNESS_TARGET_LUFS + LOUDNESS_TOLERANCE_LU
+    if lo <= before.integrated_lufs <= hi \
+            and before.true_peak_dbtp is not None \
+            and before.true_peak_dbtp <= TRUE_PEAK_MAX_DBTP:
+        raise RepairNotApplicable(
+            "the draft already measures inside the F9 band "
+            f"(integrated {before.integrated_lufs:.2f} LUFS, "
+            f"true peak {before.true_peak_dbtp:.2f} dBTP); the "
+            "F9 failure must be a measurement this repair "
+            "cannot change")
+    gain = LOUDNESS_TARGET_LUFS - before.integrated_lufs
+    linear = bool(
+        before.true_peak_dbtp is not None
+        and before.true_peak_dbtp + gain <= TRUE_PEAK_MAX_DBTP)
+    base = (f"loudnorm=I={LOUDNESS_TARGET_LUFS:.1f}"
+            f":TP={TRUE_PEAK_MAX_DBTP:.1f}"
+            f":LRA={LOUDNESS_LRA_LU:.1f}")
+    measured = (before.integrated_lufs, before.true_peak_dbtp,
+                before.lra_lu, before.threshold_lufs,
+                before.target_offset_lu)
+    if all(v is not None for v in measured):
+        filt = (base
+                + f":measured_I={before.integrated_lufs:.2f}"
+                + f":measured_TP={before.true_peak_dbtp:.2f}"
+                + f":measured_LRA={before.lra_lu:.2f}"
+                + f":measured_thresh={before.threshold_lufs:.2f}"
+                + f":offset={before.target_offset_lu:.2f}"
+                + f":linear={'true' if linear else 'false'}")
+        mode = "linear" if linear else "dynamic"
+    else:
+        # A partial measurement cannot drive the two-pass recipe;
+        # a single dynamic pass still targets the same numbers.
+        filt = base + ":linear=false"
+        mode = "dynamic (partial measurement)"
+    out_path = Path(artifacts.work_dir) / "draft2-normalize-loudness.mp4"
+    proc = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(src),
+         "-map", "0:v:0", "-c:v", "copy",
+         "-map", "0:a:0", "-af", filt, "-c:a", "aac",
+         str(out_path)],
+        capture_output=True)
+    if proc.returncode != 0 or not out_path.exists():
+        raise RepairNotApplicable(
+            "ffmpeg loudnorm pass failed: "
+            + proc.stderr.decode("utf-8", "replace")[:200])
+    after = measure_loudness(out_path)
+    detail = (
+        f"two-pass loudnorm ({mode}) of the final mix: "
+        f"integrated {before.integrated_lufs:.2f} -> "
+        f"{after.integrated_lufs} LUFS, true peak "
+        f"{before.true_peak_dbtp} -> {after.true_peak_dbtp} dBTP "
+        f"(target {LOUDNESS_TARGET_LUFS:.0f} LUFS / "
+        f"{TRUE_PEAK_MAX_DBTP:.0f} dBTP); video stream copied "
+        "untouched; speech stem unmodified")
+    return RepairExecution(
+        render_path=out_path, hook=artifacts.hook,
+        cues=list(artifacts.cues),
+        caption_rect=artifacts.caption_rect,
+        canvas_alphas=artifacts.canvas_alphas, detail=detail,
+        graphics=artifacts.graphics,
+        hook_slide_px_s=artifacts.hook.slide_px_s,
+        sfx_events=([e.to_dict() for e in artifacts.sfx_plan]
+                    if artifacts.sfx_plan is not None else None),
+        speech_audio_from=(artifacts.window_clip
+                           if artifacts.sfx_plan is not None
+                           else None),
+        backdrops=artifacts.backdrops)
+
+
 _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {
     TRIM_SILENCE: _exec_trim_silence,
     REPOSITION_HOOK: _exec_reposition_hook,
@@ -1143,6 +1267,7 @@ _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {
     REFRAME_SPEAKER: _exec_reframe_speaker,
     DROP_GRAPHICS: _exec_drop_graphics,
     ENGAGE_HOOK_SLIDE: _exec_engage_hook_slide,
+    NORMALIZE_LOUDNESS: _exec_normalize_loudness,
 }
 
 

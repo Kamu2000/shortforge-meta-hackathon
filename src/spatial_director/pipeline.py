@@ -16,7 +16,7 @@ Stages (the converged design, assembled end to end):
               fallbacks)
            -> layout (hook band + caption block from head geometry)
            -> composite render (draft 1)
-           -> verifier F1-F7 + Wonder judge (receipt 1)
+           -> verifier F1-F9 + Wonder judge (receipt 1)
            -> rescue loop if draft 1 failed (ONE menu repair,
               re-verify, chained receipt)
       -> per-Short final MP4 + chained receipt, and a run summary
