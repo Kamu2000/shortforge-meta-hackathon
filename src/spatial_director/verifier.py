@@ -1,5 +1,5 @@
-"""The F1-F7 verifier (+ F8 for graphics renders): deterministic
-checks first, one judge second.
+"""The F1-F9 verifier (F8 only for graphics renders; F9 on every
+render): deterministic checks first, one judge second.
 
 This is the gate the whole product is named for. It runs on the
 ACTUAL render (never a proxy, never the plan), in the order the
@@ -68,6 +68,17 @@ disagree is reconciled in the BUILDLOG and in layout_law):
   mix over the stem). F5 measures dead air on the pre-mix speech
   stem whenever the shipped audio carries mixed SFX, so an
   effect can never mask a gap.
+- F9 platform loudness (2026-10-31): the FINAL artifact's audio,
+  measured with ffmpeg's loudnorm analysis pass (EBU R128) -
+  integrated loudness must sit at the platform normalisation
+  target -14 LUFS +/- 1 (pass band -15.0 to -13.0) and the true
+  peak at or below -1.0 dBTP. F9 runs on EVERY render, graphics
+  or not: the pipeline's relative speech normalisation (speech
+  RMS -> -20 dB) is a per-window levelling for F1, not a
+  platform loudness guarantee, and until F9 nothing measured a
+  render against the level YouTube/Shorts will normalise it to.
+  The measured integrated / true peak / LRA are recorded next
+  to the thresholds, like every other check.
 
 Written fresh in-repo on 2026-10-29.
 """
@@ -76,6 +87,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import subprocess
 import tempfile
@@ -151,6 +163,17 @@ GRAPHIC_MIN_VISIBLE_PX = 50     # below this a sample is unmeasurable
 # effect the receipt declares is not in the render.
 SFX_GAP_FLOOR_DB = -50.0
 SFX_GAP_LIFT_MIN_DB = 6.0
+
+# F9 (platform loudness) thresholds: the level YouTube/Shorts
+# normalise uploads to. Integrated loudness is gated at the
+# target +/- the tolerance (pass band -15.0 to -13.0 LUFS); the
+# true-peak ceiling is a hard cap. LRA is the loudnorm design
+# loudness range used by both the analysis pass and the repair;
+# it is recorded, not gated.
+LOUDNESS_TARGET_LUFS = -14.0
+LOUDNESS_TOLERANCE_LU = 1.0
+TRUE_PEAK_MAX_DBTP = -1.0
+LOUDNESS_LRA_LU = 11.0
 
 _STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "in", "is", "it",
@@ -427,6 +450,122 @@ def _profile_db_at(profile: EnergyProfile, t_s: float) -> float:
 def _content_words(text: str) -> list[str]:
     words = re.findall(r"[a-z0-9]+", text.lower())
     return [w for w in words if w not in _STOPWORDS]
+
+
+# ---------------------------------------------------------------- F9 loudness
+
+
+@dataclass
+class LoudnessMeasurement:
+    """One ffmpeg loudnorm analysis of a media file (EBU R128).
+
+    ``integrated_lufs`` / ``true_peak_dbtp`` / ``lra_lu`` are the
+    input_* values of the analysis pass; ``threshold_lufs`` and
+    ``target_offset_lu`` are carried because the two-pass repair
+    (rescue_loop's NORMALIZE_LOUDNESS) feeds the full measurement
+    back into its applying pass. Non-finite readings (digital
+    silence measures -inf) surface as None - a receipt must stay
+    strict JSON, and -inf is not. ``error`` is set when no
+    measurement could be made at all (missing file, no audio
+    stream, unparseable output); measuring never raises.
+    """
+
+    integrated_lufs: float | None = None
+    true_peak_dbtp: float | None = None
+    lra_lu: float | None = None
+    threshold_lufs: float | None = None
+    target_offset_lu: float | None = None
+    error: str | None = None
+
+
+_LOUDNORM_JSON_RE = re.compile(r"\{[^{}]*\"input_i\"[^{}]*\}")
+
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if math.isfinite(out) else None
+
+
+def measure_loudness(path: str | Path) -> LoudnessMeasurement:
+    """Analyse ``path``'s audio with ffmpeg's loudnorm filter.
+
+    Single analysis pass (``print_format=json``); the JSON block
+    loudnorm prints to stderr is the parse - it is structured
+    output from the tool itself, not a log scrape. Any failure
+    returns a measurement with ``error`` set instead of raising:
+    an unmeasurable render is an F9 FAIL with the reason on the
+    receipt, not a verifier crash.
+    """
+    proc = subprocess.run(
+        ["ffmpeg", "-i", str(path), "-vn",
+         "-af", (f"loudnorm=I={LOUDNESS_TARGET_LUFS:.0f}"
+                 f":TP={TRUE_PEAK_MAX_DBTP:.0f}"
+                 f":LRA={LOUDNESS_LRA_LU:.0f}:print_format=json"),
+         "-f", "null", "-"],
+        capture_output=True, text=True)
+    blocks = _LOUDNORM_JSON_RE.findall(proc.stderr or "")
+    if not blocks:
+        return LoudnessMeasurement(error=(
+            "ffmpeg loudnorm analysis produced no measurement "
+            f"(exit {proc.returncode}; missing file, no audio "
+            "stream, or undecodable audio)"))
+    try:
+        data = json.loads(blocks[-1])
+    except json.JSONDecodeError:
+        return LoudnessMeasurement(
+            error="ffmpeg loudnorm analysis output was not "
+                  "parseable JSON")
+    return LoudnessMeasurement(
+        integrated_lufs=_finite_float(data.get("input_i")),
+        true_peak_dbtp=_finite_float(data.get("input_tp")),
+        lra_lu=_finite_float(data.get("input_lra")),
+        threshold_lufs=_finite_float(data.get("input_thresh")),
+        target_offset_lu=_finite_float(data.get("target_offset")))
+
+
+def _check_loudness(inputs: VerifyInputs) -> CheckResult:
+    """F9: platform loudness of the FINAL artifact's audio.
+
+    Measured on the artifact file itself (never the plan, never
+    a caller-supplied profile): the shipped mix, SFX included,
+    is exactly what a platform would normalise.
+    """
+    m = measure_loudness(inputs.video_path)
+    lo = LOUDNESS_TARGET_LUFS - LOUDNESS_TOLERANCE_LU
+    hi = LOUDNESS_TARGET_LUFS + LOUDNESS_TOLERANCE_LU
+    passed = bool(
+        m.integrated_lufs is not None and lo <= m.integrated_lufs <= hi
+        and m.true_peak_dbtp is not None
+        and m.true_peak_dbtp <= TRUE_PEAK_MAX_DBTP)
+    note = ""
+    if m.error:
+        note = f"loudness could not be measured: {m.error}"
+    elif m.integrated_lufs is None:
+        note = ("no measurable integrated loudness (digital "
+                "silence or an empty audio stream): a silent "
+                "render is not at platform loudness")
+    return CheckResult(
+        check_id="F9", name="platform loudness", passed=passed,
+        measured={
+            "integrated_lufs": (None if m.integrated_lufs is None
+                                else round(m.integrated_lufs, 2)),
+            "true_peak_dbtp": (None if m.true_peak_dbtp is None
+                               else round(m.true_peak_dbtp, 2)),
+            "lra_lu": (None if m.lra_lu is None
+                       else round(m.lra_lu, 2)),
+            "measurement_error": m.error,
+        },
+        threshold={
+            "integrated_target_lufs": LOUDNESS_TARGET_LUFS,
+            "integrated_min_lufs": lo,
+            "integrated_max_lufs": hi,
+            "true_peak_max_dbtp": TRUE_PEAK_MAX_DBTP,
+        },
+        note=note,
+    )
 
 
 # ---------------------------------------------------------------- F8
@@ -858,8 +997,8 @@ def verify(inputs: VerifyInputs, *,
            wonder: WonderClient | None = None,
            draft: int = 1,
            ts: str = "") -> Receipt:
-    """Run F1-F7 (plus F8 when graphics are supplied) over one
-    render and issue its receipt.
+    """Run F1-F9 (F8 only when graphics are supplied; F9 on
+    every render) over one render and issue its receipt.
 
     All deterministic checks always run (a failure never
     short-circuits the rest - the receipt reports everything, so a
@@ -1225,6 +1364,9 @@ def verify(inputs: VerifyInputs, *,
         if inputs.backdrops is not None:
             backdrops_section = [b.to_dict()
                                  for b in inputs.backdrops]
+
+    # ---- F9: platform loudness (every render) ---------------------
+    checks.append(_check_loudness(inputs))
 
     # ---- receipt ---------------------------------------------------------
     receipt = Receipt(
