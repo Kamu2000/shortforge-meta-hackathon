@@ -1,0 +1,628 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-graphics-mcarthur-2/short-3/draft2-normalize-loudness.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "FAIL",
+  "repair": {
+    "status": "executed",
+    "menu_id": "NORMALIZE_LOUDNESS",
+    "target_check": "F9",
+    "spark_reason": "raises integrated_lufs from -21.49 to -14 LUFS target via two-pass loudnorm of final mix",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0075,
+      "request_id": "chatcmpl-01a196e6-38f1-732c-aea6-ccde9ac25503"
+    },
+    "extra_calls": [],
+    "detail": "two-pass loudnorm (dynamic) of the final mix + measured corrections (gain +0.30 dB; limiter (ceiling -4.61 dB, buying headroom); gain +1.91 dB): integrated -21.49 -> -14.37 LUFS, true peak -2.49 -> -1.05 dBTP (target -14 LUFS / -1 dBTP); video stream copied untouched; speech stem unmodified"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-graphics-mcarthur-2/short-3/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F8",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -21.42,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.139,
+            "glyph_occlusion_max": 0.1486,
+            "glyph_occlusion_alpha_weighted_mean": 0.1365,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                566.7,
+                1187.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1112,
+            "frames_with_speaker": 155,
+            "frames_total": 155
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.16,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.999,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A presenter compares the Space Shuttle and Crew Dragon, saying both aim to get people from Earth to low Earth orbit but in different ways, with the shuttle able to carry large payloads. The hook is the on-screen text \"24 HOURS IN SMALL CREW DRAGON?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "24 HOURS IN SMALL CREW DRAGON?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "24 HOURS IN SMALL CREW DRAGON?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "the goals of the two vehicles are similar, [two]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0849,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9903
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": false,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "image",
+                "motion": "ken_burns",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.989,
+                "absence_match_max": 0.093,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [
+              {
+                "index": 0,
+                "kind": "backdrop",
+                "motion": "ken_burns",
+                "presence_match": null,
+                "absence_match_max": null,
+                "ok": false
+              }
+            ],
+            "offending_backdrop_indices": [
+              0
+            ],
+            "sfx": {
+              "declared": 1,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 5.172
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -21.49,
+            "true_peak_dbtp": -2.49,
+            "lra_lu": 0.7,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0211,
+          "request_id": "resp_6ae7245bdaff834b172f4504"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "708b0d98bfb6ccd40a6f0ed412f62ec6b9be9bebd37b35d91528a9b46d5ccfcf",
+        "sam_response": "71e1f094306b87387779bb890148cbe17f73f7c8202c1385db5c3c0bdd127a86",
+        "captions": "d4232d613512e353cb021e71bff3880cc64538680015b6b6b243e8e0291e2d98"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.139 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "image",
+          "span": [
+            3.37,
+            8.12
+          ],
+          "box": [
+            208,
+            256,
+            856,
+            1066
+          ],
+          "motion": "ken_burns",
+          "cost_usd": 0.01,
+          "source_quote": "The space shuttle also can take large payload into orbit, so it requires a, a huge amount of fuel to get the space shuttle into low Earth orbit, and the solid rocket boosters, when you first light off and get off the launch pad,",
+          "prompt": "space shuttle lifting off launch pad with twin boosters creating huge billowing smoke plumes. - no text, no letters, no numbers, no words"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 3.37,
+          "recipe": "whoosh",
+          "gain_db": -26.2,
+          "graphic_index": 0,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": [
+        {
+          "kind": "backdrop",
+          "start_s": 18.98,
+          "end_s": 22.0,
+          "motion": "ken_burns",
+          "prompt": "vast bright space station interior module with open airy volume and soft daylight glow. - no text, no letters, no numbers, no words",
+          "source_quote": "so we had more room to move around, but of course it's got nothing on the space that we have near now here on the International Space Station.",
+          "cost_usd": 0.01
+        }
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-graphics-mcarthur-2/short-3/draft2-normalize-loudness.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F8"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -14.0,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.139,
+            "glyph_occlusion_max": 0.1486,
+            "glyph_occlusion_alpha_weighted_mean": 0.1365,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                566.7,
+                1187.5
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1112,
+            "frames_with_speaker": 155,
+            "frames_total": 155
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.16,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.999,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A presenter explains the similarities and differences between the Space Shuttle and Crew Dragon for travel to low Earth orbit, hooked by the text \"24 HOURS IN SMALL CREW DRAGON?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "24 HOURS IN SMALL CREW DRAGON?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "24 HOURS IN SMALL CREW DRAGON?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "the goals of the two vehicles are similar, [two]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0849,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9903
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": false,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "image",
+                "motion": "ken_burns",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.989,
+                "absence_match_max": 0.093,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [
+              {
+                "index": 0,
+                "kind": "backdrop",
+                "motion": "ken_burns",
+                "presence_match": null,
+                "absence_match_max": null,
+                "ok": false
+              }
+            ],
+            "offending_backdrop_indices": [
+              0
+            ],
+            "sfx": {
+              "declared": 1,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 5.172
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": true,
+          "measured": {
+            "integrated_lufs": -14.37,
+            "true_peak_dbtp": -1.05,
+            "lra_lu": 0.9,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0136,
+          "request_id": "resp_6ae7249ec3c32d21226f444d"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "995d79f89edb19ebd616075f4ca2e8d44e5ab6647e73620b6503b630dd7e885d",
+        "sam_response": "71e1f094306b87387779bb890148cbe17f73f7c8202c1385db5c3c0bdd127a86",
+        "captions": "d4232d613512e353cb021e71bff3880cc64538680015b6b6b243e8e0291e2d98"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.139 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "image",
+          "span": [
+            3.37,
+            8.12
+          ],
+          "box": [
+            208,
+            256,
+            856,
+            1066
+          ],
+          "motion": "ken_burns",
+          "cost_usd": 0.01,
+          "source_quote": "The space shuttle also can take large payload into orbit, so it requires a, a huge amount of fuel to get the space shuttle into low Earth orbit, and the solid rocket boosters, when you first light off and get off the launch pad,",
+          "prompt": "space shuttle lifting off launch pad with twin boosters creating huge billowing smoke plumes. - no text, no letters, no numbers, no words"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 3.37,
+          "recipe": "whoosh",
+          "graphic_index": 0,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": [
+        {
+          "kind": "backdrop",
+          "start_s": 18.98,
+          "end_s": 22.0,
+          "motion": "ken_burns",
+          "prompt": "vast bright space station interior module with open airy volume and soft daylight glow. - no text, no letters, no numbers, no words",
+          "source_quote": "so we had more room to move around, but of course it's got nothing on the space that we have near now here on the International Space Station.",
+          "cost_usd": 0.01
+        }
+      ]
+    }
+  ]
+}
