@@ -1,0 +1,909 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-belew-2/short-3/draft2-normalize-loudness.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "FAIL",
+  "repair": {
+    "status": "executed",
+    "menu_id": "NORMALIZE_LOUDNESS",
+    "target_check": "F9",
+    "spark_reason": "raises integrated_lufs from -20.95 LUFS into -14 LUFS band via two-pass loudnorm of final mix",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0073,
+      "request_id": "chatcmpl-01a1913b-8b45-7675-8ef2-1625579a2974"
+    },
+    "extra_calls": [],
+    "detail": "two-pass loudnorm (dynamic) of the final mix: integrated -20.95 -> -14.59 LUFS, true peak -2.33 -> 0.13 dBTP (target -14 LUFS / -1 dBTP); video stream copied untouched; speech stem unmodified"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-belew-2/short-3/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5",
+        "F8",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -17.97,
+            "first_speech_onset_s": 0.24
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1341,
+            "glyph_occlusion_max": 0.1457,
+            "glyph_occlusion_alpha_weighted_mean": 0.1316,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                496.1,
+                1187.1
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1078,
+            "frames_with_speaker": 527,
+            "frames_total": 527
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 0.8,
+            "first_speech_onset_s": 0.24,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man recounts expecting 12 weeks of rehearsal time with Frank Zappa. The hook is the on-screen text \"12 WEEKS BECAME 7 DAYS,\" implying that rehearsal time was suddenly cut drastically.",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "12 WEEKS BECAME 17 DAYS"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "we had 12 weeks of rehearsal time."
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0045,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9972
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": false,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "count_up",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.969,
+                "absence_match_max": 0.16,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "reveal",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.934,
+                "absence_match_max": 0.002,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "count_up",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.948,
+                "absence_match_max": 0.044,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "sfx": {
+              "declared": 15,
+              "gap_events_checked": 5,
+              "stem_supplied": true,
+              "violations": [
+                {
+                  "t_s": 0.07,
+                  "recipe": "tick",
+                  "stem_db": -53.61,
+                  "mix_db": -53.31
+                },
+                {
+                  "t_s": 8.944,
+                  "recipe": "tick",
+                  "stem_db": -51.04,
+                  "mix_db": -46.19
+                },
+                {
+                  "t_s": 9.247,
+                  "recipe": "ding",
+                  "stem_db": -53.71,
+                  "mix_db": -53.28
+                }
+              ]
+            },
+            "duration_s": 21.958
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -20.95,
+            "true_peak_dbtp": -2.33,
+            "lra_lu": 2.8,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0185,
+          "request_id": "resp_6ae5b0f2b64621d1360f4f38"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "c8eb9bfdace3d2a8389b9f93ad0c495314da2467cb5b5563645b34bbc92bafed",
+        "sam_response": "ae74ce29f0c08ca038ed8a34929dcddb0b933c71c979f5a36d1a6f10ad3e3a80",
+        "captions": "aeffd0f1811741f46734ae70f1c86f5de3c166f59a3b8aa0d2be9e592858df3c"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.134 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            0.01,
+            2.72
+          ],
+          "box": [
+            216,
+            416,
+            864,
+            871
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "we had 12 weeks of rehearsal time.",
+          "headline": "12 weeks of rehearsal time",
+          "facts": "that's the amount of time I had"
+        },
+        {
+          "kind": "card",
+          "span": [
+            2.72,
+            6.27
+          ],
+          "box": [
+            720,
+            1240,
+            1056,
+            1436
+          ],
+          "motion": "reveal",
+          "cost_usd": 0.0,
+          "source_quote": "that's the amount of time I had with Frank Zappa.",
+          "headline": "Frank Zappa",
+          "facts": "that's the amount of time I had with"
+        },
+        {
+          "kind": "card",
+          "span": [
+            6.27,
+            9.9
+          ],
+          "box": [
+            632,
+            904,
+            1028,
+            1166
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "But after 17 days,",
+          "headline": "After 17 days",
+          "facts": "he said that some of the guys in"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 0.07,
+          "recipe": "tick",
+          "gain_db": -51.45,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 0.46,
+          "recipe": "tick",
+          "gain_db": -19.4,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 0.85,
+          "recipe": "tick",
+          "gain_db": -21.7,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 1.241,
+          "recipe": "tick",
+          "gain_db": -23.02,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 1.631,
+          "recipe": "tick",
+          "gain_db": -24.31,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 2.021,
+          "recipe": "tick",
+          "gain_db": -23.14,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 2.232,
+          "recipe": "ding",
+          "gain_db": -29.79,
+          "graphic_index": 0,
+          "anchor": "count_complete"
+        },
+        {
+          "t_s": 2.84,
+          "recipe": "ding",
+          "gain_db": -27.67,
+          "graphic_index": 1,
+          "anchor": "reveal"
+        },
+        {
+          "t_s": 6.33,
+          "recipe": "tick",
+          "gain_db": -25.95,
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 6.853,
+          "recipe": "tick",
+          "gain_db": -25.0,
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 7.375,
+          "recipe": "tick",
+          "gain_db": -28.86,
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 7.898,
+          "recipe": "tick",
+          "gain_db": -25.84,
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 8.421,
+          "recipe": "tick",
+          "gain_db": -25.14,
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 8.944,
+          "recipe": "tick",
+          "gain_db": -36.73,
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 9.247,
+          "recipe": "ding",
+          "gain_db": -55.13,
+          "graphic_index": 2,
+          "anchor": "count_complete"
+        }
+      ],
+      "backdrops": []
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-belew-2/short-3/draft2-normalize-loudness.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -12.88,
+            "first_speech_onset_s": 0.22
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1341,
+            "glyph_occlusion_max": 0.1457,
+            "glyph_occlusion_alpha_weighted_mean": 0.1316,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                496.1,
+                1187.1
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1078,
+            "frames_with_speaker": 527,
+            "frames_total": 527
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 0.8,
+            "first_speech_onset_s": 0.24,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man recounts thinking he had 12 weeks of rehearsal time with Frank Zappa. The hook is the large on-screen text \"12 WEEKS BECAME 7 DAYS,\" suggesting that rehearsal time was drastically cut.",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "12 WEEKS BECAME 17 DAYS"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "we had 12 weeks of rehearsal time."
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0045,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9972
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "count_up",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.969,
+                "absence_match_max": 0.16,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "reveal",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.934,
+                "absence_match_max": 0.002,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "count_up",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.948,
+                "absence_match_max": 0.044,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "sfx": {
+              "declared": 15,
+              "gap_events_checked": 5,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 21.958
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -14.59,
+            "true_peak_dbtp": 0.13,
+            "lra_lu": 2.6,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0173,
+          "request_id": "resp_6ae5b175f5eb85b77efd430e"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "593e61dfec608e0408f4002912ddded816a2891be12b6b72c543ac34a7e4ae71",
+        "sam_response": "ae74ce29f0c08ca038ed8a34929dcddb0b933c71c979f5a36d1a6f10ad3e3a80",
+        "captions": "aeffd0f1811741f46734ae70f1c86f5de3c166f59a3b8aa0d2be9e592858df3c"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.134 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            0.01,
+            2.72
+          ],
+          "box": [
+            216,
+            416,
+            864,
+            871
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "we had 12 weeks of rehearsal time.",
+          "headline": "12 weeks of rehearsal time",
+          "facts": "that's the amount of time I had"
+        },
+        {
+          "kind": "card",
+          "span": [
+            2.72,
+            6.27
+          ],
+          "box": [
+            720,
+            1240,
+            1056,
+            1436
+          ],
+          "motion": "reveal",
+          "cost_usd": 0.0,
+          "source_quote": "that's the amount of time I had with Frank Zappa.",
+          "headline": "Frank Zappa",
+          "facts": "that's the amount of time I had with"
+        },
+        {
+          "kind": "card",
+          "span": [
+            6.27,
+            9.9
+          ],
+          "box": [
+            632,
+            904,
+            1028,
+            1166
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "But after 17 days,",
+          "headline": "After 17 days",
+          "facts": "he said that some of the guys in"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 0.07,
+          "recipe": "tick",
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 0.46,
+          "recipe": "tick",
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 0.85,
+          "recipe": "tick",
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 1.241,
+          "recipe": "tick",
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 1.631,
+          "recipe": "tick",
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 2.021,
+          "recipe": "tick",
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 2.232,
+          "recipe": "ding",
+          "graphic_index": 0,
+          "anchor": "count_complete"
+        },
+        {
+          "t_s": 2.84,
+          "recipe": "ding",
+          "graphic_index": 1,
+          "anchor": "reveal"
+        },
+        {
+          "t_s": 6.33,
+          "recipe": "tick",
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 6.853,
+          "recipe": "tick",
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 7.375,
+          "recipe": "tick",
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 7.898,
+          "recipe": "tick",
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 8.421,
+          "recipe": "tick",
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 8.944,
+          "recipe": "tick",
+          "graphic_index": 2,
+          "anchor": "count"
+        },
+        {
+          "t_s": 9.247,
+          "recipe": "ding",
+          "graphic_index": 2,
+          "anchor": "count_complete"
+        }
+      ],
+      "backdrops": []
+    }
+  ]
+}

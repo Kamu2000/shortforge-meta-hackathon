@@ -1,0 +1,766 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-belew-2/short-2/draft2-normalize-loudness.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "FAIL",
+  "repair": {
+    "status": "executed",
+    "menu_id": "NORMALIZE_LOUDNESS",
+    "target_check": "F9",
+    "spark_reason": "raises integrated_lufs from -20.97 LUFS into -14 LUFS band via final-mix loudnorm while keeping true_peak <= -1 dBTP",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0096,
+      "request_id": "chatcmpl-01a19129-9c6b-7552-810e-4d6f007e4acd"
+    },
+    "extra_calls": [],
+    "detail": "two-pass loudnorm (dynamic) of the final mix: integrated -20.97 -> -14.58 LUFS, true peak -1.19 -> 0.11 dBTP (target -14 LUFS / -1 dBTP); video stream copied untouched; speech stem unmodified"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-belew-2/short-2/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5",
+        "F8",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 4,
+            "audio_rms_db_0_2s": -18.97,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1488,
+            "glyph_occlusion_max": 0.1666,
+            "glyph_occlusion_alpha_weighted_mean": 0.1459,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                499.1,
+                1185.8
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1082,
+            "frames_with_speaker": 528,
+            "frames_total": 528
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 0.94,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man in a white shirt and cap talks to camera telling a story about an upset person calling him their favorite player in the world, with the hook being the large on-screen text \"LOST EVERYTHING FOR SIX MONTHS?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "LOST EVERYTHING FOR SIX MONTHS?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "LOST EVERYTHING FOR SIX MONTHS? [everything]"
+              },
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "LOST EVERYTHING FOR SIX MONTHS? [six]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0035,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9985
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": false,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.947,
+                "absence_match_max": 0.005,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.946,
+                "absence_match_max": 0.001,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "static",
+                "path": "approach",
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.84,
+                "absence_match_max": 0.01,
+                "path_match": 0.955,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "sfx": {
+              "declared": 4,
+              "gap_events_checked": 2,
+              "stem_supplied": true,
+              "violations": [
+                {
+                  "t_s": 20.19,
+                  "recipe": "ding",
+                  "stem_db": -58.76,
+                  "mix_db": -57.45
+                }
+              ]
+            },
+            "duration_s": 22.0
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -20.97,
+            "true_peak_dbtp": -1.19,
+            "lra_lu": 4.1,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0216,
+          "request_id": "resp_6ae5ac586811197531884831"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "cb54e4af890762984d312bd61a2032d2718eeebd2c0124e9f446d01a03c055a2",
+        "sam_response": "7d71c37605d2ca9fca0f4c64b5964224ef46c7231b37b089bc0be9fe53bcf74a",
+        "captions": "b7f497303add3b87b31aa0388419e283246d287516bbff195a29673a8b66f4ce"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.149 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            11.89,
+            14.72
+          ],
+          "box": [
+            624,
+            920,
+            1020,
+            1133
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "Three months after that happened, Robert Fripp decided decided I should no longer be in King Crimson,",
+          "headline": "Robert Fripp",
+          "facts": "decided I should no longer be in King Crimson"
+        },
+        {
+          "kind": "card",
+          "span": [
+            16.75,
+            19.29
+          ],
+          "box": [
+            640,
+            1144,
+            1036,
+            1357
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "I just I wrote something called Flux, I invented something called Flux,",
+          "headline": "Flux",
+          "facts": "I wrote something called Flux"
+        },
+        {
+          "kind": "card",
+          "span": [
+            19.29,
+            21.98
+          ],
+          "box": [
+            40,
+            928,
+            376,
+            1134
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "I wrote an orchestral piece, played it with an orchestra, I did a movie with Pixar that won an Oscar,",
+          "headline": "Movie With Pixar",
+          "facts": "won an Oscar",
+          "path": "approach"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 11.89,
+          "recipe": "pop",
+          "gain_db": -24.85,
+          "graphic_index": 0,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 16.75,
+          "recipe": "pop",
+          "gain_db": -28.67,
+          "graphic_index": 1,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 19.29,
+          "recipe": "whoosh",
+          "gain_db": -24.54,
+          "graphic_index": 2,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 20.19,
+          "recipe": "ding",
+          "gain_db": -54.79,
+          "graphic_index": 2,
+          "anchor": "land"
+        }
+      ],
+      "backdrops": []
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-belew-2/short-2/draft2-normalize-loudness.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 4,
+            "audio_rms_db_0_2s": -13.65,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1488,
+            "glyph_occlusion_max": 0.1666,
+            "glyph_occlusion_alpha_weighted_mean": 0.1459,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                499.1,
+                1185.8
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1082,
+            "frames_with_speaker": 528,
+            "frames_total": 528
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 0.94,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man in a white t-shirt and cap speaks to camera recounting an anecdote about a very upset man who said he might be his favorite player in the world. The hook is the on-screen text \"LOST EVERYTHING FOR SIX MONTHS?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "LOST EVERYTHING FOR SIX MONTHS?"
+              },
+              {
+                "pattern": "conflict",
+                "source": "hook",
+                "evidence": "LOST EVERYTHING FOR SIX MONTHS? [everything]"
+              },
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "LOST EVERYTHING FOR SIX MONTHS? [six]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0035,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9985
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.947,
+                "absence_match_max": 0.005,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.946,
+                "absence_match_max": 0.001,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "static",
+                "path": "approach",
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.84,
+                "absence_match_max": 0.01,
+                "path_match": 0.955,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "sfx": {
+              "declared": 4,
+              "gap_events_checked": 2,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 22.0
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -14.58,
+            "true_peak_dbtp": 0.11,
+            "lra_lu": 3.3,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0249,
+          "request_id": "resp_6ae5ace1e888c57b0f73422c"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "b9d284f0c0b782522019d1eea23e627aac5a808fab05cfa13835fdb9266b5436",
+        "sam_response": "7d71c37605d2ca9fca0f4c64b5964224ef46c7231b37b089bc0be9fe53bcf74a",
+        "captions": "b7f497303add3b87b31aa0388419e283246d287516bbff195a29673a8b66f4ce"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.149 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            11.89,
+            14.72
+          ],
+          "box": [
+            624,
+            920,
+            1020,
+            1133
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "Three months after that happened, Robert Fripp decided decided I should no longer be in King Crimson,",
+          "headline": "Robert Fripp",
+          "facts": "decided I should no longer be in King Crimson"
+        },
+        {
+          "kind": "card",
+          "span": [
+            16.75,
+            19.29
+          ],
+          "box": [
+            640,
+            1144,
+            1036,
+            1357
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "I just I wrote something called Flux, I invented something called Flux,",
+          "headline": "Flux",
+          "facts": "I wrote something called Flux"
+        },
+        {
+          "kind": "card",
+          "span": [
+            19.29,
+            21.98
+          ],
+          "box": [
+            40,
+            928,
+            376,
+            1134
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "I wrote an orchestral piece, played it with an orchestra, I did a movie with Pixar that won an Oscar,",
+          "headline": "Movie With Pixar",
+          "facts": "won an Oscar",
+          "path": "approach"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 11.89,
+          "recipe": "pop",
+          "graphic_index": 0,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 16.75,
+          "recipe": "pop",
+          "graphic_index": 1,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 19.29,
+          "recipe": "whoosh",
+          "graphic_index": 2,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 20.19,
+          "recipe": "ding",
+          "graphic_index": 2,
+          "anchor": "land"
+        }
+      ],
+      "backdrops": []
+    }
+  ]
+}

@@ -1,0 +1,686 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-holmes-6/short-1/draft2-trim-silence.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "PASSED_AFTER_REPAIR",
+  "repair": {
+    "status": "executed",
+    "menu_id": "TRIM_SILENCE",
+    "target_check": "F5",
+    "spark_reason": "reduces max_silence_gap_s from 1.0s to under 0.45s by cutting pauses and retiming captions",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0029,
+      "request_id": "chatcmpl-01a19043-18c4-716c-a095-eeee6f30c053"
+    },
+    "extra_calls": [],
+    "detail": "trimmed 0.70s at 1.31s, 0.70s at 3.65s, 0.68s at 11.85s; 432 -> 370 frames"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-holmes-6/short-1/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -28.37,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1404,
+            "glyph_occlusion_max": 0.1606,
+            "glyph_occlusion_alpha_weighted_mean": 0.1393,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                374.4,
+                1187.3
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1101,
+            "frames_with_speaker": 432,
+            "frames_total": 432
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.0,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.93,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man discusses whether the Dallas Cowboys have put their whole season at risk over the future of Dak Prescott as a Cowboy. The hook is the text \"DID COWBOYS RISK THEIR WHOLE SEASON?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "DID COWBOYS RISK THEIR WHOLE SEASON?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0052,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9988
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.948,
+                "absence_match_max": 0.002,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.966,
+                "absence_match_max": 0.003,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.957,
+                "absence_match_max": 0.002,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "sfx": {
+              "declared": 3,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 14.414
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.019,
+          "request_id": "resp_6ae5715a1fbbb0ef7c414efc"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "781a66f46a8b99befa48f3c2635a7643aa0e31302ffaafe4d6e7afa01946c73d",
+        "sam_response": "389d997d12d268abb73ae3d2b8865cf440433e83d8a98f421f1f542a68265433",
+        "captions": "18f0335a4a469eb7de8607b3fab7bdbff786e234a89e0b72e34637d5295d7afc"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.140 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            0.08,
+            3.52
+          ],
+          "box": [
+            600,
+            1216,
+            996,
+            1429
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "So the Cowboys have put their whole season,",
+          "headline": "Cowboys",
+          "facts": "have put their whole season"
+        },
+        {
+          "kind": "card",
+          "span": [
+            3.52,
+            6.74
+          ],
+          "box": [
+            200,
+            456,
+            848,
+            749
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "the future of Dak Prescott as a Cowboy.",
+          "headline": "Dak Prescott",
+          "facts": "future of Dak Prescott as a Cowboy"
+        },
+        {
+          "kind": "card",
+          "span": [
+            7.6,
+            10.36
+          ],
+          "box": [
+            536,
+            904,
+            1006,
+            1200
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "And the future of Mike McCarthy as their head coach.",
+          "headline": "Mike McCarthy",
+          "facts": "future of Mike McCarthy as their head coach"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 0.08,
+          "recipe": "pop",
+          "gain_db": -29.48,
+          "graphic_index": 0,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 3.52,
+          "recipe": "pop",
+          "gain_db": -42.92,
+          "graphic_index": 1,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 7.6,
+          "recipe": "pop",
+          "gain_db": -37.28,
+          "graphic_index": 2,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": []
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/spike-footage/pipeline-run-graphics-holmes-6/short-1/draft2-trim-silence.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "PASSED_AFTER_REPAIR",
+      "failed_checks": [],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -24.58,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1447,
+            "glyph_occlusion_max": 0.1687,
+            "glyph_occlusion_alpha_weighted_mean": 0.1434,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                374.2,
+                1187.3
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 1101,
+            "frames_with_speaker": 370,
+            "frames_total": 370
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.3,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.912,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A speaker discusses the Dallas Cowboys putting their whole season on the future of Dak Prescott as a Cowboy. The hook is the on-screen text question \"DID COWBOYS RISK THEIR WHOLE SEASON?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "DID COWBOYS RISK THEIR WHOLE SEASON?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0051,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.998
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.949,
+                "absence_match_max": 0.002,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.966,
+                "absence_match_max": 0.003,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.957,
+                "absence_match_max": 0.077,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "sfx": {
+              "declared": 3,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 12.346
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0174,
+          "request_id": "resp_6ae57320020d733f9ede4972"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "47cffd7e5f17d7e6361608a6f36dbbaf37998fdf71e026f00b54c7881a06bfc0",
+        "sam_response": "389d997d12d268abb73ae3d2b8865cf440433e83d8a98f421f1f542a68265433",
+        "captions": "92cb09ffb405f74e21e4f8fe3f76b79f080863a1e67093f761f6ede577edefde"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.145 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            0.08,
+            2.82
+          ],
+          "box": [
+            600,
+            1216,
+            996,
+            1429
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "So the Cowboys have put their whole season,",
+          "headline": "Cowboys",
+          "facts": "have put their whole season"
+        },
+        {
+          "kind": "card",
+          "span": [
+            2.82,
+            5.34
+          ],
+          "box": [
+            200,
+            456,
+            848,
+            749
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "the future of Dak Prescott as a Cowboy.",
+          "headline": "Dak Prescott",
+          "facts": "future of Dak Prescott as a Cowboy"
+        },
+        {
+          "kind": "card",
+          "span": [
+            6.2,
+            8.96
+          ],
+          "box": [
+            536,
+            904,
+            1006,
+            1200
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "And the future of Mike McCarthy as their head coach.",
+          "headline": "Mike McCarthy",
+          "facts": "future of Mike McCarthy as their head coach"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 0.08,
+          "recipe": "pop",
+          "gain_db": -26.76,
+          "graphic_index": 0,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 2.82,
+          "recipe": "pop",
+          "gain_db": -40.21,
+          "graphic_index": 1,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 6.2,
+          "recipe": "pop",
+          "gain_db": -34.57,
+          "graphic_index": 2,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": []
+    }
+  ]
+}
