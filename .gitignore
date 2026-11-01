@@ -1,6 +1,7 @@
 # Secrets and local config — never commit credentials
 .env
 .env.*
+!.env.example
 *.key
 *.pem
 secrets/
