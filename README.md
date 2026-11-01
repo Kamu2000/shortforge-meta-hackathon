@@ -1,4 +1,4 @@
-# ShortForge — Meta AI Developer Hackathon
+# Verifiable Spatial Director — ShortForge's Meta AI Developer Hackathon entry
 
 Team **ShortForge**'s entry to the **Meta Global AI Developer Hackathon** (Meta × Cerebral Valley, October 26 – November 4, 2026).
 
@@ -7,45 +7,133 @@ Team **ShortForge**'s entry to the **Meta Global AI Developer Hackathon** (Meta 
 
 ## What this is
 
-The **Verifiable Spatial Director**: give it a long talking-head video and it returns Shorts where the speaker stands *in front of* the hook text — and every Short ships with a measured PASS/FAIL receipt proving it was checked.
+The **Verifiable Spatial Director**: give it one long talking-head video and it returns up to **3 finished vertical Shorts** (1080×1920) — and every Short ships with a measured **PASS/FAIL receipt** proving it was checked after rendering.
 
-How it works: the source is transcribed and its strongest moments are scored and selected; SAM 3.1 segments the speaker per frame; a 3-layer composite (blurred background / hook text / speaker cutout in front) is rendered; a post-render verifier then checks the *actual rendered file* — deterministic geometry checks first, then one Muse Wonder pass over the opening seconds of the render — and on a FAIL it attempts one repair and re-verifies. The receipt records every check, its measurement against its threshold, the repair (if any), every Meta model call, and the run's cost.
+How it works: the source is transcribed and its strongest moments are scored and selected; SAM 3.1 segments the speaker per frame; a layered composite is rendered in which the speaker stands *in front of* the hook text (treated backdrop / hook text / speaker cutout, captions always in front); a **post-render verifier (checks F1–F9)** then measures the *actual rendered file* — deterministic geometry and audio checks first, plus one Muse Wonder judgement of the muted opening seconds — and on a FAIL, Muse Spark 1.3 picks **at most one repair** from a fixed menu, the repair runs on cached artifacts, and the render is re-verified. The receipt records every check with its measured value against its threshold, the repair (if any), every Meta model call with its request id, input hashes, and the run's cost. A FAIL that cannot be repaired in one pass is reported as a FAIL — the pipeline never manufactures a pass.
 
-Meta models claimed for this entry (each must have a logged call in the shipped pipeline before it is claimed — see `spend-ledger.jsonl`):
+An optional **context-graphics layer** (`--graphics`) adds code-rendered context cards and Muse Image stills, placed against the SAM masks under a strict placement law and verified by check F8, with procedural sound effects synthesized in code. Every graphic traces to a verbatim quote from the transcript; a numeric guard rejects any value the speaker did not say.
 
-- **SAM 3.1** (Meta Model API) — per-frame speaker segmentation
-- **Muse Wonder** (Meta Model API) — post-render verification of the real render
-- **Muse Spark Open** (open weights, served via Baseten) — transcript moment scoring
+## Model roster and model map
 
-This README is updated as the build lands during the event; BUILDLOG.md carries the dated record.
+Every runtime model in this pipeline is a Meta model. The roster below matches `spend-ledger.jsonl` (Meta Model API spend) and `partner-usage-log.jsonl` (partner-credit usage) in this repository — a model is listed only because the shipped pipeline has logged calls to it.
 
-## Disclosure — pre-existing vs built during the event
-
-- **Pre-existing:** ShortForge is an existing private product (an AI short-form video studio) operated as a hosted service. Its codebase is **not** in this repository, and no part of it was copied, imported, or adapted here.
-- **Built during the event:** everything in this repository was written from scratch between October 26 and November 4, 2026, for this hackathon. The dated commit history and BUILDLOG.md are the record of that work.
-- **Open-source resources used (labeled):** Python standard library and FFmpeg (invoked as a subprocess), plus the declared dependencies below. No other third-party code is vendored into this repo.
-
-| Dependency | What it is | Used for |
+| Stage | Model | Provider |
 |---|---|---|
-| NumPy | Array library | Mask math, matte finishing, temporal smoothing, compositing |
-| SciPy (ndimage) | Scientific library | Connected-component labelling for matte cleanup (classical CV, not a model) |
-| Pillow | Imaging library | Hook-text rendering and frame handling |
-| meta-sam-parser | **Meta's official parser library** for the SAM segmentation protocol (PyPI) | Decoding SAM 3.1 mask payloads into rasters — the payload is a custom-base85 token over a context-coded arithmetic stream, and the library's lossless path thresholds coverage internally; our `mask_decode` module wraps it and never re-thresholds |
+| Source transcription (turn-level) | Muse Voice Transcribe (`muse-voice-transcribe-1.0`) | Meta Model API |
+| Caption punctuation pass | Muse Spark 1.3 (`muse-spark-1.3`) | Meta Model API |
+| Candidate moment scoring / sweep | **Muse Spark Open** (open weights) | **Baseten** |
+| Hook line writing | Muse Spark 1.3 | Meta Model API |
+| Speaker segmentation, per frame | SAM 3.1 (`sam-3.1`) | Meta Model API |
+| Graphics planning (which cards/stills, where) | Muse Spark 1.3 | Meta Model API |
+| Graphics stills and backdrop scenes | Muse Image (`muse-image-1.0`) | Meta Model API |
+| Post-render verification — F5 muted-hook judgement | Muse Wonder (`muse-wonder-1.0`) | Meta Model API |
+| Repair selection (one repair, fixed menu) | Muse Spark 1.3 | Meta Model API |
 
-## Running and verifying
+### Muse Wonder is a core component
 
-The event component in this repository runs standalone; it does not require the pre-existing ShortForge product. Setup and full demo instructions are added alongside the pipeline code as it lands during the event. Current state: see BUILDLOG.md.
+Wonder is not an add-on or a demo flourish: it is the semantic leg of the verifier. Check F5 fails a Short if its opening seconds cannot be understood with the sound off, and that judgement is made by Muse Wonder watching the actual rendered hook, muted. Every verified Short in `receipts/` carries a recorded Wonder call (model + request id) for this leg.
 
-What can be verified today (offline, no API key needed):
+### Muse Spark Open — open-weights provenance
+
+The candidate-sweep stage runs **Muse Spark Open** (Meta's open-weights model) served by **Baseten**. Meta staff confirmed during the event that `meta-models/muse-spark-open` on Baseten counts for the Open Weights prize, via the team's own account. Every Spark Open call is logged in `partner-usage-log.jsonl` (provider, model id as served, token counts, latency, request id); those calls bill against partner credits, so they carry no USD figure in `spend-ledger.jsonl`. Spark Open is one stage of the pipeline (moment scoring); the rest of the roster above runs on the Meta Model API. Fireworks AI also served Spark Open during our provider benchmark and is the proven fallback host (see `partner-usage-log.jsonl`, 2026-10-29 benchmark entries).
+
+### Muse Image — disclosure
+
+Event staff confirmed that Muse Image is **unavailable in India** and that this unavailability **will not count against the entry**. Both halves of the picture are stated plainly: Muse Image is unavailable in India per staff, **and** our runs did place Muse Image graphics live — a pipeline placement on 2026-10-31 (Holmes graphics run 3) and Ken Burns-treated image stills in the Belew graphics run (2026-10-31) — with the calls in `spend-ledger.jsonl` ($0.01 per image) and the placements recorded on the receipts in `receipts/`. The graphics layer degrades gracefully: context cards are rendered in code and need no image call.
+
+## The verifier — checks F1–F9
+
+The verifier measures the rendered file, never the plan. Receipts for Shorts without graphics carry the F1–F7 + F9 shape; F8 runs when a Short carries graphics.
+
+| Check | What it measures |
+|---|---|
+| F1 | Hook presence: hook-text opacity ≥ 0.90 at frame 0, and speech audio present (RMS above −32 dBFS) |
+| F2 | Captions never overlap the face (0 px), and hook-glyph occlusion by the speaker ≤ 25% (the planner targets an 8–20% band) |
+| F3 | Safe-zone containment: hook, captions and face inside the canvas safe zones; face centroid inside the central band |
+| F4 | Speaker containment: ≥ 98% of frames contained, head-top margin ≥ 90 px |
+| F5 | No dead air: maximum speech gap ≤ 0.45 s (measured on the pre-mix speech stem), **and** Muse Wonder must be able to summarise the muted opening hook |
+| F6 | Hook content: a conflict, number, or question lands by 3 s |
+| F7 | Early motion: zoom ≥ 6% or a card slide in the opening seconds, with motion consistency (IoU) |
+| F8 | **Context-graphics integrity** (graphics Shorts only), as amended 2026-10-31: **no timing legs** — no hook-window ban and no minimum gap between graphics; graphics may start at 0 s and run back-to-back. Spatial legs are all zero-tolerance: face region **plus its 28 px margin** = 0 px overlap; caption block and caption zone = 0 px; hook glyph zone while a span overlaps the hook window = 0 px; pairwise collision between time-overlapping graphics = 0 pairs. Each graphic's presence in-span and absence out-of-span is pixel-measured against its declared asset and box. Block-2 legs: motion-path fidelity (mid-travel pixel match ≥ 0.75), SFX audibility against the speech stem, and backdrop containment |
+| F9 | Loudness of every render: integrated loudness −14 LUFS ± 1, true peak ≤ −1.0 dBTP (ffmpeg loudnorm measurement) |
+
+Repairs (at most one per Short, chosen by Muse Spark 1.3 as strict JSON from this fixed menu; an out-of-menu choice leaves the draft-1 FAIL standing): TRIM_SILENCE, REPOSITION_HOOK, REFIT_HOOK_INK, RESCALE_SPEAKER, REGENERATE_HOOK_TEXT, REFRAME_SPEAKER, ENGAGE_HOOK_SLIDE, DROP_GRAPHICS, NORMALIZE_LOUDNESS.
+
+## Live figures (as of the Nov 2 repo gate)
+
+- **Cumulative Meta Model API spend: $9.4691** across 348 ledgered calls (`spend-ledger.jsonl`), against a **$145 hard cap enforced in code** (`src/spatial_director/spend_ledger.py`) — the entry was built entirely on the $150 event grant; no personal funds were spent. Model split: SAM 3.1 $4.8604 · Muse Wonder $2.4075 · Muse Spark 1.3 $1.1370 · Muse Voice Transcribe $1.0242 · Muse Image $0.0400.
+- **Test suite: 345/345 passing** (`PYTHONPATH=src python3 -m unittest discover -s tests`).
+- **Verifier proof pack: 44/44** labelled cases in exact agreement, plus the receipt re-verifier section **4/4** (`tools/proof_pack.py`).
+- **Cost per finished Short: $0.169–$0.241** across complete passing runs, fully loaded on an API-cost-only basis (per-Short calls plus the run's shared full-source transcription; infrastructure is not in any ledger and no infra-inclusive figure is claimed). Full per-run table and method: `CLAIMS-REGISTER.md`.
+
+## Setup and run (fresh clone)
+
+Requirements: Python ≥ 3.11, FFmpeg on PATH.
+
+```bash
+pip install -e .          # numpy, Pillow, scipy, meta-sam-parser
+cp .env.example .env      # then fill in your own keys — see below
+```
+
+Keys (never committed; `.env` is git-ignored):
+
+- `SPATIAL_DIRECTOR_META_API_KEY` — a Meta Model API key from the developer console at dev.meta.ai. Used for SAM 3.1, Muse Spark 1.3, Muse Voice Transcribe, Muse Wonder and Muse Image.
+- `SPATIAL_DIRECTOR_BASETEN_API_KEY` — a Baseten API key (app.baseten.co → Settings → API Keys). Used for Muse Spark Open (candidate sweep).
+- `GRAPHICS_LAYER=1` (or pass `--graphics`) — enables the context-graphics layer.
+
+Run the pipeline on a long talking-head video:
+
+```bash
+PYTHONPATH=src python3 -m spatial_director.pipeline <video.mp4> --out <run-dir> --max-shorts 3 [--graphics] [--ledger <path-to-spend-ledger.jsonl>]
+```
+
+Each Short lands in the run directory as `final.mp4` with its `receipt.json` beside it, plus a `run-summary.json` for the run.
+
+### Keyless verification — no API key, no model calls
+
+Anyone can check that a receipt tells the truth about its render, offline, with zero API calls:
+
+```bash
+python3 tools/reverify.py receipts/receipt-pipeline-holmes4-short1.json --evidence-dir <dir-holding-that-short's-artifacts>
+```
+
+`tools/reverify.py` recomputes each draft's recorded input hashes (artifact, SAM response, caption list) and re-measures the deterministic check legs field-by-field against the receipt's recorded values; the Wonder legs are verified as *recorded* (model + request id), never re-judged. It prints its own boundary honestly: it is hash verification plus deterministic re-measurement, not a bit-identical re-render. Model-judgement legs and repairs it cannot reproduce are reported as NOT-REPRODUCIBLE with the reason named, never silently passed.
+
+The offline test suite needs no keys either:
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-This exercises the cumulative spend ledger (including its hard cap); the SAM and Voice Transcribe clients' request construction and ledger gating with fake transports; mask decoding, canvas placement, and primary-speaker selection against a trimmed real SAM response fixture plus synthetic multi-object payloads; and the finish stack and compositor layer order on synthetic frames.
+## Standalone statement — pre-existing vs built during the event
 
-Spend accountability: `spend-ledger.jsonl` at the repository root is the cumulative, append-only record of every paid Meta API call made for this entry, with the cap enforced in code (`src/spatial_director/spend_ledger.py`).
+**This repository contains only work built during the event (October 26 – November 4, 2026).**
 
-## Credentials
+- **Pre-existing:** ShortForge is an existing private product (an AI short-form video studio) operated as a hosted service. Its codebase is **not** in this repository. Anything pre-existing was **excluded** from this repository, not merely disclosed: no pre-event code, scaffolding, or assets were copied in. The pre-kickoff cutoff applied throughout is **12:24 PM ET, October 26, 2026** — work written before it does not appear here; pre-kickoff scaffolding was rewritten from scratch during the event, not carried over.
+- **Built during the event:** everything in this repository — pipeline, verifier, graphics layer, tools, tests, receipts — was written between October 26 and November 4, 2026, for this hackathon. The dated commit history and `BUILDLOG.md` are the record of that work.
+- The event component runs standalone from this repository; it does not require the pre-existing ShortForge product.
 
-This repository contains **no API keys or secrets**. The code reads credentials from environment variables / local configuration that is git-ignored and never committed.
+## Demo footage — CC-BY attribution
+
+The demonstration and test footage is Creative Commons Attribution (CC BY) licensed, verified in the source metadata on 2026-10-28, and credited here and in the demo credits:
+
+- **Adrian Belew interview** — "Adrian Belew speaks up on Nine Inch Nails & Talking Heads", Ultimate Guitar ("On The Record"): https://www.youtube.com/watch?v=8H678YcwCl4 — CC BY.
+- **Mark Holmes commentary** — "Cowboys and Ceedee only One Million away", Mark Holmes: https://www.youtube.com/watch?v=MQjeUxN6l4c — CC BY.
+
+Attribution is required wherever this footage appears (demo, receipts, README); the rights log is maintained with the build records. No unlicensed or unconsented footage is used anywhere in this entry, including for evaluation.
+
+## Non-model libraries (helpers)
+
+The pipeline calls Meta models for every model task at runtime. The following are non-model libraries and tools — no third-party model runs at runtime:
+
+| Dependency | What it is | Used for |
+|---|---|---|
+| NumPy | Array library | Mask math, matte finishing, temporal smoothing, compositing, procedural SFX synthesis |
+| SciPy (ndimage) | Scientific library | Connected-component labelling for matte cleanup (classical CV, not a model) |
+| Pillow | Imaging library | Hook-text and context-card rendering, frame handling |
+| meta-sam-parser | Licensed open-source parser library for the SAM segmentation protocol (PyPI) — a non-AI decoding library, not a model | Decoding SAM 3.1 mask payloads into rasters; the library thresholds coverage internally on its lossless path, and our `mask_decode` module wraps it and never re-thresholds |
+| FFmpeg | Media tool (invoked as a subprocess) | Rendering, loudness measurement (loudnorm), audio/video processing |
+
+## Claims and evidence
+
+Every claim made for this entry — in the demo, this README, or the submission — is registered with its evidence in **`CLAIMS-REGISTER.md`**, including what is still pending and what is banned from use. `BUILDLOG.md` carries the dated build record. Receipts for the verified runs are in `receipts/`.
