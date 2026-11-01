@@ -29,7 +29,8 @@ no ledger and no infra-inclusive figure is claimed (§8, item 5).
   $1.90 founding.** Gross margin on API cost at the measured run
   costs: **75.1–82.5% (Basic)**, **62.0–73.3% (founding)** (§5).
 - Total event API spend (all R&D, not just production):
-  **$9.4691 across 348 ledgered calls** (§4), of the $150 grant,
+  **$11.0330 across 401 ledgered calls** (§4; updated 2026-11-01
+  evening — the gate figure was $9.4691 / 348), of the $150 grant,
   under the $145 hard cap enforced in `spend_ledger.py`.
 
 The two block-2 graphics runs of 2026-10-31 are tabulated in §2
@@ -38,7 +39,13 @@ alongside the earlier runs (register entries G4 and G5 in
 3/3 passing F1–F8) is a complete passing run and sits inside every
 range above. The Belew graphics run ($0.6572) FAILED all three
 Shorts and is excluded from every range — its cost is disclosed in
-§2, not folded into any passing figure.
+§2, not folded into any passing figure. The two McArthur runs
+(2026-11-01, NASA ISS source) are likewise tabulated in §2 and
+likewise outside every §1 range: run 1 ($0.7858) produced zero
+passing Shorts (F9 repair fault), and the re-run ($0.7781)
+produced the first two F1–F9-passing Shorts but is not a
+*complete* passing run (short 3 failed F8), so the ranges —
+computed on complete passing runs only — do not move.
 
 ## 2. Per-run economics
 
@@ -52,7 +59,7 @@ Transcribe), except the run marked †, whose summary was never written
 and whose costs are ledger-attributed (§7). Durations are ffprobe
 measurements of the finished `final.mp4` files. Sources: Holmes
 commentary, 1026.554 s (17.109 min); Belew interview, 1219.210 s
-(20.320 min).
+(20.320 min); McArthur ISS interview, 1035.053 s (17.251 min).
 
 | Run (source) | Run cost | Finished / passing | $ / finished Short | $ / finished minute of output | $ / minute of source | Wall-clock |
 |---|---|---|---|---|---|---|
@@ -65,6 +72,8 @@ commentary, 1026.554 s (17.109 min); Belew interview, 1219.210 s
 | pipeline-run-graphics-holmes-3 (new F8 rules) † | $0.4089 | 2 / 2 | $0.2045 | $0.7483 | $0.0239 | — (§8) |
 | pipeline-run-graphics-holmes-6 (Holmes, graphics, block-2) | $0.6193 | 3 / 3 | $0.2064 | $0.8030 | $0.0362 | 72.0 min |
 | pipeline-run-graphics-belew-2 (Belew, graphics, block-2) — **FAILED** | $0.6572 | 3 / 0 | $0.2191 | — | $0.0323 | 66.1 min |
+| pipeline-run-graphics-mcarthur-1 (McArthur, graphics) — **FAILED (F9)** | $0.7858 | 3 / 0 | $0.2619 | — | $0.0456 | 47.7 min |
+| pipeline-run-graphics-mcarthur-2 (McArthur, graphics, F9 repair reworked) | $0.7781 | 3 / 2 | $0.2594 | $0.9598 | $0.0451 | 49.4 min |
 
 **The first Belew attempt is not in the table.** Its spend is a
 contiguous block of the ledger — lines 143–156, totalling exactly
@@ -108,6 +117,24 @@ Notes on the imperfect rows — reported, not hidden:
   per-finished-minute figure is stated for it because it produced
   zero passing Shorts. Its receipts are kept in this repo as FAIL
   evidence (`CLAIMS-REGISTER.md` G5).
+- **The McArthur runs** (2026-11-01, NASA ISS interview — CC-BY
+  and a US federal work). Run 1 ($0.7858): shorts 1–2 passed
+  F1–F8 on both drafts and failed F9 only, on the
+  NORMALIZE_LOUDNESS true-peak fault (post-repair peaks +0.52 /
+  +0.59 dBTP); short 3's window was the split-screen intro, SAM
+  returned 155 of 659 frames, and the render truncated to a 5.2s
+  stub (F8+F9 fail). After the repair rework (BUILDLOG
+  2026-11-01), the re-run ($0.7781) produced **the first two
+  F1–F9-passing Shorts** (both PASSED_AFTER_REPAIR; draft-2 F9
+  −13.91 LUFS / −1.53 dBTP and −14.49 / −1.42); short 3 failed
+  F8 only on the same split-screen window (its F9 passes on
+  draft 2). The re-run's $0.9598 per finished minute is computed
+  on all finished output including the 5.1s stub; on the two
+  passing Shorts' own recorded per-Short costs ($0.4748 over
+  43.52 s of output, shared transcription excluded) it is
+  $0.6546 per finished minute. Neither McArthur run enters the
+  §1 ranges (run 1: zero passing; re-run: not a complete passing
+  run). Receipts for both runs are in this repo (register G6/G7).
 - **pipeline-run-graphics-holmes-3 †**: shorts 1–2 finished and
   passed under the current F8 ruleset (short 1 PASSED_AFTER_REPAIR,
   short 2 PASSED_FIRST_DRAFT with the run's first live Muse Image
@@ -119,10 +146,12 @@ Notes on the imperfect rows — reported, not hidden:
 ## 3. Per-Short detail (from the run summaries)
 
 Per-Short `cost_usd` exactly as recorded in each `run-summary.json`;
-the shared full-source transcription ($0.0513 Holmes / $0.0610 Belew)
+the shared full-source transcription ($0.0513 Holmes / $0.0610 Belew
+/ $0.0518 McArthur)
 is additional to these and is included in the §2 run totals. In every
 summary, per-Short costs + shared cost reconcile to the recorded run
-total to the cent (re-verified for this staging).
+total to the cent (re-verified for this staging; the two McArthur
+summaries re-verified 2026-11-01 evening).
 
 | Run | Short 1 | Short 2 | Short 3 |
 |---|---|---|---|
@@ -133,6 +162,8 @@ total to the cent (re-verified for this staging).
 | pipeline-run-graphics-holmes | $0.1500 (repaired) | $0.1706 (FAIL) | $0.2066 (repaired) |
 | pipeline-run-graphics-holmes-2 | $0.2257 (repaired) | $0.1984 (repaired) | $0.2469 (repaired) |
 | pipeline-run-graphics-holmes-3 † (ledger) | $0.1961 (repaired) | $0.1615 (first draft) | — (killed, $0.1437) |
+| pipeline-run-graphics-mcarthur-1 | $0.2191 (FAIL) | $0.2730 (FAIL) | $0.2419 (FAIL) |
+| pipeline-run-graphics-mcarthur-2 | $0.2164 (repaired) | $0.2584 (repaired) | $0.2515 (FAIL) |
 
 The first Belew attempt has no run-summary and no per-Short row here:
 the only per-Short evidence for it is the surviving short-1 receipt
@@ -144,20 +175,21 @@ reconciliation.
 ## 4. Where the money went — ledger model split
 
 Aggregation of the repo's `spend-ledger.jsonl`, **performed
-2026-11-01 on the current ledger: all 348 lines, cumulative
-$9.4691**. The ledger covers all event spend — production runs
+2026-11-01 on the gate ledger (348 lines, $9.4691) and
+re-performed the same evening after the two McArthur runs: all
+401 lines, cumulative $11.0330**. The ledger covers all event spend — production runs
 (including failed, partial and killed work), the Oct 29 spike,
 benchmarks, proof packs, calibration calls and one-off probes — i.e.
 the R&D total, not production cost alone.
 
 | Model | Calls | Cost | Share |
 |---|---|---|---|
-| SAM 3.1 (segmentation) | 45 | $4.8604 | 51.3% |
-| Muse Wonder (verifier judge) | 69 | $2.4075 | 25.4% |
-| Muse Spark 1.3 (hooks, captions, planning, repairs) | 186 | $1.1370 | 12.0% |
-| Muse Voice Transcribe | 44 | $1.0242 | 10.8% |
-| Muse Image (graphics stills) | 4 | $0.0400 | 0.4% |
-| **Total** | **348** | **$9.4691** | 100% |
+| SAM 3.1 (segmentation) | 51 | $5.6488 | 51.2% |
+| Muse Wonder (verifier judge) | 82 | $2.7182 | 24.6% |
+| Muse Spark 1.3 (hooks, captions, planning, repairs) | 207 | $1.4082 | 12.8% |
+| Muse Voice Transcribe | 48 | $1.1278 | 10.2% |
+| Muse Image (graphics stills) | 13 | $0.1300 | 1.2% |
+| **Total** | **401** | **$11.0330** | 100% |
 
 (Shares are rounded to one decimal and may not sum to exactly
 100.0%.) Muse Spark Open runs on partner credits (Baseten/Fireworks)
@@ -205,14 +237,17 @@ made or implied.
 
 - Run totals, per-Short costs, verdicts and `door_to_door_s`: read
   directly from each run's `run-summary.json` in the build records.
-  Cross-check performed: in all six summaries, Σ per-Short costs +
+  Cross-check performed: in every run-summary carrying per-Short
+  costs (eight at this staging, the two McArthur summaries
+  included), Σ per-Short costs +
   shared cost = recorded run total, exactly (re-verified for this
   staging).
 - Durations: `ffprobe` on each finished `final.mp4` (and on the two
   source files for source durations).
-- Ledger split (§4): programmatic aggregation of all 348 lines of
+- Ledger split (§4): programmatic aggregation of all 401 lines of
   `spend-ledger.jsonl` by `model`, summing `cost_usd`, performed
-  2026-11-01.
+  2026-11-01 (gate aggregation at 348 lines; re-performed the
+  same evening at 401 lines after the McArthur runs).
 - † Run (graphics-holmes-3): no `run-summary.json` exists. Costs were
   attributed from contiguous ledger blocks identified by the purpose
   tags (`pipeline-sam-shortN`, `pipeline-caption-punctuation-shortN`,

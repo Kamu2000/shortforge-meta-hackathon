@@ -19,7 +19,7 @@ the quarantine list again at the Nov 4 pre-submit audit.
 | 1 | One Director run turns one long video into up to 3 finished Shorts, each with a chained PASS/FAIL receipt | Pipeline runs on Holmes (CC-BY); receipts in repo `receipts/` |
 | 2 | Latest full F1–F7 run: 2 Shorts PASSED_AFTER_REPAIR, 1 PASSED_FIRST_DRAFT (Holmes run 4, refined build) | `receipts/receipt-pipeline-holmes4-short{1,2,3}.json`; see A16 |
 | 3 | Complete passing runs cost **$0.5070–$0.7223 per run** and **$0.169–$0.241 per finished Short**, fully loaded on an API-cost-only basis (per-Short calls + shared full-source transcription; infrastructure is in no ledger and no infra-inclusive figure is claimed). Framing rule: the $0.4407 pipeline-run-1 was the pre-fix run whose 3 finals all FAILED verification — it must never be cited as the cost of a passing run | Per-run run-summaries + ledger attribution, tabulated in the economics draft §1–§3 (2026-10-31); Belew figures per the reconciliation section below |
-| 4 | Cumulative event spend **$9.4691** of the $150 grant (348 ledger lines), $145 hard cap enforced in `spend_ledger.py`. Model split: SAM 3.1 $4.8604 · Muse Wonder $2.4075 · Muse Spark 1.3 $1.1370 · Muse Voice Transcribe $1.0242 · Muse Image $0.0400 | Direct aggregation of repo `spend-ledger.jsonl` at this gate |
+| 4 | Cumulative event spend **$11.0330** of the $150 grant (401 ledger lines; updated 2026-11-01 evening after the two McArthur runs — the gate figure was $9.4691 / 348 lines), $145 hard cap enforced in `spend_ledger.py`. Model split: SAM 3.1 $5.6488 · Muse Wonder $2.7182 · Muse Spark 1.3 $1.4082 · Muse Voice Transcribe $1.1278 · Muse Image $0.1300 | Direct aggregation of repo `spend-ledger.jsonl`, re-performed 2026-11-01 evening |
 | 5 | SAM 3.1 tracks the speaker in 100% of frames across 3 test clips; 1,679 masks decoded, zero errors; consecutive-frame IoU means 0.980–0.995 | Spike record, BUILDLOG 2026-10-29 ~01:30 IST |
 | 6 | SAM 3.1 video costs exactly $0.20 per 1,000 frames | Billed calls: 480 fr $0.096 / 600 fr $0.120 / 599 fr $0.1198 |
 | 7 | The verifier runs the deterministic checks **F1–F7** on the actual render, then one Wonder judgement of the muted 5s hook (the F5 semantic leg — Wonder is a core component, not an add-on); at most ONE repair, picked by Spark 1.3 from a fixed menu, on cached artifacts. **F9** (every render) checks integrated loudness −14 LUFS ±1 and true peak ≤ −1.0 dBTP, with NORMALIZE_LOUDNESS in the repair menu. When a Short carries graphics, **F8** also runs — see the F8 statement in the graphics section below | `verifier.py`, `rescue_loop.py`; receipts carry per-check measured values + every Meta call |
@@ -55,7 +55,7 @@ the quarantine list again at the Nov 4 pre-submit audit.
 | 18 | Any A/B preference figure vs an OpusClip-class incumbent. **PRE-REGISTERED DECISION THRESHOLD — not a result:** the claim may ship only if a blind A/B measures a preference of at least ≥68% among ~50 strangers for the Director output; below that threshold the claim is deleted. No blind A/B has run; no preference figure exists | Blind A/B execution (kit built 2026-10-31); recruitment blocked on creator outreach |
 | 19 | Verifier precision/recall per rule. SYNTHETIC HALF DONE: **44 labelled cases, exact label/verdict agreement 44/44, per-rule precision/recall 1.000** (fault injections + controls, incl. the F9 legs), plus the receipt re-verifier proof section **4/4** — valid ONLY as "the verifier catches the injected faults it was designed to catch" (`tools/proof_pack.py`). Real-render accuracy still pending the founder's blind pass | Blind pass over real renders |
 | 20 | Creator demand: switch/pay verdicts. Zero creators have been asked; nothing may be stated about demand | Outreach wave 1 + verdict forms at the locked 30-credit price |
-| 21 | SAM on a held-object occlusion case. UNTESTED — neither CC-BY source contains one; the clip-C hand-over-mouth case stands as the declared substitute | Closes only with a consented/self-recorded clip |
+| 21 | SAM on a held-object case — **PROVEN 2026-11-01, no longer pending.** On the NASA ISS interview (CC-BY, and a US federal work), the speaker holds a microphone throughout her answers; in the McArthur re-run's two F1–F9-passing Shorts, SAM's speaker track is present and contained in **657/657 and 650/650 frames (F4 containment 1.0)**, microphone in hand — the held object never breaks the track. The clip-C hand-over-mouth substitute is retired | `receipts/receipt-pipeline-graphics-mcarthur2-short{1,2}.json` (F4 measured legs); first exercised in the run-1 receipts (G6), proven on passing receipts in G7 |
 | 22 | Per-run cost typicality beyond the measured runs. Cost figures may be cited per measured run (with the run named), never as typical | Cohort runs (blocked on outreach consent) |
 | 23 | Door-to-door timing typicality (~56–95 min per 3-Short run across measured runs; cite per run, never as typical) | Cohort runs (blocked on outreach consent) |
 
@@ -133,14 +133,44 @@ relax verdicts.
   default-on flip is NOT met** (it required a Belew 3/3 pass on
   F1–F8 under the same code); the layer stays opt-in (`--graphics` /
   `GRAPHICS_LAYER=1`).
-- **Hero modes — wording rule.** Motion paths, backdrop mode, and
-  speaker-forward spans are **built and test-verified, live receipts
-  pending**: the planner selected none of them in the holmes6 or
-  Belew graphics runs (backdrop count 0, speaker-forward count 0,
-  all placed animations static / reveal / count-up / Ken Burns).
-  They may not be stated as proven on a real render. By contrast,
-  count-up cards and Ken Burns image stills ARE live-proven (G5),
-  and context cards + procedural SFX are live-proven (G4, G5).
+- **G6 — McArthur graphics run 1 (2026-11-01, NASA ISS interview,
+  CC-BY + US federal work):** **0/3**, run cost $0.7858, receipts
+  `receipts/receipt-pipeline-graphics-mcarthur1-short{1,2,3}.json`
+  (FAIL evidence). Shorts 1–2 passed F1–F8 completely on both
+  drafts and failed **F9 only**, on the NORMALIZE_LOUDNESS
+  true-peak fault (post-repair peaks +0.52 / +0.59 dBTP vs the
+  −1 cap; short 1's integrated also missed the floor by 0.14 LU).
+  Short 3 failed F8+F9: the sweep picked the split-screen intro
+  window, SAM returned 155 of 659 frames, and the render truncated
+  to a 5.2s stub. Live firsts: **backdrop mode** (short 2, galaxy
+  field, 15.3–17.86s), **speaker-forward spans** (shorts 1–2), and
+  the **held-object case exercised** (speaker + hand-held
+  microphone tracked, F4 containment 1.0).
+- **G7 — McArthur graphics re-run (2026-11-01 evening, after the
+  NORMALIZE_LOUDNESS rework, remote head e3ab608):** **2/3
+  PASSED_AFTER_REPAIR under the full F1–F9 set — the first
+  all-passing outputs under all nine checks**, run cost $0.7781,
+  receipts `receipts/receipt-pipeline-graphics-mcarthur2-short{1,2,3}.json`.
+  Short 1 (21.9s): draft 1 failed F9 only (−22.59 LUFS /
+  −0.19 dBTP) → repaired to **−13.91 LUFS / −1.53 dBTP**, all
+  checks green. Short 2 (21.6s): −21.74 / −0.76 → **−14.49 /
+  −1.42**, all green; backdrop mode selected again (galaxy
+  field, 14.52–17.41s) and a speaker-forward span (19.33–22.0s).
+  Short 3 FAIL on **F8 only** — the same split-screen window
+  produced the same 5.1s stub (its F9 now passes on draft 2:
+  −14.37 / −1.05); the loudness fault is closed on all three,
+  and the remaining defect is the unbuilt SAM-coverage guard on
+  window selection, recorded here rather than smoothed over.
+- **Hero modes — wording rule.** **Backdrop mode and
+  speaker-forward spans are now LIVE-PROVEN** (McArthur runs,
+  G6/G7: galaxy-field backdrops on short 2 of both runs;
+  speaker-forward spans on run-1 shorts 1–2 and run-2 short 2,
+  declared on the receipts with their transforms). **Motion
+  paths remain built and test-verified only** — the planner has
+  still never selected one on a live run, and they may not be
+  stated as proven on a real render. Count-up cards and Ken
+  Burns image stills ARE live-proven (G5), and context cards +
+  procedural SFX are live-proven (G4, G5).
 
 ## Belew cost reconciliation (gate ruling, 2026-11-01)
 

@@ -39,7 +39,7 @@ The candidate-sweep stage runs **Muse Spark Open** (Meta's open-weights model) s
 
 ### Muse Image — disclosure
 
-Event staff confirmed that Muse Image is **unavailable in India** and that this unavailability **will not count against the entry**. Both halves of the picture are stated plainly: Muse Image is unavailable in India per staff, **and** our runs did place Muse Image graphics live — a pipeline placement on 2026-10-31 (Holmes graphics run 3) and Ken Burns-treated image stills in the Belew graphics run (2026-10-31) — with the calls in `spend-ledger.jsonl` ($0.01 per image) and the placements recorded on the receipts in `receipts/`. The graphics layer degrades gracefully: context cards are rendered in code and need no image call.
+Event staff confirmed that Muse Image is **unavailable in India** and that this unavailability **will not count against the entry**. Both halves of the picture are stated plainly: Muse Image is unavailable in India per staff, **and** our runs did place Muse Image graphics live — a pipeline placement on 2026-10-31 (Holmes graphics run 3), Ken Burns-treated image stills in the Belew graphics run (2026-10-31), and image stills plus full-bleed backdrop scenes in both McArthur runs (2026-11-01) — with the calls in `spend-ledger.jsonl` ($0.01 per image) and the placements recorded on the receipts in `receipts/`. The graphics layer degrades gracefully: context cards are rendered in code and need no image call.
 
 ## The verifier — checks F1–F9
 
@@ -61,7 +61,7 @@ Repairs (at most one per Short, chosen by Muse Spark 1.3 as strict JSON from thi
 
 ## Live figures (as of the Nov 2 repo gate)
 
-- **Cumulative Meta Model API spend: $9.4691** across 348 ledgered calls (`spend-ledger.jsonl`), against a **$145 hard cap enforced in code** (`src/spatial_director/spend_ledger.py`) — the entry was built entirely on the $150 event grant; no personal funds were spent. Model split: SAM 3.1 $4.8604 · Muse Wonder $2.4075 · Muse Spark 1.3 $1.1370 · Muse Voice Transcribe $1.0242 · Muse Image $0.0400.
+- **Cumulative Meta Model API spend: $11.0330** across 401 ledgered calls (`spend-ledger.jsonl`; updated 2026-11-01 evening after the two McArthur runs), against a **$145 hard cap enforced in code** (`src/spatial_director/spend_ledger.py`) — the entry was built entirely on the $150 event grant; no personal funds were spent. Model split: SAM 3.1 $5.6488 · Muse Wonder $2.7182 · Muse Spark 1.3 $1.4082 · Muse Voice Transcribe $1.1278 · Muse Image $0.1300.
 - **Test suite: 345/345 passing** (`PYTHONPATH=src python3 -m unittest discover -s tests`).
 - **Verifier proof pack: 44/44** labelled cases in exact agreement, plus the receipt re-verifier section **4/4** (`tools/proof_pack.py`).
 - **Cost per finished Short: $0.169–$0.241** across complete passing runs, fully loaded on an API-cost-only basis (per-Short calls plus the run's shared full-source transcription; infrastructure is not in any ledger and no infra-inclusive figure is claimed). Full per-run table and method: `CLAIMS-REGISTER.md`.
@@ -119,6 +119,7 @@ The demonstration and test footage is Creative Commons Attribution (CC BY) licen
 
 - **Adrian Belew interview** — "Adrian Belew speaks up on Nine Inch Nails & Talking Heads", Ultimate Guitar ("On The Record"): https://www.youtube.com/watch?v=8H678YcwCl4 — CC BY.
 - **Mark Holmes commentary** — "Cowboys and Ceedee only One Million away", Mark Holmes: https://www.youtube.com/watch?v=MQjeUxN6l4c — CC BY.
+- **Megan McArthur ISS interview** — NASA astronaut Megan McArthur aboard the International Space Station, uploaded by "Kids Space Adventure": https://www.youtube.com/watch?v=yhwfDX-qzl4 — listed CC BY (verified by full metadata extraction 2026-11-01); the content is NASA-produced (end card nasa.gov/hubble, @NASAHubble) and therefore a US federal work in the public domain independently of the listing license. Credited to NASA / Megan McArthur wherever it appears.
 
 Attribution is required wherever this footage appears (demo, receipts, README); the rights log is maintained with the build records. No unlicensed or unconsented footage is used anywhere in this entry, including for evaluation.
 
