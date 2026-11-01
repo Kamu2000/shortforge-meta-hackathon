@@ -786,6 +786,48 @@ class NormalizeLoudnessTests(unittest.TestCase):
             self.assertGreaterEqual(after.integrated_lufs, -15.0)
             self.assertLessEqual(after.integrated_lufs, -13.0)
 
+    def test_executor_tames_quiet_bed_with_hot_transients(self):
+        # The real-world F9 failure shape (Belew graphics run
+        # 2026-10-31, McArthur run 2026-11-01 - six F9-only
+        # failures): a quiet bed under brief hot peaks. A
+        # loudnorm pass aimed at the ceiling, and likewise a
+        # sample-peak limiter pass, leaves the ENCODED artifact
+        # over the true-peak cap; the repair's measured loop
+        # must land both legs on the artifact it returns.
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            # Calibrated so the encoded fixture measures
+            # integrated -18.0 LUFS / true peak -0.07 dBTP:
+            # under the band, over the peak cap.
+            segments = [(1.98, 0.03), (0.03, 0.95), (1.99, 0.03)]
+            mix = write_wav(td / "mix.wav", segments, sr=44100)
+            src = td / "draft1.mp4"
+            subprocess.run(
+                ["ffmpeg", "-y", "-v", "error",
+                 "-f", "lavfi", "-i",
+                 "color=c=0x335577:s=320x240:r=10:d=4",
+                 "-i", str(mix),
+                 "-shortest", "-c:v", "libx264",
+                 "-pix_fmt", "yuv420p", "-c:a", "aac",
+                 str(src)],
+                check=True)
+            before = measure_loudness(src)
+            self.assertLess(before.integrated_lufs, -15.0)
+            self.assertGreater(before.true_peak_dbtp, -1.0)
+            artifacts = make_artifacts(td)
+            artifacts.render_path = src
+            execution = _exec_normalize_loudness(
+                artifacts,
+                f9_receipt(before.integrated_lufs,
+                           before.true_peak_dbtp),
+                FakeRenderer())
+            after = measure_loudness(execution.render_path)
+            self.assertGreaterEqual(after.integrated_lufs, -15.0)
+            self.assertLessEqual(after.integrated_lufs, -13.0)
+            self.assertLessEqual(after.true_peak_dbtp, -1.0)
+            self.assertEqual(video_stream_hash(src),
+                             video_stream_hash(execution.render_path))
+
     def test_executor_leaves_the_speech_stem_untouched(self):
         # F5 interaction, proven: the repair must not modify the
         # pre-mix stem F5 measures, and the execution must carry

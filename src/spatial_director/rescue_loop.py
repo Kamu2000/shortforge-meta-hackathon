@@ -1155,27 +1155,159 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
         else None)
 
 
+# NORMALIZE_LOUDNESS aims loudnorm's own TP target below the
+# F9 ceiling, then closes the loop in the only domains that
+# count: measurements of the actual files. The evidence that
+# forced this shape (all measured with the verifier's own
+# measure_loudness):
+# - A dynamic loudnorm pass aimed at -1.0 dBTP, followed by
+#   the AAC encode, repeatedly measured OVER the ceiling on
+#   the artifact the verifier reads - Belew graphics run
+#   2026-10-31 and McArthur run 2026-11-01: six F9-only
+#   failures, post-repair true peaks +0.11..+0.59 dBTP, and
+#   integrated levels landing up to 1.1 LU short.
+# - Loudnorm dynamic under-delivers integrated loudness on
+#   quiet-speech/hot-transient mixes (a -22.5 LUFS draft
+#   lands at -16.8 no matter the target), but plain gain
+#   translates 1:1 - so loudnorm does the shaping and exact
+#   gain does the lifting.
+# - A sample-peak limiter pass on the encoded artifact
+#   still leaves measured true peaks up to ~1.5 dB over its
+#   ceiling (inter-sample overshoot + codec ringing), and
+#   the AAC encode of SFX-heavy mixes overshoots the WAV
+#   true peak by +0.5..+2.7 dB, content-dependent.
+# The repair therefore works in the lossless domain first:
+# the draft's audio is extracted to a 192 kHz float WAV,
+# loudnormed there, then iterated - limiter / exact gain /
+# cut, every step driven by a fresh measurement of the WAV -
+# until it sits inside a tightened window (integrated within
+# [-14.6, -13.4], true peak at or under -2.7 dBTP, the slack
+# being the encode's overshoot budget). The WAV is then
+# muxed back over the untouched video with a single AAC
+# encode, the MP4 is measured, and up to
+# _MP4_MAX_CORRECTIONS further WAV corrections (limiter
+# ceiling set from the measured encode overshoot; exact gain
+# or cut for the integrated leg) are muxed and re-measured
+# the same way. Validated 2026-11-01 against the three real
+# draft-1 renders that had failed F9 (McArthur shorts 1-2,
+# Belew graphics short 1): all three land in band. The loop
+# is bounded; if it still has not landed, the best measured
+# artifact is returned and the draft-2 FAIL stands. The
+# final numbers in the detail string are measured on the
+# returned file itself - the repair never claims a number
+# it did not measure on the artifact it hands back.
+_LOUDNORM_TP_GUARD_DBTP = -3.0
+_WAV_TP_AIM_DBTP = -2.7
+_WAV_I_LO = -14.6
+_WAV_I_HI = -13.4
+_WAV_GAIN_AIM_LUFS = -13.9
+_MP4_GAIN_AIM_LUFS = -14.3
+_CUT_AIM_LUFS = -13.7
+_LOUDNESS_MAX_CORRECTIONS = 6
+_MP4_MAX_CORRECTIONS = 3
+
+
+def _loudnorm_filter(before) -> tuple[str, str]:
+    """The two-pass loudnorm filter for one measurement.
+
+    Linear mode when the required gain applied to the measured
+    true peak stays under the GUARDED target (not merely the
+    F9 ceiling); dynamic otherwise.
+    """
+    gain = LOUDNESS_TARGET_LUFS - before.integrated_lufs
+    linear = bool(
+        before.true_peak_dbtp is not None
+        and before.true_peak_dbtp + gain
+        <= _LOUDNORM_TP_GUARD_DBTP)
+    base = (f"loudnorm=I={LOUDNESS_TARGET_LUFS:.1f}"
+            f":TP={_LOUDNORM_TP_GUARD_DBTP:.1f}"
+            f":LRA={LOUDNESS_LRA_LU:.1f}")
+    measured = (before.integrated_lufs, before.true_peak_dbtp,
+                before.lra_lu, before.threshold_lufs,
+                before.target_offset_lu)
+    if all(v is not None for v in measured):
+        filt = (base
+                + f":measured_I={before.integrated_lufs:.2f}"
+                + f":measured_TP={before.true_peak_dbtp:.2f}"
+                + f":measured_LRA={before.lra_lu:.2f}"
+                + f":measured_thresh={before.threshold_lufs:.2f}"
+                + f":offset={before.target_offset_lu:.2f}"
+                + f":linear={'true' if linear else 'false'}")
+        return filt, "linear" if linear else "dynamic"
+    # A partial measurement cannot drive the two-pass recipe;
+    # a single dynamic pass still targets the same numbers.
+    return base + ":linear=false", "dynamic (partial measurement)"
+
+
+def _limiter_filter(ceiling_db: float) -> str:
+    """Oversampled sample-peak limiter at ``ceiling_db`` dBFS.
+
+    Run in the 192 kHz WAV domain, where the ceiling binds
+    the signal's own peaks; the caller's measured loop, not
+    the filter, is what makes the pair a true-peak limiter
+    in effect.
+    """
+    return ("aresample=192000,"
+            f"alimiter=limit={10 ** (ceiling_db / 20):.4f}"
+            ":attack=5:release=50:level=false")
+
+
+def _ffmpeg(args: list[str], label: str) -> None:
+    proc = subprocess.run(["ffmpeg", "-y", "-v", "error", *args],
+                          capture_output=True)
+    if proc.returncode != 0:
+        raise RepairNotApplicable(
+            f"ffmpeg {label} pass failed: "
+            + proc.stderr.decode("utf-8", "replace")[:200])
+
+
+def _wav_pass(src: Path, out: Path, filt: str, label: str) -> None:
+    """One lossless-domain audio pass (float WAV in and out)."""
+    _ffmpeg(["-i", str(src), "-vn", "-af", filt,
+             "-c:a", "pcm_f32le", str(out)], label)
+    if not out.exists():
+        raise RepairNotApplicable(
+            f"ffmpeg {label} pass produced no file")
+
+
+def _mux_wav(video_src: Path, wav: Path, out: Path) -> None:
+    """The single AAC encode: corrected WAV over copied video."""
+    _ffmpeg(["-i", str(video_src), "-i", str(wav),
+             "-map", "0:v:0", "-c:v", "copy",
+             "-map", "1:a:0", "-c:a", "aac", "-shortest",
+             str(out)], "mux")
+    if not out.exists():
+        raise RepairNotApplicable("ffmpeg mux produced no file")
+
+
 def _exec_normalize_loudness(artifacts: RenderArtifacts,
                              receipt: Receipt,
                              renderer, **_) -> RepairExecution:
-    """NORMALIZE_LOUDNESS: two-pass loudnorm of the FINAL artifact.
+    """NORMALIZE_LOUDNESS: loudnorm of the FINAL artifact, with
+    a measured corrective loop.
 
     The one repair that does not re-render: it operates on the
-    draft-1 render file itself, because F9 is a property of the
+    draft-1 render's audio, because F9 is a property of the
     finished mix (graphics/SFX included), not of any layer.
-    Pass 1 is the verifier's own measurement
-    (``measure_loudness``); pass 2 applies ffmpeg's loudnorm
-    with the measured values fed back, per the two-pass recipe.
-    Linear mode is used when the measurement allows it - the
-    required gain applied to the measured true peak stays under
-    the ceiling - and dynamic mode otherwise (a hot render's
-    peaks would clip under a linear lift). The video stream is
-    copied untouched (``-c:v copy``); the audio is the only
-    thing re-encoded. The pre-mix speech stem is never opened
-    for writing: F5 re-measures the same stem file on draft 2,
-    so this repair cannot launder a dead-air failure, and the
-    stem's identity is carried into the execution exactly as
-    the other executors carry it.
+    The audio is extracted to a 192 kHz float WAV and loudnorm
+    is applied there from the verifier's own measurement
+    (``measure_loudness``), per the two-pass recipe, aimed at
+    a guarded true-peak target. A measured loop in the WAV
+    domain (limiter / exact gain / cut, each step re-measured)
+    brings the WAV into a tightened window, then a single AAC
+    encode muxes it back over the stream-copied video and a
+    second measured loop corrects whatever the encode moved
+    (see the module note above for the measured evidence).
+    If the loops still have not landed both F9 legs, the best
+    measured artifact is returned and the verifier's draft-2
+    FAIL stands: the loops are bounded, and the repair reports
+    what it measured, never what it hoped. The video stream
+    is copied untouched through every pass. The pre-mix
+    speech stem is never opened for writing: F5 re-measures
+    the same stem file on draft 2, so this repair cannot
+    launder a dead-air failure, and the stem's identity is
+    carried into the execution exactly as the other executors
+    carry it.
     """
     src = Path(artifacts.render_path)
     if not src.exists():
@@ -1199,45 +1331,97 @@ def _exec_normalize_loudness(artifacts: RenderArtifacts,
             f"true peak {before.true_peak_dbtp:.2f} dBTP); the "
             "F9 failure must be a measurement this repair "
             "cannot change")
-    gain = LOUDNESS_TARGET_LUFS - before.integrated_lufs
-    linear = bool(
-        before.true_peak_dbtp is not None
-        and before.true_peak_dbtp + gain <= TRUE_PEAK_MAX_DBTP)
-    base = (f"loudnorm=I={LOUDNESS_TARGET_LUFS:.1f}"
-            f":TP={TRUE_PEAK_MAX_DBTP:.1f}"
-            f":LRA={LOUDNESS_LRA_LU:.1f}")
-    measured = (before.integrated_lufs, before.true_peak_dbtp,
-                before.lra_lu, before.threshold_lufs,
-                before.target_offset_lu)
-    if all(v is not None for v in measured):
-        filt = (base
-                + f":measured_I={before.integrated_lufs:.2f}"
-                + f":measured_TP={before.true_peak_dbtp:.2f}"
-                + f":measured_LRA={before.lra_lu:.2f}"
-                + f":measured_thresh={before.threshold_lufs:.2f}"
-                + f":offset={before.target_offset_lu:.2f}"
-                + f":linear={'true' if linear else 'false'}")
-        mode = "linear" if linear else "dynamic"
-    else:
-        # A partial measurement cannot drive the two-pass recipe;
-        # a single dynamic pass still targets the same numbers.
-        filt = base + ":linear=false"
-        mode = "dynamic (partial measurement)"
-    out_path = Path(artifacts.work_dir) / "draft2-normalize-loudness.mp4"
-    proc = subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(src),
-         "-map", "0:v:0", "-c:v", "copy",
-         "-map", "0:a:0", "-af", filt, "-c:a", "aac",
-         str(out_path)],
-        capture_output=True)
-    if proc.returncode != 0 or not out_path.exists():
-        raise RepairNotApplicable(
-            "ffmpeg loudnorm pass failed: "
-            + proc.stderr.decode("utf-8", "replace")[:200])
+    work = Path(artifacts.work_dir)
+    src_wav = work / "draft2-normalize-loudness.src.wav"
+    wav = work / "draft2-normalize-loudness.wav"
+    step_wav = work / "draft2-normalize-loudness.step.wav"
+    out_path = work / "draft2-normalize-loudness.mp4"
+    _ffmpeg(["-i", str(src), "-vn", "-af", "aresample=192000",
+             "-c:a", "pcm_f32le", str(src_wav)], "extract")
+    filt, mode = _loudnorm_filter(before)
+    _wav_pass(src_wav, wav, filt, "loudnorm")
+    corrections: list[str] = []
+    ceiling_db = _WAV_TP_AIM_DBTP - 0.1
+    for _ in range(_LOUDNESS_MAX_CORRECTIONS):
+        m = measure_loudness(wav)
+        if m.error or m.integrated_lufs is None \
+                or m.true_peak_dbtp is None:
+            break
+        if _WAV_I_LO <= m.integrated_lufs <= _WAV_I_HI \
+                and m.true_peak_dbtp <= _WAV_TP_AIM_DBTP:
+            break
+        if m.true_peak_dbtp > _WAV_TP_AIM_DBTP:
+            if corrections:
+                ceiling_db -= m.true_peak_dbtp - _WAV_TP_AIM_DBTP
+            _wav_pass(wav, step_wav, _limiter_filter(ceiling_db),
+                      "true-peak limiter")
+            corrections.append(
+                f"limiter (ceiling {ceiling_db:.2f} dB)")
+        elif m.integrated_lufs < _WAV_I_LO:
+            deficit = _WAV_GAIN_AIM_LUFS - m.integrated_lufs
+            room = _WAV_TP_AIM_DBTP - m.true_peak_dbtp
+            if room >= 0.1:
+                gain = min(deficit, room)
+                _wav_pass(wav, step_wav, f"volume={gain:.2f}dB",
+                          "gain")
+                corrections.append(f"gain +{gain:.2f} dB")
+            else:
+                ceiling_db -= deficit - room + 0.2
+                _wav_pass(wav, step_wav,
+                          _limiter_filter(ceiling_db),
+                          "true-peak limiter")
+                corrections.append(
+                    f"limiter (ceiling {ceiling_db:.2f} dB, "
+                    "buying headroom)")
+        else:
+            cut = m.integrated_lufs - _CUT_AIM_LUFS
+            _wav_pass(wav, step_wav, f"volume={-cut:.2f}dB",
+                      "gain")
+            corrections.append(f"gain -{cut:.2f} dB")
+        step_wav.replace(wav)
+    _mux_wav(src, wav, out_path)
     after = measure_loudness(out_path)
+    for _ in range(_MP4_MAX_CORRECTIONS):
+        if after.error or after.integrated_lufs is None \
+                or after.true_peak_dbtp is None:
+            break
+        if lo <= after.integrated_lufs <= hi \
+                and after.true_peak_dbtp <= TRUE_PEAK_MAX_DBTP:
+            break
+        mw = measure_loudness(wav)
+        if mw.error or mw.integrated_lufs is None \
+                or mw.true_peak_dbtp is None:
+            break
+        if after.true_peak_dbtp > TRUE_PEAK_MAX_DBTP:
+            overshoot = after.true_peak_dbtp - mw.true_peak_dbtp
+            ceiling_db = -1.7 - overshoot - 0.1
+            _wav_pass(wav, step_wav, _limiter_filter(ceiling_db),
+                      "true-peak limiter")
+            corrections.append(
+                f"post-encode limiter (ceiling "
+                f"{ceiling_db:.2f} dB, measured encode "
+                f"overshoot {overshoot:.2f} dB)")
+        elif after.integrated_lufs < lo:
+            gain = _MP4_GAIN_AIM_LUFS - mw.integrated_lufs
+            _wav_pass(wav, step_wav, f"volume={gain:.2f}dB",
+                      "gain")
+            corrections.append(
+                f"post-encode gain +{gain:.2f} dB")
+        else:
+            cut = mw.integrated_lufs - _CUT_AIM_LUFS
+            _wav_pass(wav, step_wav, f"volume={-cut:.2f}dB",
+                      "gain")
+            corrections.append(
+                f"post-encode gain -{cut:.2f} dB")
+        step_wav.replace(wav)
+        _mux_wav(src, wav, out_path)
+        after = measure_loudness(out_path)
+    src_wav.unlink(missing_ok=True)
     detail = (
-        f"two-pass loudnorm ({mode}) of the final mix: "
-        f"integrated {before.integrated_lufs:.2f} -> "
+        f"two-pass loudnorm ({mode}) of the final mix"
+        + (f" + measured corrections ({'; '.join(corrections)})"
+           if corrections else "")
+        + f": integrated {before.integrated_lufs:.2f} -> "
         f"{after.integrated_lufs} LUFS, true peak "
         f"{before.true_peak_dbtp} -> {after.true_peak_dbtp} dBTP "
         f"(target {LOUDNESS_TARGET_LUFS:.0f} LUFS / "
