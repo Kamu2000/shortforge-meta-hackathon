@@ -18,6 +18,13 @@ venv/
 *.mov
 *.wav
 *.mp3
+
+# Bundled re-verification evidence set — the ONE run-artifact set
+# shipped on purpose (README, "Keyless verification"). Scoped
+# exception for this path only; the global media ignores above
+# still apply everywhere else.
+!/evidence/holmes4-short1/*.mp4
+!/evidence/holmes4-short1/*.wav
 cache/
 tmp/
 out/
