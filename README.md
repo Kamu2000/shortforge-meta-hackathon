@@ -91,19 +91,27 @@ Each Short lands in the run directory as `final.mp4` with its `receipt.json` bes
 
 ### Keyless verification — no API key, no model calls
 
-Anyone can check that a receipt tells the truth about its render, offline, with zero API calls:
+Anyone can check that a receipt tells the truth about its render, offline, with zero API calls. One scope limit, stated plainly: receipts record the artifact paths of the machine that issued them, and **run artifacts are not shipped in this repository — with one exception**. The complete run directory of the example Short below is bundled at **`evidence/holmes4-short1/`** (Holmes run 4, Short 1: both draft artifacts, captions, the SAM response, the window clip and the audio stems, 26 MB), so that one receipt verifies end-to-end from a fresh clone:
 
 ```bash
-python3 tools/reverify.py receipts/receipt-pipeline-holmes4-short1.json --evidence-dir <dir-holding-that-short's-artifacts>
+python3 tools/reverify.py receipts/receipt-pipeline-holmes4-short1.json --evidence-dir evidence/holmes4-short1
 ```
 
-`tools/reverify.py` recomputes each draft's recorded input hashes (artifact, SAM response, caption list) and re-measures the deterministic check legs field-by-field against the receipt's recorded values; the Wonder legs are verified as *recorded* (model + request id), never re-judged. It prints its own boundary honestly: it is hash verification plus deterministic re-measurement, not a bit-identical re-render. Model-judgement legs and repairs it cannot reproduce are reported as NOT-REPRODUCIBLE with the reason named, never silently passed.
+(The same command with no `--evidence-dir` also works for this receipt: when a stored path does not exist on your machine, the tool resolves the artifact by basename against the bundled `evidence/` tree and adopts that directory as the evidence directory. Every such fallback is printed as a `RESOLVED` line naming the path actually used — never silent — and a same-name substituted file is still caught by the hash check.)
+
+For every other receipt in `receipts/`, the chain verifies when that Short's artifacts are supplied with `--evidence-dir` (or `--artifact-dir`); without the artifact files the tool reports `CHAIN MISSING: artifact file not found on disk` and fails, rather than passing a receipt it could not check.
+
+What the tool delivers, exactly: it recomputes each draft's recorded input hashes (artifact, SAM response, caption list) and — in evidence mode — re-measures the deterministic check legs field-by-field against the receipt's recorded values. With only a receipt and its artifact (no evidence directory), it verifies the hash chain and the artifact-only legs (F9 loudness, F1 audio) and reports the rest NOT-REPRODUCIBLE. The Wonder legs are verified as *recorded* (model + request id), never re-judged. It prints its own boundary honestly: it is hash verification plus deterministic re-measurement, not a bit-identical re-render. Model-judgement legs and repairs it cannot reproduce are reported as NOT-REPRODUCIBLE with the reason named, never silently passed.
+
+Cost of verifying: evidence mode is heavy — it decodes the SAM response and rebuilds the measured frames, peaking above 3 GB RAM for the bundled Short and taking minutes per Short, so run it on an otherwise idle machine (on a small shared VM it will not complete alongside other heavy jobs).
 
 The offline test suite needs no keys either:
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
+
+The full suite is a multi-minute run on a small VM (two of the larger modules alone took ~5 minutes in the Nov 2 verification pass); budget accordingly.
 
 ## Standalone statement — pre-existing vs built during the event
 
