@@ -287,6 +287,123 @@ class TestResolve(unittest.TestCase):
             self.assertEqual(got, swapped)
 
 
+class TestBundledEvidenceFallback(unittest.TestCase):
+    """Stored absolute paths from the author's machine, resolved
+    by basename against the bundled evidence/ tree — the fresh-
+    clone case. The fallback must resolve AND be reported."""
+
+    def _layout(self, td: Path, with_evidence_files=False):
+        receipts = td / "receipts"
+        receipts.mkdir()
+        ev = td / "evidence" / "set1"
+        ev.mkdir(parents=True)
+        f1 = ev / "draft-1.mp4"
+        f1.write_bytes(b"draft-one")
+        f2 = ev / "draft2.mp4"
+        f2.write_bytes(b"draft-two")
+        if with_evidence_files:
+            (ev / "captions.json").write_text("{}")
+            (ev / "sam-response.json").write_text("{}")
+            (ev / "window.mp4").write_bytes(b"w")
+        return receipts, ev, f1, f2
+
+    def _receipt(self, f1: Path, f2: Path):
+        store = "/home/hatch/author-machine"
+        d1 = _draft([], verdict="FAIL", failed_checks=["F5"],
+                    artifact=f"{store}/draft-1.mp4",
+                    inputs_sha256={
+                        "video": hashlib.sha256(b"draft-one").hexdigest()})
+        d2 = _draft([], verdict="PASSED_AFTER_REPAIR",
+                    artifact=f"{store}/draft2.mp4",
+                    inputs_sha256={
+                        "video": hashlib.sha256(b"draft-two").hexdigest()})
+        d1["draft"] = 1
+        d2["draft"] = 2
+        rep = {"chain_version": 1, "artifact": f"{store}/draft2.mp4",
+               "final_verdict": "PASSED_AFTER_REPAIR",
+               "repair": {"status": "executed",
+                          "menu_id": "TRIM_SILENCE",
+                          "target_check": "F5"},
+               "drafts": [d1, d2]}
+        return rep
+
+    def test_bundled_dirs_finds_shipped_layout(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            receipts, ev, _f1, _f2 = self._layout(td)
+            dirs = rv.bundled_evidence_dirs(receipts / "r.json")
+            self.assertIn(ev, dirs)
+
+    def test_missing_absolute_found_in_bundled_tree_verifies(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            receipts, ev, f1, f2 = self._layout(
+                td, with_evidence_files=True)
+            rep = self._receipt(f1, f2)
+            resolved, resolutions, ev_dir = rv._resolve_all(
+                rep, rep["drafts"], False, receipts / "r.json",
+                artifact=None, evidence_dir=None, artifact_dir=None)
+            self.assertEqual(resolved[1], f1)
+            self.assertEqual(resolved[2], f2)
+            self.assertEqual(resolved["top"], f2)
+            # The fallback is on the record, naming the paths used.
+            vias = {(r["what"], r["via"]) for r in resolutions}
+            self.assertIn(("draft 1 artifact", "bundled-evidence"),
+                          vias)
+            self.assertTrue(any(r["resolved"] == str(f1)
+                                for r in resolutions))
+            # The evidence directory is adopted from the same set.
+            self.assertEqual(ev_dir, ev)
+            self.assertIn(("evidence directory", "adopted"), vias)
+            # And the chain verifies against the resolved files.
+            chain = rv.verify_chain(rep, resolved)
+            self.assertTrue(chain["ok"])
+            self.assertEqual(chain["findings"], [])
+
+    def test_resolution_lines_render_in_report(self):
+        report = {
+            "receipt": "r.json", "final_verdict": "X",
+            "chain": {"chain_hash": "0" * 64, "findings": []},
+            "drafts": [],
+            "resolutions": [{
+                "what": "draft 1 artifact",
+                "stored": "/home/hatch/author-machine/draft-1.mp4",
+                "resolved": "/clone/evidence/set1/draft-1.mp4",
+                "via": "bundled-evidence"}],
+            "evidence_dir": "/clone/evidence/set1",
+            "boundary": rv.BOUNDARY, "ok": True}
+        text = rv.render_report(report)
+        self.assertIn("RESOLVED draft 1 artifact", text)
+        self.assertIn("/clone/evidence/set1/draft-1.mp4", text)
+        self.assertIn("Evidence dir: /clone/evidence/set1", text)
+
+    def test_basename_nowhere_is_same_missing_fail_as_today(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            receipts = td / "receipts"
+            receipts.mkdir()
+            (td / "evidence").mkdir()
+            d1 = _draft([], inputs_sha256={"video": "0" * 64},
+                        artifact="/home/hatch/author-machine/gone.mp4")
+            rep = {"chain_version": 1, "artifact": d1["artifact"],
+                   "final_verdict": "PASSED_FIRST_DRAFT",
+                   "repair": {"status": "not_needed"}, "drafts": [d1]}
+            rp = receipts / "r.json"
+            rp.write_text(json.dumps(rep))
+            resolved, resolutions, _ev = rv._resolve_all(
+                rep, rep["drafts"], False, rp,
+                artifact=None, evidence_dir=None, artifact_dir=None)
+            self.assertIsNone(resolved[1])
+            self.assertEqual(resolutions, [])
+            chain = rv.verify_chain(rep, resolved)
+            self.assertTrue(any(f["status"] == "MISSING"
+                                for f in chain["findings"]))
+            report = rv.reverify(rp)
+            self.assertFalse(report["ok"])
+            self.assertIn("CHAIN MISSING: artifact file not found "
+                          "on disk", rv.render_report(report))
+
+
 class TestRunSummaryShape(unittest.TestCase):
     def test_run_level_shorts_list_matched_by_receipt_dir(self):
         with tempfile.TemporaryDirectory() as td:
