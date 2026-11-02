@@ -55,6 +55,20 @@ the rest NOT-REPRODUCIBLE. Receipts from the F1–F7 era (no F8/F9
 checks) verify the same way; checks the receipt predates are
 reported as ADVISORY (computed, not recorded), never as failures.
 
+Stored artifact paths are absolute paths from the machine that
+issued the receipt. When one does not exist on this machine, the
+artifact is resolved by BASENAME: the ``--artifact-dir``, then
+the ``--evidence-dir``, then the repository's bundled ``evidence/``
+tree (the one shipped evidence set — see the README's keyless
+verification section). Every such fallback is REPORTED in the
+output with the path actually used, never silent; a swapped file
+under the same name is still caught by the hash check. When no
+``--evidence-dir`` is given and a bundled directory that resolved
+an artifact also holds the full evidence file set (captions.json,
+sam-response.json, window.mp4), it is adopted as the evidence
+directory — also reported — so the shipped set re-measures in
+full from a fresh clone with no flags at all.
+
 No threshold in this file is a copy of a verifier threshold: the
 comparison reuses ``verifier.verify`` itself, so thresholds can
 never drift between the gate and this tool. No verifier behaviour
@@ -198,30 +212,78 @@ def artifact_canvas(path: str | Path) -> tuple[int, int]:
     return DEFAULT_CANVAS
 
 
-def resolve_artifact(stored: str, *, override: Path | None,
-                     artifact_dir: Path | None,
-                     evidence_dir: Path | None) -> Path | None:
-    """Resolve a receipt's stored artifact path to a file on disk.
+def bundled_evidence_dirs(receipt_path: str | Path) -> list[Path]:
+    """Candidate directories of the bundled ``evidence/`` tree.
 
+    Two roots, in order: the tree adjacent to the receipt file
+    (``receipts/``'s sibling — where a clone of this repo keeps
+    it) and the tree at this tool's own repo root. Each root
+    itself and each immediate subdirectory (the shipped layout is
+    ``evidence/<set-name>/<files>``) is a candidate, sorted for
+    determinism.
+    """
+    roots: list[Path] = []
+    rp = Path(receipt_path)
+    if rp.parent.parent != rp.parent:
+        roots.append(rp.parent.parent / "evidence")
+    roots.append(REPO / "evidence")
+    dirs: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        cands = [root] + sorted(
+            d for d in root.iterdir() if d.is_dir())
+        for cand in cands:
+            if cand not in seen:
+                seen.add(cand)
+                dirs.append(cand)
+    return dirs
+
+
+def resolve_artifact_detailed(
+        stored: str, *, override: Path | None,
+        artifact_dir: Path | None, evidence_dir: Path | None,
+        bundled_dirs: Sequence[Path] = ()) \
+        -> tuple[Path | None, str]:
+    """Resolve a receipt's stored artifact path; report HOW.
+
+    Returns (path, via) with via one of "override", "stored",
+    "artifact-dir", "evidence-dir", "bundled-evidence", "missing".
     Stored paths are absolute paths from the machine that issued
     the receipt; a fresh clone has the same files elsewhere. An
     explicit override always wins over the stored path (that is
     what makes a swapped-artifact check possible when the original
     file still exists). The basename fallback is deliberate and
-    reported: a swapped file with the same name is still caught
-    by the hash check.
+    reported by the caller: a swapped file with the same name is
+    still caught by the hash check.
     """
     if override is not None and override.exists():
-        return override
+        return override, "override"
     p = Path(stored)
     if p.exists():
-        return p
-    for base in (artifact_dir, evidence_dir):
+        return p, "stored"
+    for label, base in (("artifact-dir", artifact_dir),
+                        ("evidence-dir", evidence_dir)):
         if base is not None:
             cand = base / p.name
             if cand.exists():
-                return cand
-    return None
+                return cand, label
+    for base in bundled_dirs:
+        cand = base / p.name
+        if cand.exists():
+            return cand, "bundled-evidence"
+    return None, "missing"
+
+
+def resolve_artifact(stored: str, *, override: Path | None,
+                     artifact_dir: Path | None,
+                     evidence_dir: Path | None,
+                     bundled_dirs: Sequence[Path] = ()) -> Path | None:
+    path, _via = resolve_artifact_detailed(
+        stored, override=override, artifact_dir=artifact_dir,
+        evidence_dir=evidence_dir, bundled_dirs=bundled_dirs)
+    return path
 
 
 def find_run_summary(evidence_dir: Path | None) -> dict[str, Any]:
@@ -1320,6 +1382,59 @@ BOUNDARY = (
 )
 
 
+def _resolve_all(receipt: dict[str, Any], drafts: list,
+                 single: bool, receipt_path: str | Path, *,
+                 artifact: Path | None, evidence_dir: Path | None,
+                 artifact_dir: Path | None):
+    """Resolve every draft artifact (plus the top-level one).
+
+    Returns (resolved, resolutions, evidence_dir). ``resolutions``
+    records every NON-stored resolution — a fallback is part of
+    the report, never silent. When no evidence dir was given and
+    a resolved artifact's directory holds the full evidence file
+    set (captions.json, sam-response.json, window.mp4), that
+    directory is adopted as the evidence dir so a shipped evidence
+    set re-measures in full; the adoption is recorded too.
+    """
+    bundled = bundled_evidence_dirs(receipt_path)
+    if evidence_dir is None and artifact is not None:
+        evidence_dir = artifact.parent
+    resolved: dict[Any, Path | None] = {}
+    resolutions: list[dict[str, Any]] = []
+
+    def _one(what: str, stored: str, override: Path | None):
+        path, via = resolve_artifact_detailed(
+            stored, override=override, artifact_dir=artifact_dir,
+            evidence_dir=evidence_dir, bundled_dirs=bundled)
+        if via not in ("stored", "missing"):
+            resolutions.append({
+                "what": what, "stored": stored,
+                "resolved": str(path), "via": via})
+        return path
+
+    for i, draft in enumerate(drafts, start=1):
+        resolved[i] = _one(
+            f"draft {i} artifact", draft.get("artifact", ""),
+            artifact if i == len(drafts) else None)
+    if not single and receipt.get("artifact"):
+        resolved["top"] = _one("top-level artifact",
+                               receipt["artifact"], artifact)
+    if evidence_dir is None:
+        for i in range(1, len(drafts) + 1):
+            art = resolved.get(i)
+            if art is not None and all(
+                    (art.parent / name).exists() for name in
+                    ("captions.json", "sam-response.json",
+                     "window.mp4")):
+                evidence_dir = art.parent
+                resolutions.append({
+                    "what": "evidence directory",
+                    "stored": "(none given)",
+                    "resolved": str(art.parent), "via": "adopted"})
+                break
+    return resolved, resolutions, evidence_dir
+
+
 def reverify(receipt_path: str | Path, *,
              artifact: Path | None = None,
              evidence_dir: Path | None = None,
@@ -1336,18 +1451,9 @@ def reverify(receipt_path: str | Path, *,
     repair_status = repair.get("status")
 
     # Resolve artifacts first: the chain check needs every draft.
-    resolved: dict[int, Path | None] = {}
-    if evidence_dir is None and artifact is not None:
-        evidence_dir = artifact.parent
-    for i, draft in enumerate(drafts, start=1):
-        stored = draft.get("artifact", "")
-        resolved[i] = resolve_artifact(
-            stored, override=artifact if i == len(drafts) else None,
-            artifact_dir=artifact_dir, evidence_dir=evidence_dir)
-    if not single and receipt.get("artifact"):
-        resolved["top"] = resolve_artifact(
-            receipt["artifact"], override=artifact,
-            artifact_dir=artifact_dir, evidence_dir=evidence_dir)
+    resolved, resolutions, evidence_dir = _resolve_all(
+        receipt, drafts, single, receipt_path, artifact=artifact,
+        evidence_dir=evidence_dir, artifact_dir=artifact_dir)
     chain = verify_chain(receipt, resolved)
 
     run_summary: dict[str, Any] = {}
@@ -1405,6 +1511,8 @@ def reverify(receipt_path: str | Path, *,
         "final_verdict": receipt.get("final_verdict"),
         "chain": chain,
         "drafts": draft_reports,
+        "resolutions": resolutions,
+        "evidence_dir": str(evidence_dir) if evidence_dir else None,
         "boundary": BOUNDARY,
         "ok": ok,
     }
@@ -1414,6 +1522,12 @@ def render_report(report: dict[str, Any]) -> str:
     lines: list[str] = []
     lines.append(f"Receipt: {report['receipt']}")
     lines.append(f"Final verdict: {report['final_verdict']}")
+    for r in report.get("resolutions", []):
+        lines.append(
+            f"  RESOLVED {r['what']}: stored {r['stored']!r} -> "
+            f"{r['resolved']} (via {r['via']})")
+    if report.get("evidence_dir"):
+        lines.append(f"  Evidence dir: {report['evidence_dir']}")
     lines.append(f"Chain hash: {report['chain']['chain_hash']}")
     for f in report["chain"]["findings"]:
         lines.append(f"  CHAIN {f['status']}: {f['detail']}")
