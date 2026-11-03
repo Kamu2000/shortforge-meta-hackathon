@@ -29,7 +29,7 @@ no ledger and no infra-inclusive figure is claimed (§8, item 5).
   $1.90 founding.** Gross margin on API cost at the measured run
   costs: **75.1–82.5% (Basic)**, **62.0–73.3% (founding)** (§5).
 - Total event API spend (all R&D, not just production):
-  **$11.0330 across 401 ledgered calls** (§4; updated 2026-11-01
+  **$21.9867 across 850 ledgered calls** (§4; final merge 2026-11-04
   evening — the gate figure was $9.4691 / 348), of the $150 grant,
   under the $145 hard cap enforced in `spend_ledger.py`.
 
@@ -176,20 +176,22 @@ reconciliation.
 
 Aggregation of the repo's `spend-ledger.jsonl`, **performed
 2026-11-01 on the gate ledger (348 lines, $9.4691) and
-re-performed the same evening after the two McArthur runs: all
-401 lines, cumulative $11.0330**. The ledger covers all event spend — production runs
+re-performed after the two McArthur runs (401 lines, $11.0330),
+and closed at the 2026-11-04 finalize — every run ledger from
+both build lines unioned, deduplicated by request id where the
+API returned one: **850 lines, cumulative $21.9867**. The ledger covers all event spend — production runs
 (including failed, partial and killed work), the Oct 29 spike,
 benchmarks, proof packs, calibration calls and one-off probes — i.e.
 the R&D total, not production cost alone.
 
 | Model | Calls | Cost | Share |
 |---|---|---|---|
-| SAM 3.1 (segmentation) | 51 | $5.6488 | 51.2% |
-| Muse Wonder (verifier judge) | 82 | $2.7182 | 24.6% |
-| Muse Spark 1.3 (hooks, captions, planning, repairs) | 207 | $1.4082 | 12.8% |
-| Muse Voice Transcribe | 48 | $1.1278 | 10.2% |
-| Muse Image (graphics stills) | 13 | $0.1300 | 1.2% |
-| **Total** | **401** | **$11.0330** | 100% |
+| SAM 3.1 (segmentation) | 108 | $11.7224 | 53.3% |
+| Muse Wonder (verifier judge) | 165 | $4.7677 | 21.7% |
+| Muse Spark 1.3 (hooks, captions, planning, repairs) | 457 | $3.2519 | 14.8% |
+| Muse Voice Transcribe | 106 | $2.1047 | 9.6% |
+| Muse Image (graphics stills) | 14 | $0.1400 | 0.6% |
+| **Total** | **850** | **$21.9867** | 100% |
 
 (Shares are rounded to one decimal and may not sum to exactly
 100.0%.) Muse Spark Open runs on partner credits (Baseten/Fireworks)

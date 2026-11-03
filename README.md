@@ -1,4 +1,4 @@
-# Verifiable Spatial Director — ShortForge's Meta AI Developer Hackathon entry
+# AI Spatial Director — ShortForge's Meta AI Developer Hackathon entry
 
 Team **ShortForge**'s entry to the **Meta Global AI Developer Hackathon** (Meta × Cerebral Valley, October 26 – November 4, 2026).
 
@@ -7,7 +7,7 @@ Team **ShortForge**'s entry to the **Meta Global AI Developer Hackathon** (Meta 
 
 ## What this is
 
-The **Verifiable Spatial Director**: give it one long talking-head video and it returns up to **3 finished vertical Shorts** (1080×1920) — and every Short ships with a measured **PASS/FAIL receipt** proving it was checked after rendering.
+The **AI Spatial Director**: give it one long talking-head video and it returns up to **3 finished vertical Shorts** (1080×1920) — and every Short ships with a measured **PASS/FAIL receipt** proving it was checked after rendering.
 
 How it works: the source is transcribed and its strongest moments are scored and selected; SAM 3.1 segments the speaker per frame; a layered composite is rendered in which the speaker stands *in front of* the hook text (treated backdrop / hook text / speaker cutout, captions always in front); a **post-render verifier (checks F1–F9)** then measures the *actual rendered file* — deterministic geometry and audio checks first, plus one Muse Wonder judgement of the muted opening seconds — and on a FAIL, Muse Spark 1.3 picks **at most one repair** from a fixed menu, the repair runs on cached artifacts, and the render is re-verified. The receipt records every check with its measured value against its threshold, the repair (if any), every Meta model call with its request id, input hashes, and the run's cost. A FAIL that cannot be repaired in one pass is reported as a FAIL — the pipeline never manufactures a pass.
 
@@ -59,10 +59,11 @@ The verifier measures the rendered file, never the plan. Receipts for Shorts wit
 
 Repairs (at most one per Short, chosen by Muse Spark 1.3 as strict JSON from this fixed menu; an out-of-menu choice leaves the draft-1 FAIL standing): TRIM_SILENCE, REPOSITION_HOOK, REFIT_HOOK_INK, RESCALE_SPEAKER, REGENERATE_HOOK_TEXT, REFRAME_SPEAKER, ENGAGE_HOOK_SLIDE, DROP_GRAPHICS, NORMALIZE_LOUDNESS.
 
-## Live figures (as of the Nov 2 repo gate)
+## Live figures (final, 2026-11-04)
 
-- **Cumulative Meta Model API spend: $11.0330** across 401 ledgered calls (`spend-ledger.jsonl`; updated 2026-11-01 evening after the two McArthur runs), against a **$145 hard cap enforced in code** (`src/spatial_director/spend_ledger.py`) — the entry was built entirely on the $150 event grant; no personal funds were spent. Model split: SAM 3.1 $5.6488 · Muse Wonder $2.7182 · Muse Spark 1.3 $1.4082 · Muse Voice Transcribe $1.1278 · Muse Image $0.1300.
-- **Test suite: 345/345 passing** (`PYTHONPATH=src python3 -m unittest discover -s tests`).
+- **Cumulative Meta Model API spend: $21.9867** across 850 ledgered calls (`spend-ledger.jsonl`; final merge 2026-11-04 — every run ledger from both build lines unioned and deduplicated by request id where the API returned one; the few calls logged without a request id, Muse Image stills among them, are counted at their logged multiplicity), against a **$145 hard cap enforced in code** (`src/spatial_director/spend_ledger.py`) — the entry was built entirely on the $150 event grant; no personal funds were spent. Model split: SAM 3.1 $11.7224 · Muse Wonder $4.7677 · Muse Spark 1.3 $3.2519 · Muse Voice Transcribe $2.1047 · Muse Image $0.1400.
+- **Test suite: 626/626 passing** (`PYTHONPATH=src python3 -m unittest discover -s tests`; final merged suite, 2026-11-04).
+- **Final production batch (round-6 code, 2026-11-03):** 10 receipted Shorts — **3 PASSED_AFTER_REPAIR, 7 FAIL** — plus the geometry-bundle proof run (PASSED_AFTER_REPAIR). All 11 receipts are in `receipts/`; the FAILs ship too.
 - **Verifier proof pack: 44/44** labelled cases in exact agreement, plus the receipt re-verifier section **4/4** (`tools/proof_pack.py`).
 - **Cost per finished Short: $0.169–$0.241** across complete passing runs, fully loaded on an API-cost-only basis (per-Short calls plus the run's shared full-source transcription; infrastructure is not in any ledger and no infra-inclusive figure is claimed). Full per-run table and method: `CLAIMS-REGISTER.md`.
 
@@ -102,6 +103,8 @@ python3 tools/reverify.py receipts/receipt-pipeline-holmes4-short1.json --eviden
 For every other receipt in `receipts/`, the chain verifies when that Short's artifacts are supplied with `--evidence-dir` (or `--artifact-dir`); without the artifact files the tool reports `CHAIN MISSING: artifact file not found on disk` and fails, rather than passing a receipt it could not check.
 
 What the tool delivers, exactly: it recomputes each draft's recorded input hashes (artifact, SAM response, caption list) and — in evidence mode — re-measures the deterministic check legs field-by-field against the receipt's recorded values. With only a receipt and its artifact (no evidence directory), it verifies the hash chain and the artifact-only legs (F9 loudness, F1 audio) and reports the rest NOT-REPRODUCIBLE. The Wonder legs are verified as *recorded* (model + request id), never re-judged. It prints its own boundary honestly: it is hash verification plus deterministic re-measurement, not a bit-identical re-render. Model-judgement legs and repairs it cannot reproduce are reported as NOT-REPRODUCIBLE with the reason named, never silently passed.
+
+Geometry bundles (added 2026-11-03): the pipeline also writes a per-draft `geometry-bundle.json` beside each new receipt — the recorded stage geometry, layout spans, hook style and caption rect the verifier measured from, hash-chained to the receipt's own input hashes. The re-verifier rebuilds its measurement inputs from the bundle (a file bundle is trusted only after its `inputs_hash` verifies against the receipt), so the geometry legs re-measure from the run's own recorded declarations. A draft with no graphics and no backdrops reports F8 as NOT-APPLICABLE — excluded, not failed. The hash chain also accepts a final FAIL after an executed repair as a consistent chain: a repair that honestly did not fix the Short is a truthful chain, not a broken one.
 
 Cost of verifying: evidence mode is heavy — it decodes the SAM response and rebuilds the measured frames, peaking above 3 GB RAM for the bundled Short and taking minutes per Short, so run it on an otherwise idle machine (on a small shared VM it will not complete alongside other heavy jobs).
 
