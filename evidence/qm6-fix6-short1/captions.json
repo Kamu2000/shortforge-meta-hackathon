@@ -1,0 +1,401 @@
+{
+  "cues": [
+    {
+      "text": "Air,",
+      "start_s": 0.0,
+      "end_s": 0.4,
+      "word_timings": [
+        {
+          "word": "Air,",
+          "start_s": 0.003,
+          "end_s": 0.49,
+          "source": "mms"
+        }
+      ]
+    },
+    {
+      "text": "but the the one thing that that I",
+      "start_s": 0.4,
+      "end_s": 2.643,
+      "word_timings": [
+        {
+          "word": "but",
+          "start_s": 0.953,
+          "end_s": 1.214,
+          "source": "mms"
+        },
+        {
+          "word": "the",
+          "start_s": 1.857,
+          "end_s": 1.913,
+          "source": "mms"
+        },
+        {
+          "word": "the",
+          "start_s": 1.913,
+          "end_s": 2.054,
+          "source": "mms"
+        },
+        {
+          "word": "one",
+          "start_s": 2.292,
+          "end_s": 2.433,
+          "source": "mms"
+        },
+        {
+          "word": "thing",
+          "start_s": 2.438,
+          "end_s": 2.538,
+          "source": "mms"
+        },
+        {
+          "word": "that",
+          "start_s": 2.558,
+          "end_s": 2.719,
+          "source": "mms"
+        },
+        {
+          "word": "that",
+          "start_s": 2.848,
+          "end_s": 2.89,
+          "source": "mms"
+        },
+        {
+          "word": "I",
+          "start_s": 2.89,
+          "end_s": 2.891,
+          "source": "mms"
+        }
+      ]
+    },
+    {
+      "text": "noticed on my previous flight when people went",
+      "start_s": 2.643,
+      "end_s": 4.849,
+      "word_timings": [
+        {
+          "word": "noticed",
+          "start_s": 2.41,
+          "end_s": 2.558,
+          "source": "mms"
+        },
+        {
+          "word": "on",
+          "start_s": 2.558,
+          "end_s": 2.618,
+          "source": "mms"
+        },
+        {
+          "word": "my",
+          "start_s": 2.828,
+          "end_s": 2.848,
+          "source": "mms"
+        },
+        {
+          "word": "previous",
+          "start_s": 2.848,
+          "end_s": 3.332,
+          "source": "mms"
+        },
+        {
+          "word": "flight",
+          "start_s": 3.462,
+          "end_s": 3.817,
+          "source": "mms"
+        },
+        {
+          "word": "when",
+          "start_s": 3.817,
+          "end_s": 4.079,
+          "source": "mms"
+        },
+        {
+          "word": "people",
+          "start_s": 4.388,
+          "end_s": 4.63,
+          "source": "mms"
+        },
+        {
+          "word": "went",
+          "start_s": 4.808,
+          "end_s": 4.867,
+          "source": "mms"
+        }
+      ]
+    },
+    {
+      "text": "out to do a spacewalk and then came",
+      "start_s": 4.849,
+      "end_s": 7.056,
+      "word_timings": [
+        {
+          "word": "out",
+          "start_s": 4.867,
+          "end_s": 5.008,
+          "source": "mms"
+        },
+        {
+          "word": "to",
+          "start_s": 5.077,
+          "end_s": 5.079,
+          "source": "mms"
+        },
+        {
+          "word": "do",
+          "start_s": 5.079,
+          "end_s": 5.159,
+          "source": "mms"
+        },
+        {
+          "word": "a",
+          "start_s": 5.455,
+          "end_s": 5.475,
+          "source": "mms"
+        },
+        {
+          "word": "spacewalk",
+          "start_s": 5.513,
+          "end_s": 5.982,
+          "source": "mms"
+        },
+        {
+          "word": "and",
+          "start_s": 5.982,
+          "end_s": 6.103,
+          "source": "mms"
+        },
+        {
+          "word": "then",
+          "start_s": 6.362,
+          "end_s": 6.482,
+          "source": "mms"
+        },
+        {
+          "word": "came",
+          "start_s": 6.482,
+          "end_s": 6.745,
+          "source": "mms"
+        }
+      ]
+    },
+    {
+      "text": "back inside,",
+      "start_s": 7.056,
+      "end_s": 7.608,
+      "word_timings": [
+        {
+          "word": "back",
+          "start_s": 6.838,
+          "end_s": 7.048,
+          "source": "mms"
+        },
+        {
+          "word": "inside,",
+          "start_s": 7.048,
+          "end_s": 7.721,
+          "source": "mms"
+        }
+      ]
+    },
+    {
+      "text": "I smelled the smell of of cooking meat.",
+      "start_s": 7.608,
+      "end_s": 10.12,
+      "word_timings": [
+        {
+          "word": "I",
+          "start_s": 7.968,
+          "end_s": 7.987,
+          "source": "mms"
+        },
+        {
+          "word": "smelled",
+          "start_s": 9.047,
+          "end_s": 9.47,
+          "source": "mms"
+        },
+        {
+          "word": "the",
+          "start_s": 9.652,
+          "end_s": 9.713,
+          "source": "mms"
+        },
+        {
+          "word": "smell",
+          "start_s": 9.848,
+          "end_s": 10.05,
+          "source": "mms"
+        },
+        {
+          "word": "of",
+          "start_s": 10.087,
+          "end_s": 10.127,
+          "source": "mms"
+        },
+        {
+          "word": "of",
+          "start_s": 10.127,
+          "end_s": 10.167,
+          "source": "mms"
+        },
+        {
+          "word": "cooking",
+          "start_s": 10.277,
+          "end_s": 10.289,
+          "source": "mms"
+        },
+        {
+          "word": "meat.",
+          "start_s": 10.289,
+          "end_s": 10.29,
+          "source": "mms"
+        }
+      ]
+    },
+    {
+      "text": "It smelled like hamburger to me,",
+      "start_s": 10.12,
+      "end_s": 11.629,
+      "word_timings": [
+        {
+          "word": "It",
+          "start_s": 9.87,
+          "end_s": 9.871,
+          "source": "mms"
+        },
+        {
+          "word": "smelled",
+          "start_s": 9.871,
+          "end_s": 10.033,
+          "source": "mms"
+        },
+        {
+          "word": "like",
+          "start_s": 10.248,
+          "end_s": 11.078,
+          "source": "mms"
+        },
+        {
+          "word": "hamburger",
+          "start_s": 11.078,
+          "end_s": 11.527,
+          "source": "mms"
+        },
+        {
+          "word": "to",
+          "start_s": 11.527,
+          "end_s": 11.609,
+          "source": "mms"
+        },
+        {
+          "word": "me,",
+          "start_s": 11.639,
+          "end_s": 11.64,
+          "source": "mms"
+        }
+      ]
+    },
+    {
+      "text": "which was so strange, and it was.",
+      "start_s": 11.629,
+      "end_s": 13.56,
+      "word_timings": [
+        {
+          "word": "which",
+          "start_s": 11.64,
+          "end_s": 11.996,
+          "source": "dsp"
+        },
+        {
+          "word": "was",
+          "start_s": 11.996,
+          "end_s": 12.209,
+          "source": "dsp"
+        },
+        {
+          "word": "so",
+          "start_s": 12.209,
+          "end_s": 12.351,
+          "source": "dsp"
+        },
+        {
+          "word": "strange,",
+          "start_s": 12.351,
+          "end_s": 12.92,
+          "source": "dsp"
+        },
+        {
+          "word": "and",
+          "start_s": 12.92,
+          "end_s": 13.133,
+          "source": "dsp"
+        },
+        {
+          "word": "it",
+          "start_s": 13.133,
+          "end_s": 13.276,
+          "source": "dsp"
+        },
+        {
+          "word": "was.",
+          "start_s": 13.276,
+          "end_s": 13.56,
+          "source": "dsp"
+        }
+      ]
+    }
+  ],
+  "timing_source": "mms+dsp",
+  "cue_sources": [
+    "mms",
+    "mms",
+    "mms",
+    "mms",
+    "mms",
+    "mms",
+    "mms",
+    "dsp_phrase"
+  ],
+  "timing_gate": [
+    {
+      "cue_index": 7,
+      "action": "pace_gate_rejected",
+      "slice": [
+        11.39,
+        13.81
+      ],
+      "reason": "sustained pace 4.51 words/s over the aligned extent 1.55s exceeds the 4.5 words/s sanity ceiling"
+    },
+    {
+      "cue_index": 7,
+      "action": "dsp_fallback",
+      "reason": "re-slice still fails the pace gate: sustained pace 5.41 words/s over the aligned extent 1.29s exceeds the 4.5 words/s sanity ceiling"
+    }
+  ],
+  "caption_snap": {
+    "applied": true,
+    "method": "energy_valley_snap",
+    "window_s": 0.15,
+    "hop_s": 0.005,
+    "smooth_hops": 3,
+    "words": 48,
+    "words_snapped": 37,
+    "mean_abs_shift_ms": 71.1,
+    "max_abs_shift_ms": 149.5,
+    "snap_sources": [
+      "mms"
+    ],
+    "words_eligible": 41
+  },
+  "cue_repairs": [],
+  "chunk_max_words": 4,
+  "turn_reports": [
+    {
+      "turn_index": 0,
+      "used_fallback": false,
+      "spark_request_id": "chatcmpl-01a19fe4-e48f-7194-9e36-ccdeae90f3b5",
+      "spark_cost_usd": 0.0084,
+      "note": ""
+    }
+  ]
+}

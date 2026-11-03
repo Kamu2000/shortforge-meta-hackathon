@@ -3155,6 +3155,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -3308,6 +3310,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -3453,6 +3457,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -3598,6 +3604,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -3743,6 +3751,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -3882,6 +3892,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -4035,6 +4047,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -4198,6 +4212,8 @@
             ],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -4337,6 +4353,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -4482,6 +4500,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -4615,6 +4635,8 @@
               }
             ],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -4754,6 +4776,8 @@
             "offending_backdrop_indices": [
               0
             ],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -5119,6 +5143,8 @@
             "collision_violations": [],
             "backdrops": [],
             "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
             "sfx": null,
             "duration_s": 10.0
           }
@@ -5531,15 +5557,15 @@
       },
       {
         "id": "reverify-real-committed",
-        "description": "committed holmes4 short-1 receipt re-verified against its real artifact and run directory",
+        "description": "committed fix6-qm6test short-1 receipt re-verified against its real artifact and run directory",
         "expected": "clean",
         "actual": "clean",
         "detail": {
           "report_ok": true,
           "chain_ok": true,
           "draft_statuses": {
-            "1": "MATCH",
-            "2": "MATCH"
+            "1": "PARTIAL",
+            "2": "PARTIAL"
           }
         }
       }

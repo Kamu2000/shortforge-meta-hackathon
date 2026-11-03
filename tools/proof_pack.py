@@ -1073,10 +1073,10 @@ def run_reverify_cases(only: str = "") -> list[dict[str, Any]]:
             })
         if not only or "reverify-real-committed".startswith(only):
             committed = REPO / "receipts" / \
-                "receipt-pipeline-holmes4-short1.json"
+                "receipt-pipeline-fix6-qm6test-short1.json"
             entry: dict[str, Any] = {
                 "id": "reverify-real-committed",
-                "description": "committed holmes4 short-1 receipt "
+                "description": "committed fix6-qm6test short-1 receipt "
                                "re-verified against its real artifact "
                                "and run directory",
                 "expected": "clean",

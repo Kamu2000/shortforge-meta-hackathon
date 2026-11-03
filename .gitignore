@@ -23,8 +23,8 @@ venv/
 # shipped on purpose (README, "Keyless verification"). Scoped
 # exception for this path only; the global media ignores above
 # still apply everywhere else.
-!/evidence/holmes4-short1/*.mp4
-!/evidence/holmes4-short1/*.wav
+!/evidence/qm6-fix6-short1/*.mp4
+!/evidence/qm6-fix6-short1/*.wav
 cache/
 tmp/
 out/

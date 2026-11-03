@@ -1,0 +1,127 @@
+{
+  "placed": [
+    {
+      "kind": "image",
+      "span": [
+        7.508,
+        11.929
+      ],
+      "box": [
+        135,
+        100,
+        945,
+        708
+      ],
+      "motion": "ken_burns",
+      "cost_usd": 0.01,
+      "source_quote": "I smelled the smell of of cooking meat. It smelled like hamburger to me,",
+      "prompt": "Close-up of a sizzling hamburger patty on a grill with rising steam. - no text, no letters, no numbers, no words",
+      "layout": "spotlight",
+      "anchor_quality": "low"
+    }
+  ],
+  "dropped": [],
+  "planner_rejected": [],
+  "planner_call": {
+    "model": "muse-spark-1.3",
+    "purpose": "graphics-planner",
+    "cost_usd": 0.0131,
+    "request_id": "chatcmpl-01a19fe8-6cc8-70b3-a441-f561159bac55",
+    "empty_first_attempt": false,
+    "malformed_first_attempt": false
+  },
+  "error": null,
+  "path_rejections": [],
+  "backdrops": [],
+  "speaker_forward": [],
+  "layout_assist": [],
+  "layout_spans": [
+    {
+      "span": [
+        7.508,
+        11.929
+      ],
+      "layout": "spotlight",
+      "speaker_box": [
+        261,
+        756,
+        819,
+        1460
+      ],
+      "speaker_placement": {
+        "crop": [
+          0.0,
+          0.0,
+          234.0,
+          295.0
+        ],
+        "scale": 2.3864,
+        "origin": [
+          260.8,
+          756.0
+        ],
+        "alpha_scale": 1.0
+      },
+      "placed_centroid": [
+        541.2,
+        945.7
+      ],
+      "head_top_min": 813,
+      "feasible": true,
+      "note": "PiP below hero (full frame) 558x704px at (261, 756) in band [756, 1460]: centroid (541, 946), head-top min 813px, placed face height 231px",
+      "graphic_box": [
+        135,
+        100,
+        945,
+        708
+      ],
+      "anchor_quality": "low",
+      "spotlight_hero": {
+        "from_box": [
+          16,
+          448,
+          301,
+          804
+        ],
+        "to_box": [
+          135,
+          100,
+          945,
+          708
+        ],
+        "strategy": "hero_first",
+        "pip_box": [
+          261,
+          756,
+          819,
+          1460
+        ],
+        "fit": "cover",
+        "band": [
+          756,
+          1460
+        ],
+        "group": {
+          "top_px": 100,
+          "gap_px": 48,
+          "hero_width_frac_cap": 0.85,
+          "hero_min_width_frac": 0.74
+        }
+      }
+    }
+  ],
+  "coverage": {
+    "graphics_s": 4.421,
+    "short_s": 14.0,
+    "coverage_frac": 0.3158
+  },
+  "total_cost_usd": 0.01,
+  "sfx_plan": [
+    {
+      "t_s": 7.508,
+      "recipe": "whoosh",
+      "graphic_index": 0,
+      "anchor": "enter"
+    }
+  ]
+}
