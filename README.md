@@ -60,6 +60,20 @@ Every runtime model in this pipeline is a Meta model. The roster below matches `
 | Post-render verification — F5 muted-hook judgement | Muse Wonder (`muse-wonder-1.0`) | Meta Model API |
 | Repair selection (one repair, fixed menu) | Muse Spark 1.3 | Meta Model API |
 
+### SAM 3.1 — the segmentation the whole stage stands on
+
+SAM 3.1 is the load-bearing model of this build: without a per-frame speaker matte, there is no layered stage. For each selected window the pipeline prompts SAM 3.1 for `person` and keeps the largest persistent speaker track; the returned masks are decoded (via Meta's `meta-sam-parser` library) and finished in code — component and hole cleanup, then temporal smoothing across the mask sequence, which cut edge flicker by 18.6% (Holmes) and 21.2% (McArthur) against the previous finish (BUILDLOG.md, round 6).
+
+Everything spatial in the product is measured or placed against these masks:
+
+- **The composite itself** — the speaker cutout that stands in front of the hook text; the signature glyph occlusion exists only because the matte is per-frame.
+- **Framing** — the composite aims the speaker's centroid and holds the speaker at 0.58–0.66 of frame height; checks F3/F4 (containment, head margin) are mask measurements.
+- **Caption safety** — F2's zero-tolerance caption/face overlap is measured against the mask's face region.
+- **Graphics placement** — the placement law (face + 28 px margin excluded, at most 4% speaker coverage) runs on the SAM masks.
+- **Verification** — the geometry legs re-measure from the same masks, and each receipt hash-chains the SAM response, so the re-verifier can rebuild the masks from the recorded response offline.
+
+Two guards keep SAM honest in the pipeline: a window is only rendered if SAM's speaker coverage clears a floor (0.613 of frames), and segmentation is cached per window, so a rescue repair never re-buys it. SAM is also the build's largest cost line — $11.7224 of the $21.9867 total (108 calls, priced per 1,000 frames) — visible in `spend-ledger.jsonl`. And the track is robust where it matters: on the NASA ISS interview, where the speaker holds a microphone throughout her answers, SAM never loses her — 657/657 and 650/650 frames contained in the two passing Shorts (CLAIMS-REGISTER.md #21).
+
 ### Muse Wonder is a core component
 
 Wonder is not an add-on or a demo flourish: it is the semantic leg of the verifier. Check F5 fails a Short if its opening seconds cannot be understood with the sound off, and that judgement is made by Muse Wonder watching the actual rendered hook, muted. Every verified Short in `receipts/` carries a recorded Wonder call (model + request id) for this leg.
