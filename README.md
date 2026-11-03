@@ -9,9 +9,40 @@ Team **ShortForge**'s entry to the **Meta Global AI Developer Hackathon** (Meta 
 
 The **AI Spatial Director**: give it one long talking-head video and it returns up to **3 finished vertical Shorts** (1080×1920) — and every Short ships with a measured **PASS/FAIL receipt** proving it was checked after rendering.
 
-How it works: the source is transcribed and its strongest moments are scored and selected; SAM 3.1 segments the speaker per frame; a layered composite is rendered in which the speaker stands *in front of* the hook text (treated backdrop / hook text / speaker cutout, captions always in front); a **post-render verifier (checks F1–F9)** then measures the *actual rendered file* — deterministic geometry and audio checks first, plus one Muse Wonder judgement of the muted opening seconds — and on a FAIL, Muse Spark 1.3 picks **at most one repair** from a fixed menu, the repair runs on cached artifacts, and the render is re-verified. The receipt records every check with its measured value against its threshold, the repair (if any), every Meta model call with its request id, input hashes, and the run's cost. A FAIL that cannot be repaired in one pass is reported as a FAIL — the pipeline never manufactures a pass.
+**The problem it solves.** Long single-speaker videos — podcasts, interviews, talks, lessons — are where the best short-form material lives, but turning one into a Short that holds attention is manual, skilled work: find the moment, cut it, frame the speaker, write a hook that lands in the first seconds, caption it without covering the face, add visual context for what is being described, keep the sound clean. Generic auto-clippers centre-crop and hope: hooks get buried, captions sit on faces, and quiet or broken renders ship silently because nothing ever checks the output file. The Director does the skilled parts as a pipeline — and then proves, per Short, that the rendered file was measured.
 
-An optional **context-graphics layer** (`--graphics`) adds code-rendered context cards and Muse Image stills, placed against the SAM masks under a strict placement law and verified by check F8, with procedural sound effects synthesized in code. Every graphic traces to a verbatim quote from the transcript; a numeric guard rejects any value the speaker did not say.
+**How a run works, stage by stage:**
+
+1. **Transcribe.** Muse Voice Transcribe transcribes the source (turn-level); a Muse Spark 1.3 pass restores caption punctuation under a word-sequence guard, and phrase timing is aligned for the captions.
+2. **Pick the moments.** Muse Spark Open (Meta's open-weights model, served by Baseten) scores the transcript and sweeps for the strongest candidate moments.
+3. **Cut the speaker out.** SAM 3.1 segments the speaker in every frame of the chosen window; the matte is finished in code — component and hole cleanup, then temporal smoothing across the mask sequence — so the cutout edge holds still instead of flickering.
+4. **Direct the stage.** The Short is composed as a layered stage, not a crop: a treated backdrop; the hook text *behind* the speaker — the speaker occludes part of the lettering, and that occlusion is what makes the depth read (the planner targets an 8–20% glyph-occlusion band, hard cap 25%); the speaker cutout in front; captions always in front, never over the face.
+5. **Add the graphics.** The graphics layer (next section) plans visual context for what is being said — generated stills, context cards, backdrop scenes — and places each one against the SAM masks under a strict placement law.
+6. **Verify the render.** A **post-render verifier (checks F1–F9)** measures the *actual rendered file* — deterministic geometry and audio checks first, plus one Muse Wonder judgement of the muted opening seconds.
+7. **Repair at most once.** On a FAIL, Muse Spark 1.3 picks **at most one repair** from a fixed menu, the repair runs on cached artifacts, and the render is re-verified.
+8. **Receipt.** The receipt records every check with its measured value against its threshold, the repair (if any), every Meta model call with its request id, input hashes, and the run's cost. A FAIL that cannot be repaired in one pass is reported as a FAIL — the pipeline never manufactures a pass.
+
+## The graphics layer — the Short shows what the speaker is talking about
+
+The graphics layer is the Director's visual imagination, and one of the most distinctive parts of the build. A talking head alone is a weak visual; when the speaker describes something, the Short *shows* it — beside the speaker, behind the speaker, in the stage — at the moment it is said.
+
+**What it makes.** A Muse Spark 1.3 planner reads the transcript and, for specific spoken moments, plans a graphic of one of four kinds:
+
+- **Generated stills (Muse Image)** — a picture of the thing being described. When Megan McArthur recounts that the space station smelled of cooking meat — "like hamburger" — after a spacewalk, the run generates that visual and composites it into her Short.
+- **Context cards (rendered in code)** — figures, names and short context as clean typeset cards in the brand palette.
+- **Collages** — treatments assembled from stills.
+- **Backdrop scenes (Muse Image)** — full-bleed generated scenes that take over the backdrop behind the speaker for a span.
+
+Each span is anchored to a verbatim quote from the transcript, and procedural sound effects synthesized in code (NumPy) can be tied to a span's appearance. Runs enable the layer with `--graphics` (or `GRAPHICS_LAYER=1`); the graphics runs whose receipts ship in `receipts/` — Holmes, Belew, McArthur, and the geometry-bundle proof run — all ran with it on.
+
+**The laws it runs under.** The graphics are attractive precisely because they are constrained:
+
+- **Nothing invented.** Every graphic traces to a verbatim quote from the transcript. A numeric guard validates any value a card displays against what the speaker actually said — a card may show "$1M" only if the transcript supports it ("one million"); an invented value is rejected before rendering.
+- **Text never goes through the image model.** Image models garble lettering, so words and numbers are rendered deterministically in code (Pillow), never generated. Image prompts are digit-free and carry a face/likeness blocklist — this layer never generates a face of a real person.
+- **Placement is mask-aware.** Graphics are placed against the SAM speaker masks under a zero-tolerance law: the face region plus a 28 px margin is never touched, the caption block and caption zone are excluded, a graphic may cover at most 4% of the speaker, and beside-the-head placements rank first. A graphic that cannot be placed legally is dropped, with the reason recorded — never forced in.
+- **Verified like everything else.** Check F8 pixel-measures each graphic's presence inside its span and absence outside it against its declared asset and box, checks motion-path fidelity and SFX audibility against the speech stem, and confirms backdrop containment. If the graphics are what broke a Short, DROP_GRAPHICS is on the repair menu.
+
+Live placements are on record in `receipts/` — the Holmes graphics run (2026-10-31), the Belew graphics run's Ken Burns-treated stills (2026-10-31), and both McArthur runs' stills and full-bleed backdrop scenes (2026-11-01) — and the geometry-bundle proof run verifies a graphics-bearing receipt end-to-end (see *Keyless verification*). The layer degrades gracefully: context cards are rendered in code and need no image call.
 
 ## Model roster and model map
 
