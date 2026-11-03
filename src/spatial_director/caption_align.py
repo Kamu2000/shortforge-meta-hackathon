@@ -292,6 +292,36 @@ def active_segments(profile: EnergyProfile, t0: float, t1: float,
     return merged
 
 
+# Fix round 5: the phrase map above merges silences shorter than
+# MIN_SILENCE_S (0.15s), which is right for caption LAYOUT but too
+# coarse to bound an alignment slice: inside one merged segment a
+# speaker breathes, lists, hesitates - sub-phrase dips of
+# 50-150ms that carry no words. A forced-alignment slice bounded
+# by those dips (first onset to last offset of the FINE map) is
+# bounded by measured speech activity, never by a word-count
+# proportion - the distinction the QM6 caption defect turned on
+# (see word_timing's pace gate and pipeline._caption_word_timings).
+FINE_MIN_SILENCE_S = 0.05
+
+
+def speech_activity_span(
+    profile: EnergyProfile, t0: float, t1: float, *,
+    min_silence_s: float = FINE_MIN_SILENCE_S,
+) -> tuple[float, float] | None:
+    """(first onset, last offset) of speech activity in [t0, t1].
+
+    Reads the FINE segment map (sub-phrase dips split segments),
+    so the span hugs the speech a caption cue actually covers
+    instead of the merged phrase block. None when the span holds
+    no detectable speech activity at all.
+    """
+    segs = active_segments(profile, t0, t1,
+                           min_silence_s=min_silence_s)
+    if not segs:
+        return None
+    return (segs[0][0], segs[-1][1])
+
+
 # ---------------------------------------------------------------- text
 
 
@@ -555,3 +585,152 @@ def build_captions(turns: Sequence[Any],
 
 def cues_to_srt(cues: Sequence[CaptionCue]) -> str:
     return "\n".join(cue.to_srt(i + 1) for i, cue in enumerate(cues))
+
+
+# ------------------------------------------------------------------
+# Cue-sanity guard (fix round 2, Fix D, 2026-11-02).
+#
+# The Voice Transcribe turns occasionally carry a near-zero span
+# for a full sentence (a turn timestamp glitch). build_captions
+# then lays the turn's phrases over ~0 seconds: cues like 3 words
+# in 0.06s (pipeline-run-ext-qm4 short-1 cue 14) or five cues in
+# 0.2-0.3s (pipeline-run-ext-qh3 short-1 cues 0-4). DSP word timing
+# tolerates them (it just subdivides silence-free spans); the MMS
+# CTC aligner physically cannot - it needs at least one emission
+# frame per token - so one rotten cue used to fail the WHOLE
+# Short's MMS alignment and silently downgrade every cue to DSP,
+# and graphic spans anchored to those cues fired at wrong times.
+#
+# The plausibility bound, from measurement, not taste:
+# * CTC floor: the MMS aligner emits one frame per 20 ms of audio
+#   (16 kHz, stride 320). A cue's alignment needs at least one
+#   frame per character token plus one separator frame per word,
+#   so duration >= (chars + words) * 0.02 s is a hard physical
+#   floor. The measured failures sit far below it (0.06 s for a
+#   3-word / 8-char cue needs >= 0.22 s).
+# * Rate floor: 0.05 s/word = 20 words/second = 1200 wpm is ~3x
+#   the fastest sustained human speech (~0.15 s/word); no real
+#   phrase is spoken faster. Every cue in the banked corpus at or
+#   below 0.02 s/word belongs to a compressed-turn artifact, and
+#   the fastest plausible banked cues sit at >= ~0.09 s/word.
+# A cue is degenerate iff its duration is below BOTH floors'
+# maximum. Repair is deterministic and word-preserving: expand
+# into the neighbouring gaps first (never past a neighbour's
+# span), then merge into a neighbour (previous preferred), until
+# the cue passes or nothing can absorb it - merges cascade. A cue
+# that still fails is left in place and RECORDED unrepairable;
+# the pipeline's timing source then honestly falls back for the
+# Short (the guard never invents words and never moves a cue
+# across another cue's span).
+CUE_MIN_SECONDS_PER_WORD = 0.05
+CUE_CTC_FRAME_S = 0.02
+
+
+def cue_min_plausible_s(text: str) -> float:
+    """The shortest span `text` can physically occupy."""
+    words = text.split()
+    if not words:
+        return 0.0
+    chars = sum(len(w) for w in words)
+    return max(len(words) * CUE_MIN_SECONDS_PER_WORD,
+               (chars + len(words)) * CUE_CTC_FRAME_S)
+
+
+def is_degenerate_cue(cue: CaptionCue) -> bool:
+    return (cue.end_s - cue.start_s) \
+        < cue_min_plausible_s(cue.text) - 1e-9
+
+
+def repair_cue_spans(
+    cues: Sequence[CaptionCue], *, duration_s: float | None = None,
+) -> tuple[list[CaptionCue], list[dict[str, Any]]]:
+    """Repair degenerate cue spans before word timing.
+
+    Returns (repaired cues, repair records). Each record:
+    {cue_index (index in the ORIGINAL list), action:
+    "expanded" | "merged_into_previous" | "merged_next" |
+    "unrepairable", before: [start, end], after: [start, end],
+    reason}. Word sequence over the whole list is preserved
+    verbatim and no new overlaps are created: expansions stop at
+    the neighbours' current spans, merges only union spans.
+    """
+    work = [CaptionCue(text=c.text, start_s=c.start_s, end_s=c.end_s)
+            for c in cues]
+    origin = list(range(len(work)))  # original index per work cue
+    records: list[dict[str, Any]] = []
+    i = 0
+    while i < len(work):
+        cue = work[i]
+        if not is_degenerate_cue(cue):
+            i += 1
+            continue
+        need = cue_min_plausible_s(cue.text)
+        before = [round(cue.start_s, 3), round(cue.end_s, 3)]
+        reason = (f"span {cue.end_s - cue.start_s:.3f}s < plausible "
+                  f"minimum {need:.3f}s for "
+                  f"{len(cue.text.split())} words")
+        # 1) Expand into adjacent gaps (left first, then right).
+        prev_end = work[i - 1].end_s if i > 0 else 0.0
+        if i + 1 < len(work):
+            next_start = work[i + 1].start_s
+        elif duration_s is not None:
+            next_start = duration_s
+        else:
+            next_start = cue.end_s
+        deficit = need - (cue.end_s - cue.start_s)
+        take_l = min(deficit, max(0.0, cue.start_s - prev_end))
+        cue.start_s -= take_l
+        deficit -= take_l
+        take_r = min(deficit, max(0.0, next_start - cue.end_s))
+        cue.end_s += take_r
+        deficit -= take_r
+        if deficit <= 1e-9:
+            records.append({
+                "cue_index": origin[i], "action": "expanded",
+                "before": before,
+                "after": [round(cue.start_s, 3), round(cue.end_s, 3)],
+                "reason": reason})
+            i += 1
+            continue
+        # 2) Merge. Previous neighbour preferred: it is already
+        # repaired (indices < i are final), so one merge usually
+        # ends the cascade.
+        if i > 0:
+            prev = work[i - 1]
+            merged = CaptionCue(
+                text=f"{prev.text} {cue.text}".strip(),
+                start_s=min(prev.start_s, cue.start_s),
+                end_s=max(prev.end_s, cue.end_s))
+            records.append({
+                "cue_index": origin[i],
+                "action": "merged_into_previous",
+                "before": before,
+                "after": [round(merged.start_s, 3),
+                          round(merged.end_s, 3)],
+                "reason": reason})
+            work[i - 1] = merged
+            del work[i]
+            del origin[i]
+            i -= 1  # re-examine the merged cue
+            continue
+        if i + 1 < len(work):
+            nxt = work[i + 1]
+            merged = CaptionCue(
+                text=f"{cue.text} {nxt.text}".strip(),
+                start_s=min(cue.start_s, nxt.start_s),
+                end_s=max(cue.end_s, nxt.end_s))
+            records.append({
+                "cue_index": origin[i], "action": "merged_next",
+                "before": before,
+                "after": [round(merged.start_s, 3),
+                          round(merged.end_s, 3)],
+                "reason": reason})
+            work[i] = merged
+            del work[i + 1]
+            del origin[i + 1]
+            continue  # re-examine the merged cue at i
+        records.append({
+            "cue_index": origin[i], "action": "unrepairable",
+            "before": before, "after": before, "reason": reason})
+        i += 1
+    return work, records

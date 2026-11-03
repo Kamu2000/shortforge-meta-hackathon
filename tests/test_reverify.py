@@ -139,6 +139,81 @@ class TestChain(unittest.TestCase):
         self.assertTrue(any("did not fail it" in f["detail"]
                             for f in out["findings"]))
 
+    def test_executed_repair_that_still_fails_is_consistent(self):
+        # The pipeline's own derivation (rescue_loop.rescue):
+        # an executed repair whose draft 2 still fails another
+        # check yields final_verdict FAIL — a legitimate chain
+        # (the fix-5 QH5 receipt has exactly this shape: the
+        # loudness repair fixed F9, F5 still failing).
+        d1 = _draft([], verdict="FAIL", failed_checks=["F5", "F9"])
+        d2 = _draft([], verdict="FAIL", failed_checks=["F5"])
+        d1["draft"] = 1
+        d2["draft"] = 2
+        rep = self._receipt(
+            [d1, d2],
+            repair={"status": "executed",
+                    "menu_id": "NORMALIZE_LOUDNESS",
+                    "target_check": "F9"})
+        rep["final_verdict"] = "FAIL"
+        out = rv.verify_chain(rep, {1: None, 2: None, "top": None})
+        self.assertFalse(any(f["kind"] == "structure"
+                             and f["status"] == "FAIL"
+                             for f in out["findings"]))
+
+    def test_executed_repair_with_impossible_verdict_fails(self):
+        d1 = _draft([], verdict="FAIL", failed_checks=["F9"])
+        d2 = _draft([], verdict="FAIL", failed_checks=[])
+        d1["draft"] = 1
+        d2["draft"] = 2
+        rep = self._receipt(
+            [d1, d2],
+            repair={"status": "executed",
+                    "menu_id": "NORMALIZE_LOUDNESS",
+                    "target_check": "F9"})
+        rep["final_verdict"] = "PASSED_FIRST_DRAFT"
+        out = rv.verify_chain(rep, {1: None, 2: None, "top": None})
+        self.assertTrue(any("not a verdict an executed repair"
+                            " can produce" in f["detail"]
+                            for f in out["findings"]))
+
+
+class TestEmphasisFromRecord(unittest.TestCase):
+    NOTE = ("emphasis x1.18: crop (10, 9, 227, 284) + pad 40; "
+            "centroid (124,111) -> (540,866) canvas, head-top "
+            "min 474px >= 150px plan floor")
+
+    def test_note_recovery(self):
+        plan = rv._emphasis_from_record({
+            "span": [9.866, 11.929], "scale": 1.18,
+            "placed_centroid": [540.2, 865.6],
+            "placed_head_top_min": 474, "note": self.NOTE})
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan.crop, (10, 9, 227, 284))
+        self.assertEqual(plan.pad_bottom_px, 40)
+        self.assertEqual(plan.scale, 1.18)
+        self.assertEqual(plan.placed_centroid, (540.2, 865.6))
+        self.assertEqual(plan.placed_head_top_min, 474.0)
+
+    def test_direct_transform_wins(self):
+        plan = rv._emphasis_from_record({
+            "span": [1.0, 3.0], "scale": 1.1,
+            "crop": [1, 2, 30, 40], "pad_bottom_px": 7,
+            "placed_centroid": [500.0, 800.0],
+            "placed_head_top_min": 300, "note": self.NOTE})
+        self.assertEqual(plan.crop, (1, 2, 30, 40))
+        self.assertEqual(plan.pad_bottom_px, 7)
+
+    def test_scale_mismatch_declines_note(self):
+        plan = rv._emphasis_from_record({
+            "span": [9.866, 11.929], "scale": 1.05,
+            "placed_centroid": [540.2, 865.6],
+            "placed_head_top_min": 474, "note": self.NOTE})
+        self.assertIsNone(plan)
+
+    def test_no_record_returns_none(self):
+        self.assertIsNone(rv._emphasis_from_record(
+            {"span": [1.0, 2.0], "scale": 1.18}))
+
 
 class TestHookRecovery(unittest.TestCase):
     def test_f6_question_evidence(self):
@@ -404,6 +479,7 @@ class TestBundledEvidenceFallback(unittest.TestCase):
                           "on disk", rv.render_report(report))
 
 
+
 class TestRunSummaryShape(unittest.TestCase):
     def test_run_level_shorts_list_matched_by_receipt_dir(self):
         with tempfile.TemporaryDirectory() as td:
@@ -460,6 +536,171 @@ class TestF3NestedCompare(unittest.TestCase):
             "NOT-REPRODUCIBLE")
         self.assertEqual(
             fields["violations.caption_px_outside_lower_zone"], "MATCH")
+
+
+class TestF8NotApplicable(unittest.TestCase):
+    def test_no_graphics_no_backdrops_is_not_applicable(self):
+        # The graphics layer ran but placed nothing: F8 recorded
+        # an empty measurement. It must report NOT-APPLICABLE,
+        # never NOT-REPRODUCIBLE.
+        draft = _draft([_check("F8", {
+            "count": 0, "graphics": [], "offending_indices": [],
+            "collision_violations": [], "backdrops": []})],
+            graphics=[], backdrops=[])
+        out = rv.compare_draft(draft, [], _inputs(graphics=[]),
+                               None, {})
+        self.assertEqual(out["checks"][0]["status"],
+                         "NOT-APPLICABLE")
+
+    def test_graphics_present_still_compares(self):
+        draft = _draft([_check("F8", {
+            "count": 0, "graphics": [], "offending_indices": [],
+            "collision_violations": []})],
+            graphics=[{"kind": "card"}], backdrops=[])
+        new = [_check("F8", {
+            "count": 0, "graphics": [], "offending_indices": [],
+            "collision_violations": [], "backdrops": [],
+            "sfx": None})]
+        out = rv.compare_draft(
+            draft, new, _inputs(graphics=[object()]), None, {})
+        self.assertNotEqual(out["checks"][0]["status"],
+                            "NOT-APPLICABLE")
+
+
+_STAGE_GEOMETRY = {
+    "feasible": True, "identity": False, "scale": 2.4,
+    "crop": [10, 20, 200, 300], "pad_bottom_px": 5,
+    "placed_centroid": [540.0, 930.0], "head_top_min": 660,
+    "mask_height_frac": 0.62, "reframe_pad_bottom_px": 0,
+    "effect_pad_bottom_px": 7}
+
+
+def _bundle_receipt(**draft_over):
+    draft = _draft(
+        [_check("F6", {"patterns_fired": [
+            {"pattern": "question", "source": "hook",
+             "evidence": "HELLO WORLD?"}]})],
+        stage_geometry=dict(_STAGE_GEOMETRY),
+        hook_style={"accent_index": 2, "text_size": 144},
+        layout_spans=None, speaker_forward=None,
+        inputs_sha256={"video": "a" * 64})
+    draft.update(draft_over)
+    return {"chain_version": 1, "artifact": draft["artifact"],
+            "final_verdict": draft["verdict"],
+            "repair": {"status": "not_needed"}, "drafts": [draft]}
+
+
+class TestBackfillBundle(unittest.TestCase):
+    _SUMMARY = {"layout": {"hook_y_frac": 0.42,
+                           "caption_rect": [1, 2, 3, 4]}}
+
+    def test_backfill_copies_recorded_geometry(self):
+        receipt = _bundle_receipt()
+        bundle = rv._backfill_draft_bundle(receipt, self._SUMMARY)
+        self.assertIsNotNone(bundle)
+        self.assertTrue(bundle["backfilled"])
+        self.assertEqual(bundle["hook"]["text"], "HELLO WORLD?")
+        self.assertEqual(bundle["hook"]["y_center_frac"], 0.42)
+        self.assertEqual(bundle["hook"]["text_size"], 144)
+        self.assertEqual(bundle["hook"]["accent_index"], 2)
+        self.assertEqual(bundle["caption_rect"], [1, 2, 3, 4])
+        recipe = bundle["alpha_recipe"]
+        self.assertEqual(recipe["stage_zoom"]["crop"],
+                         [10, 20, 200, 300])
+        self.assertEqual(recipe["stage_zoom"]["pad_bottom_px"], 5)
+        self.assertEqual(recipe["effect_pad_bottom_px"], 7)
+
+    def test_backfill_absent_without_stage_geometry(self):
+        receipt = _bundle_receipt(stage_geometry=None)
+        self.assertIsNone(
+            rv._backfill_draft_bundle(receipt, self._SUMMARY))
+
+    def test_backfill_absent_without_run_summary_layout(self):
+        receipt = _bundle_receipt()
+        self.assertIsNone(rv._backfill_draft_bundle(receipt, {}))
+
+
+class TestBundleLoading(unittest.TestCase):
+    def _file_bundle(self, inputs_sha256, y_frac=0.33):
+        from spatial_director import geometry_bundle as gb
+        return gb.draft_bundle_dict(
+            stage_geometry=dict(_STAGE_GEOMETRY),
+            alpha_recipe=gb.alpha_recipe_dict(
+                src_frame_size=(360, 640),
+                stage_geometry=_STAGE_GEOMETRY,
+                speaker_forward=None),
+            hook={"text": "HELLO WORLD?", "window": [0.0, 6.0],
+                  "y_center_frac": y_frac, "layout_rendered": True,
+                  "accent_index": None, "text_size": 170,
+                  "slide": None, "variant": "stage"},
+            caption_rect=[1, 2, 3, 4], layout_spans=None,
+            hook_slide_px_s=0.0, inputs_sha256=inputs_sha256)
+
+    def test_file_bundle_preferred_over_records(self):
+        # The bundle's recorded hook band (0.33) must win over the
+        # run-summary's (0.42): the bundle is what the verifier
+        # consumed, the summary is a recompute-grade record.
+        from spatial_director import geometry_bundle as gb
+        receipt = _bundle_receipt()
+        bundle = self._file_bundle(receipt["drafts"][0]
+                                   ["inputs_sha256"])
+        with tempfile.TemporaryDirectory() as td:
+            gb.write_bundle(td, {1: bundle})
+            bundles, _notes = rv.load_geometry_bundles(
+                Path(td), receipt,
+                {"layout": {"hook_y_frac": 0.42}})
+        self.assertEqual(bundles[1]["hook"]["y_center_frac"], 0.33)
+
+    def test_untrusted_bundle_dropped(self):
+        # A bundle whose inputs_hash does not match the receipt
+        # draft's recorded hashes is dropped, never used.
+        from spatial_director import geometry_bundle as gb
+        receipt = _bundle_receipt()
+        bundle = self._file_bundle({"video": "z" * 64})
+        with tempfile.TemporaryDirectory() as td:
+            gb.write_bundle(td, {1: bundle})
+            bundles, notes = rv.load_geometry_bundles(
+                Path(td), receipt, {"layout": {}})
+        self.assertEqual(bundles, {})
+        self.assertTrue(any("not trusted" in n for n in notes))
+
+
+class TestDraftBundleResolution(unittest.TestCase):
+    def _bundles(self):
+        base = {"stage_geometry": dict(_STAGE_GEOMETRY),
+                "alpha_recipe": {"stage_zoom": {"applied": True},
+                                 "effect_pad_bottom_px": 7},
+                "hook": {"text": "ONE?"}, "caption_rect": [1, 2, 3, 4],
+                "layout_spans": None, "hook_slide_px_s": 0.0}
+        draft2 = {"alpha_recipe": {"base_draft": 1,
+                                   "repair": "REPOSITION_HOOK"},
+                  "hook": {"text": "ONE?"}, "caption_rect": [5, 6, 7, 8],
+                  "layout_spans": [{"span": [1.0, 2.0]}],
+                  "hook_slide_px_s": 0.0}
+        return {1: base, 2: draft2}
+
+    def test_geometry_repair_uses_draft2_bundle(self):
+        bundles = self._bundles()
+        got = rv.resolve_draft_bundle(bundles, 2, "REPOSITION_HOOK")
+        self.assertEqual(got["caption_rect"], [5, 6, 7, 8])
+        # Alpha recipe: draft 1's transforms + the repair replay.
+        self.assertEqual(got["alpha_recipe"]["effect_pad_bottom_px"],
+                         7)
+        self.assertEqual(got["alpha_recipe"]["repair"],
+                         "REPOSITION_HOOK")
+
+    def test_audio_only_repair_reuses_draft1(self):
+        bundles = self._bundles()
+        del bundles[2]
+        got = rv.resolve_draft_bundle(
+            bundles, 2, "NORMALIZE_LOUDNESS")
+        self.assertIs(got, bundles[1])
+
+    def test_geometry_repair_without_entry_is_none(self):
+        bundles = self._bundles()
+        del bundles[2]
+        self.assertIsNone(rv.resolve_draft_bundle(
+            bundles, 2, "REPOSITION_HOOK"))
 
 
 if __name__ == "__main__":

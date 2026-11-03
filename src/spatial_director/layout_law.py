@@ -198,16 +198,22 @@ def sequence_geometry(
 def to_canvas_alpha(
     alpha: np.ndarray,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    placement: object | None = None,
 ) -> np.ndarray:
     """Map a source-resolution alpha to canvas space.
 
     Goes through the compositor's ``speaker_layer`` (with a blank
     frame - only its alpha transform is used) so the geometry this
     module computes is in exactly the space the render occupies.
+    ``placement`` (layout states) forwards an explicit speaker
+    placement, so geometry planned/measured for a layout span is
+    in exactly the space that span's render occupies; None is the
+    historic fit placement.
     """
     h, w = alpha.shape
     blank = np.zeros((h, w, 3), dtype=np.uint8)
-    _, a = speaker_layer(blank, alpha, canvas)
+    _, a = speaker_layer(blank, alpha, canvas, placement=placement)
     return a
 
 
@@ -241,6 +247,11 @@ class HookPlacement:
     # A placement can be ok (gate-safe) and below_band (effect
     # absent) at once - the gate run's every draft was exactly that.
     effect_status: str = "below_band"
+    # Fix round 2 (Fix E): the hook size this placement was solved
+    # at (plan_hook_effect's size ladder start size). 170 = the
+    # historic default; smaller values are recorded step-downs
+    # that hold the occlusion band against the enlarged speaker.
+    text_size: int = 170
 
 
 def effect_status(
@@ -286,42 +297,52 @@ def effect_note(
         "more of the hook than the effect targets.")
 
 
-def render_hook_layer(
-    text: str,
-    canvas: tuple[int, int] = DEFAULT_CANVAS,
-    *,
-    y_center_frac: float = DEFAULT_HOOK_FRAC,
-) -> np.ndarray:
-    """The hook layer as the LAYOUT path renders it (safe width).
+def hook_accent_index(text: str) -> int | None:
+    """The hook's ONE emphasis word (fix round 2, Fix E).
 
-    Same renderer as the compositor, with the width budget clamped
-    to the safe zone - this is the layer the compositor's
-    ``--hook-auto-layout`` path composites, so what layout_law plans
-    is byte-for-byte what ships. One correction on top of the raw
-    renderer: it centres text on the CANVAS (x=540), but the safe
-    zone is centred at x=520 - an 885px ink block centred at 540
-    spans 97..982 and breaks the right rail by 2px. The layer is
-    therefore shifted onto the safe zone's centre.
+    Deterministic, reusing the caption emphasis selection
+    (caption_emphasis_indices - numbers and named entities read
+    off the text itself): a digit-bearing emphasis word wins,
+    else the longest emphasis word (ties: first). With no
+    emphasis candidates at all, the longest word wins (ties:
+    first). None only for empty text.
     """
-    # The compositor's renderer shrinks for LINE COUNT, not width:
-    # a single long word ("REHEARSES" at the default size) renders
-    # ~1000px wide inside an 888px budget. The layout path therefore
-    # steps the start size down until the INK fits the safe width -
-    # placement law, enforced on pixels, not on the renderer's say-so.
-    size = 170
-    layer = hook_layer(
-        text, canvas, y_center_frac=y_center_frac,
-        max_width_frac=HOOK_MAX_WIDTH_FRAC, start_size=size,
-    )
+    words = text.split()
+    if not words:
+        return None
+    emph = caption_emphasis_indices(text)
+    digit = [i for i in sorted(emph)
+             if any(c.isdigit() for c in words[i])]
+    if digit:
+        return digit[0]
+    if emph:
+        return max(sorted(emph), key=lambda i: len(words[i]))
+    return max(range(len(words)), key=lambda i: len(words[i]))
+
+
+def _hook_final_size(text: str, canvas: tuple[int, int],
+                     start_size: int) -> int:
+    """The start size render_hook_layer's shrink loop settles on.
+
+    Replicates the loop's decisions (ink width vs the safe-zone
+    budget) so the per-word entry layers render at exactly the
+    size the resting layer uses.
+    """
+    size = start_size
     while size > 40:
+        layer = hook_layer(text, canvas,
+                           max_width_frac=HOOK_MAX_WIDTH_FRAC,
+                           start_size=size)
         bbox = _bbox_of(layer[..., 3] > 0)
         if bbox is None or bbox[2] - bbox[0] <= SAFE_X1 - SAFE_X0 - 32:
             break
         size = int(size * 0.9)
-        layer = hook_layer(
-            text, canvas, y_center_frac=y_center_frac,
-            max_width_frac=HOOK_MAX_WIDTH_FRAC, start_size=size,
-        )
+    return size
+
+
+def _safe_center(layer: np.ndarray,
+                 canvas: tuple[int, int]) -> np.ndarray:
+    """Shift a hook layer onto the safe zone's centre (x=520)."""
     dx = (SAFE_X0 + SAFE_X1) // 2 - canvas[0] // 2
     if dx == 0:
         return layer
@@ -333,19 +354,203 @@ def render_hook_layer(
     return shifted
 
 
+def render_hook_layer(
+    text: str,
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    y_center_frac: float = DEFAULT_HOOK_FRAC,
+    accent_index: int | None = None,
+    start_size: int = 170,
+) -> np.ndarray:
+    """The hook layer as the LAYOUT path renders it (safe width).
+
+    Same renderer as the compositor, with the width budget clamped
+    to the safe zone - this is the layer the compositor's
+    ``--hook-auto-layout`` path composites, so what layout_law plans
+    is byte-for-byte what ships. One correction on top of the raw
+    renderer: it centres text on the CANVAS (x=540), but the safe
+    zone is centred at x=520 - an 885px ink block centred at 540
+    spans 97..982 and breaks the right rail by 2px. The layer is
+    therefore shifted onto the safe zone's centre.
+
+    Fix round 2: ``accent_index`` paints the one emphasis word in
+    Viral Pink (two-tone type); ``start_size`` is the solved hook
+    size from plan_hook_effect's size ladder.
+    """
+    # The compositor's renderer shrinks for LINE COUNT, not width:
+    # a single long word ("REHEARSES" at the default size) renders
+    # ~1000px wide inside an 888px budget. The layout path therefore
+    # steps the start size down until the INK fits the safe width -
+    # placement law, enforced on pixels, not on the renderer's say-so.
+    size = _hook_final_size(text, canvas, start_size)
+    layer = hook_layer(
+        text, canvas, y_center_frac=y_center_frac,
+        max_width_frac=HOOK_MAX_WIDTH_FRAC, start_size=size,
+        accent_index=accent_index,
+    )
+    return _safe_center(layer, canvas)
+
+
+def hook_word_layers(
+    text: str,
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    y_center_frac: float = DEFAULT_HOOK_FRAC,
+    accent_index: int | None = None,
+    start_size: int = 170,
+) -> list[np.ndarray]:
+    """Per-word hook layers for the stagger-pop entry (Fix E).
+
+    Word i's layer carries only word i's ink, at its resting
+    position in the styled resting layer (same settled size, same
+    safe-centre shift), so compositor.hook_entry_layer can compose
+    the entry from exactly the pixels that come to rest.
+    """
+    size = _hook_final_size(text, canvas, start_size)
+    layers = []
+    for i in range(len(text.split())):
+        layer = hook_layer(
+            text, canvas, y_center_frac=y_center_frac,
+            max_width_frac=HOOK_MAX_WIDTH_FRAC, start_size=size,
+            accent_index=accent_index, only_word_index=i)
+        layers.append(_safe_center(layer, canvas))
+    return layers
+
+
 def hook_glyph_mask(
     text: str,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
     *,
     y_center_frac: float = DEFAULT_HOOK_FRAC,
+    start_size: int = 170,
 ) -> tuple[np.ndarray, tuple[int, int, int, int]]:
     """Glyph mask + bbox of the hook as the layout path renders it."""
-    layer = render_hook_layer(text, canvas, y_center_frac=y_center_frac)
+    layer = render_hook_layer(text, canvas, y_center_frac=y_center_frac,
+                              start_size=start_size)
     mask = layer[..., 3] > 0
     bbox = _bbox_of(mask)
     if bbox is None:
         raise ValueError(f"hook text rendered no glyphs: {text!r}")
     return mask, bbox
+
+
+# ------------------------------------------------------- hook variants
+# Foreground hook variants (extension Stage 5, 2026-11-01): the
+# Stage hook sits BEHIND the speaker in the central band and earns
+# its depth effect from partial occlusion. The variants instead
+# put the hook on a solid brand bar IN FRONT of everything (the
+# caption plane's side of the stack): "banner" across the top of
+# the safe zone, "lower_third" across the bottom of the central
+# band, just above the caption block. Because a foreground bar
+# HIDES whatever it covers, its law is the opposite of Stage's:
+# the text must not cover the face AT ALL - F2's variant leg
+# measures text-over-face against the variant's own declared
+# geometry and allows 0 px. Both bars are built inside the safe
+# zone / central band, so F3's existing geometry check reads
+# them unchanged.
+
+HOOK_VARIANTS = ("stage", "banner", "lower_third")
+HOOK_VARIANT_BAR_FILL = (11, 11, 12, 238)     # near-black, near-solid
+HOOK_VARIANT_ACCENT = (255, 61, 126, 255)     # Viral Pink rule
+HOOK_VARIANT_BANNER_H = 168
+HOOK_VARIANT_LOWER_H = 150
+
+
+def hook_variant_bar_rect(
+    variant: str,
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+) -> tuple[int, int, int, int] | None:
+    """The declared bar geometry of a foreground variant.
+
+    None for "stage" (no bar - the historic behind-speaker hook).
+    Both bars span the safe width; banner tops at the central
+    band's top edge, lower_third bottoms 24px above the caption
+    block's top edge - inside the central band either way.
+    """
+    _cw, ch = canvas
+    if variant == "banner":
+        return (SAFE_X0, SAFE_Y0, SAFE_X1,
+                SAFE_Y0 + HOOK_VARIANT_BANNER_H)
+    if variant == "lower_third":
+        caption_top = ch - CAPTION_BOTTOM_MARGIN \
+            - caption_block_height()
+        y1 = caption_top - 24
+        return (SAFE_X0, y1 - HOOK_VARIANT_LOWER_H, SAFE_X1, y1)
+    return None
+
+
+def _variant_text_layer(
+    text: str,
+    canvas: tuple[int, int],
+    bar: tuple[int, int, int, int],
+) -> np.ndarray:
+    """The variant's TEXT layer alone (no bar): white hook type
+    centred in the bar, shrunk until the ink fits the bar with
+    margin. The glyph mask F2 measures is this layer's alpha -
+    the bar itself is furniture, the text is the claim."""
+    bar_h = bar[3] - bar[1]
+    y_frac = ((bar[1] + bar[3]) / 2.0) / canvas[1]
+    layer = None
+    for size in (96, 84, 72, 60, 48, 40):
+        layer = hook_layer(
+            text, canvas, y_center_frac=y_frac,
+            max_width_frac=HOOK_MAX_WIDTH_FRAC, start_size=size)
+        bbox = _bbox_of(layer[..., 3] > 0)
+        if bbox is not None and bbox[3] - bbox[1] <= bar_h - 28 \
+                and bbox[2] - bbox[0] <= (bar[2] - bar[0]) - 32:
+            break
+    assert layer is not None
+    dx = (SAFE_X0 + SAFE_X1) // 2 - canvas[0] // 2
+    if dx == 0:
+        return layer
+    shifted = np.zeros_like(layer)
+    if dx > 0:
+        shifted[:, dx:] = layer[:, :-dx]
+    else:
+        shifted[:, :dx] = layer[:, -dx:]
+    return shifted
+
+
+def hook_variant_layers(
+    text: str,
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    variant: str = "stage",
+    *,
+    y_center_frac: float = DEFAULT_HOOK_FRAC,
+) -> tuple[np.ndarray, np.ndarray, tuple[int, int, int, int]]:
+    """(full layer, glyph mask, glyph bbox) for a hook variant.
+
+    "stage" is exactly the historic layout-path hook: layer =
+    render_hook_layer, glyphs = its ink. The foreground variants
+    return the bar + text composited, with the glyph mask over
+    the TEXT ink only.
+    """
+    if variant == "stage":
+        layer = render_hook_layer(text, canvas,
+                                  y_center_frac=y_center_frac)
+        mask = layer[..., 3] > 0
+        bbox = _bbox_of(mask)
+        if bbox is None:
+            raise ValueError(f"hook text rendered no glyphs: {text!r}")
+        return layer, mask, bbox
+    bar = hook_variant_bar_rect(variant, canvas)
+    if bar is None:
+        raise ValueError(f"unknown hook variant {variant!r}")
+    text_layer = _variant_text_layer(text, canvas, bar)
+    mask = text_layer[..., 3] > 0
+    bbox = _bbox_of(mask)
+    if bbox is None:
+        raise ValueError(f"hook text rendered no glyphs: {text!r}")
+    img = Image.new("RGBA", (canvas[0], canvas[1]), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(
+        [bar[0], bar[1], bar[2] - 1, bar[3] - 1], radius=18,
+        fill=HOOK_VARIANT_BAR_FILL)
+    draw.rectangle(
+        [bar[0] + 18, bar[3] - 12, bar[2] - 18, bar[3] - 6],
+        fill=HOOK_VARIANT_ACCENT)
+    img.alpha_composite(Image.fromarray(text_layer))
+    return np.asarray(img), mask, bbox
 
 
 def _in_central_band(bbox: tuple[int, int, int, int]) -> bool:
@@ -407,6 +612,7 @@ def plan_hook(
     cap: float = GLYPH_OCCLUSION_CAP,
     fracs: Sequence[float] | None = None,
     occlusion_band: tuple[float, float] | None = EFFECT_OCCLUSION_BAND,
+    text_size: int = 170,
 ) -> HookPlacement:
     """Choose the hook band centre from the window's speaker geometry.
 
@@ -443,7 +649,8 @@ def plan_hook(
         else EFFECT_OCCLUSION_BAND
     scored: list[HookPlacement] = []
     for frac in fracs:
-        glyph, bbox = hook_glyph_mask(text, canvas, y_center_frac=frac)
+        glyph, bbox = hook_glyph_mask(text, canvas, y_center_frac=frac,
+                                      start_size=text_size)
         occ = predict_occlusion(glyph, occ_map)
         safe = _in_central_band(bbox)
         scored.append(
@@ -456,6 +663,7 @@ def plan_hook(
                 within_safe_zone=safe,
                 ok=bool(safe and occ <= cap),
                 effect_status=effect_status(occ, band),
+                text_size=text_size,
             )
         )
 
@@ -756,7 +964,10 @@ def plan_captions(
 # small approximation for crops (the mask extent shrinks) is
 # declared where it is used.
 
-REFRAME_TARGET_FRAC = 0.78     # of the central band: aim low-centre
+REFRAME_TARGET_FRAC = 0.5573   # of the central band: centroid y 930
+#                                (fix round 2: the Stage target moved
+#                                from low-centre 1187 to mid-frame 930
+#                                per the 2026-11-02 geometry spike)
 REFRAME_HEAD_TOP_PLAN_MIN = 150  # planning floor (verifier F4: 90)
 REFRAME_IDENTITY_TOL_PX = 60   # centroid this deep in-band: no move
 _F4_HEAD_MARGIN_PX = 90        # verifier F4's floor (duplicated to
@@ -827,16 +1038,16 @@ def plan_speaker_reframe(
         return placed_cy, placed_ht, scale
 
     cur_cy, cur_ht, cur_scale = evaluate(float(sh))
-    if SAFE_Y0 + REFRAME_IDENTITY_TOL_PX <= cur_cy \
-            <= SAFE_Y1 - REFRAME_IDENTITY_TOL_PX:
+    target_cy = SAFE_Y0 + target_frac * (SAFE_Y1 - SAFE_Y0)
+    cur_cx = (cw - sw * cur_scale) / 2.0 + cx * cur_scale
+    if abs(cur_cy - target_cy) <= REFRAME_IDENTITY_TOL_PX \
+            and SAFE_X0 <= cur_cx <= SAFE_X1:
         return SpeakerReframe(
             0, cur_scale,
-            (round((cw - sw * cur_scale) / 2.0 + cx * cur_scale, 1),
-             round(cur_cy, 1)),
+            (round(cur_cx, 1), round(cur_cy, 1)),
             int(round(cur_ht)), feasible=True, identity=True,
-            note="median face centroid already inside the central band")
+            note="median face centroid already at the Stage target")
 
-    target_cy = SAFE_Y0 + target_frac * (SAFE_Y1 - SAFE_Y0)
     # Solve the frame height for the target centroid (monotone in
     # height; a few secant steps converge in either scale regime).
     height = cy + (ch - target_cy) / max(cur_scale, 1e-9)
@@ -1152,6 +1363,214 @@ def apply_speaker_emphasis(
     return frames, alphas
 
 
+# ---------------------------------------------------------------- stage zoom
+#
+# Fix round 2 (Fix A, 2026-11-02): the default Stage composition.
+# The legacy construction fit the whole 16:9 frame into the
+# portrait canvas and parked the speaker low (placed mask height
+# ~24-34% of the canvas, centroid ~1187-1542). The 2026-11-02
+# geometry spike (extension-fix2-geometry-spike-2026-11-02.md)
+# proved a ratio-preserving crop cannot enlarge the speaker -
+# visible height is capped at source height x fit scale - so the
+# Stage default is now a TALL-NARROW crop: the crop keeps the full
+# mask height, its WIDTH is solved for the target placed scale,
+# and a bottom pad solves the centroid, all against the untouched
+# F3/F4 bands. Verified feasible on all banked profile windows
+# (Holmes / Belew / McArthur, head-top 625-806 vs the 150 plan
+# floor, containment 1.000).
+
+STAGE_HEIGHT_FRAC_MIN = 0.58   # speaker visual height design band
+STAGE_HEIGHT_FRAC_AIM = 0.62
+STAGE_HEIGHT_FRAC_MAX = 0.66
+STAGE_CENTROID_TARGET = (540.0, 930.0)
+STAGE_CENTROID_Y_BAND = (880.0, 980.0)
+STAGE_HEADROOM_PX = 24         # crop-top headroom above the head
+STAGE_SCALE_STEP = 1.02        # width-ladder step (placed scale)
+
+
+@dataclass
+class StageZoom:
+    """A planned Stage crop+pad enlarging the speaker."""
+
+    feasible: bool
+    identity: bool
+    crop: tuple[int, int, int, int] | None  # x0, y0, w, h (source)
+    pad_bottom_px: int
+    scale: float                   # placed scale / fit scale
+    placed_scale: float
+    placed_centroid: tuple[float, float] | None
+    placed_head_top_min: int | None
+    height_frac: float | None      # planned placed mask height / ch
+    note: str = ""
+
+    def declaration(self) -> dict[str, Any]:
+        """The receipt/summary record of this plan."""
+        return {
+            "feasible": self.feasible,
+            "identity": self.identity,
+            "scale": round(self.scale, 3),
+            "crop": list(self.crop) if self.crop else None,
+            "pad_bottom_px": self.pad_bottom_px,
+            "centroid_target": [STAGE_CENTROID_TARGET[0],
+                                STAGE_CENTROID_TARGET[1]],
+            "placed_centroid": (
+                [round(v, 1) for v in self.placed_centroid]
+                if self.placed_centroid else None),
+            "head_top_min": self.placed_head_top_min,
+            "mask_height_frac": (
+                round(self.height_frac, 3)
+                if self.height_frac is not None else None),
+            "note": self.note,
+        }
+
+
+def plan_stage_zoom(
+    src_alphas: Sequence[np.ndarray],
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    head_top_plan_min: int = REFRAME_HEAD_TOP_PLAN_MIN,
+) -> StageZoom:
+    """Plan the Stage zoom for a window's finished alphas.
+
+    Statistics mirror the verifier (median face centroid, minimum
+    head top); candidates are scored hard-constraints first
+    (centroid inside the F3 band, head top at the plan floor, face
+    inside the crop), then the design bands (height frac
+    0.58-0.66, centroid y 880-980), then closeness to the aims. A
+    window whose fit already reaches the height band, or whose
+    geometry admits no legal zoom, returns an honest identity or
+    infeasible plan - the transform is never forced.
+    """
+    geos = [frame_geometry(a) for a in src_alphas]
+    present = [g for g in geos if g.present
+               and g.face_centroid is not None]
+    if not present or not src_alphas:
+        return StageZoom(
+            feasible=False, identity=True, crop=None, pad_bottom_px=0,
+            scale=1.0, placed_scale=0.0, placed_centroid=None,
+            placed_head_top_min=None, height_frac=None,
+            note="no speaker geometry in the window; nothing to place")
+    sh, sw = src_alphas[0].shape
+    cw, ch = canvas
+    cx = float(np.median([g.face_centroid[0] for g in present]))
+    cy = float(np.median([g.face_centroid[1] for g in present]))
+    ht_min = min(g.head_top for g in present
+                 if g.head_top is not None)
+    fx0 = min(g.face_box[0] for g in present if g.face_box)
+    fy0 = min(g.face_box[1] for g in present if g.face_box)
+    fx1 = max(g.face_box[2] for g in present if g.face_box)
+    fy1 = max(g.face_box[3] for g in present if g.face_box)
+    mh_med = float(np.median(
+        [g.mask_bbox[3] - g.mask_bbox[1] for g in present]))
+    mask_bot = float(np.median([g.mask_bbox[3] for g in present]))
+    s_fit = min(cw / sw, ch / sh)
+    if mh_med * s_fit / ch >= STAGE_HEIGHT_FRAC_MIN:
+        return StageZoom(
+            feasible=True, identity=True, crop=None, pad_bottom_px=0,
+            scale=1.0, placed_scale=round(s_fit, 4),
+            placed_centroid=None, placed_head_top_min=None,
+            height_frac=round(mh_med * s_fit / ch, 3),
+            note="fit placement already reaches the Stage height band")
+    y0 = min(max(0, ht_min - STAGE_HEADROOM_PX), ht_min)
+    h = int(min(sh - y0, max(fy1 - y0, mask_bot - y0 + 8)))
+    if h < fy1 - y0:
+        return StageZoom(
+            feasible=False, identity=True, crop=None, pad_bottom_px=0,
+            scale=1.0, placed_scale=round(s_fit, 4),
+            placed_centroid=None, placed_head_top_min=None,
+            height_frac=None,
+            note="face does not fit a mask-height crop")
+    mh_vis = min(mh_med, float(h))
+    s_max = cw / max(1, (fx1 - fx0) + 2)  # face + 1px insets
+    s_hi = min(s_max, ch / h)
+    target_x, target_y = STAGE_CENTROID_TARGET
+    best: dict[str, Any] | None = None
+    s = s_fit * STAGE_SCALE_STEP
+    while s <= s_hi + 1e-9:
+        w = min(int(np.ceil(cw / s)), sw)
+        if w >= 2:
+            s_w = cw / w
+            x0 = min(max(0, int(round(cx - target_x / s_w))), sw - w)
+            if fx0 >= x0 + 1 and fx1 <= x0 + w - 1:
+                s_nom = min(cw / w, ch / h)
+                oy_want = target_y - s_nom * (cy - y0)
+                pad = int(round((ch - oy_want) / s_nom)) - h
+                height = h + pad
+                if height >= (fy1 - y0) + 4:
+                    s2 = min(cw / w, ch / height)
+                    ox = (cw - w * s2) / 2.0
+                    oy = ch - height * s2
+                    pcx = ox + s2 * (cx - x0)
+                    pcy = oy + s2 * (cy - y0)
+                    pht = oy + s2 * max(0, ht_min - y0)
+                    frac = mh_vis * s2 / ch
+                    hard = bool(SAFE_X0 <= pcx <= SAFE_X1
+                                and SAFE_Y0 <= pcy <= SAFE_Y1
+                                and pht >= head_top_plan_min)
+                    inband = bool(
+                        STAGE_HEIGHT_FRAC_MIN <= frac
+                        <= STAGE_HEIGHT_FRAC_MAX
+                        and STAGE_CENTROID_Y_BAND[0] <= pcy
+                        <= STAGE_CENTROID_Y_BAND[1])
+                    score = (0 if hard else 2) + (0 if inband else 1) \
+                        + abs(frac - STAGE_HEIGHT_FRAC_AIM) \
+                        + abs(pcy - target_y) / 4000.0
+                    cand = {
+                        "crop": (x0, y0, w, h), "pad": pad, "s2": s2,
+                        "pcx": pcx, "pcy": pcy, "pht": pht,
+                        "frac": frac, "hard": hard, "score": score}
+                    if best is None or score < best["score"]:
+                        best = cand
+        s = round(s * STAGE_SCALE_STEP, 4)
+    if best is None or not best["hard"]:
+        return StageZoom(
+            feasible=False, identity=True, crop=None, pad_bottom_px=0,
+            scale=1.0, placed_scale=round(s_fit, 4),
+            placed_centroid=None, placed_head_top_min=None,
+            height_frac=None,
+            note="no zoom satisfies the F3/F4 plan constraints")
+    frac = best["frac"]
+    note = (f"stage zoom x{best['s2'] / s_fit:.2f}: crop "
+            f"{best['crop']} pad {best['pad']}; placed centroid "
+            f"({best['pcx']:.0f},{best['pcy']:.0f}), mask height "
+            f"frac {frac:.3f}")
+    if not (STAGE_HEIGHT_FRAC_MIN <= frac <= STAGE_HEIGHT_FRAC_MAX):
+        note += (" - closest feasible step to the "
+                 f"{STAGE_HEIGHT_FRAC_MIN}-{STAGE_HEIGHT_FRAC_MAX} "
+                 "design band")
+    return StageZoom(
+        feasible=True, identity=False, crop=best["crop"],
+        pad_bottom_px=int(best["pad"]),
+        scale=round(best["s2"] / s_fit, 4),
+        placed_scale=round(best["s2"], 4),
+        placed_centroid=(round(best["pcx"], 1), round(best["pcy"], 1)),
+        placed_head_top_min=int(round(best["pht"])),
+        height_frac=round(frac, 3), note=note)
+
+
+def apply_stage_zoom(
+    frames: list[np.ndarray],
+    alphas: list[np.ndarray],
+    zoom: StageZoom,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Bake a StageZoom crop+pad into every frame/alpha.
+
+    The resting Stage geometry: applied once, uniformly, before
+    reframe/hook-effect planning, so every downstream consumer
+    (emphasis, layout states, graphics placement, the verifier)
+    sees the enlarged speaker. Identity/infeasible plans return
+    the inputs untouched.
+    """
+    if zoom.identity or not zoom.feasible or zoom.crop is None:
+        return frames, alphas
+    x0, y0, w, h = zoom.crop
+    pad = zoom.pad_bottom_px
+    return (
+        [_emphasis_frame(f, x0, y0, w, h, pad) for f in frames],
+        [_emphasis_alpha(a, x0, y0, w, h, pad) for a in alphas],
+    )
+
+
 # ---------------------------------------------------------------- hook effect
 #
 # plan_hook aims at the depth-effect band, but on some geometry no
@@ -1173,6 +1592,9 @@ def apply_speaker_emphasis(
 # legibility, the effect line judges the demo.
 
 
+HOOK_TEXT_SIZE_LADDER = (170, 144, 122, 104)
+
+
 @dataclass
 class HookEffectPlan:
     """A hook placement plus the speaker transform it requires."""
@@ -1182,6 +1604,7 @@ class HookEffectPlan:
     placement: HookPlacement
     geometry_ok: bool           # centroid in band + head-top floor held
     note: str = ""
+    text_size: int = 170        # hook size the placement was solved at
 
 
 def _transform_alpha(alpha: np.ndarray, pad_bottom_px: int) -> np.ndarray:
@@ -1234,7 +1657,8 @@ def plan_hook_effect(
     n = hook_sample if hook_sample is not None else len(src_alphas)
     idx = list(range(0, min(n, len(src_alphas)), max(1, sample_stride)))
 
-    def evaluate(pad: int) -> tuple[HookPlacement, bool]:
+    def evaluate(pad: int, text_size: int = 170
+                 ) -> tuple[HookPlacement, bool]:
         sample = [to_canvas_alpha(_transform_alpha(src_alphas[i], pad),
                                   canvas)
                   for i in idx]
@@ -1247,47 +1671,191 @@ def plan_hook_effect(
             and SAFE_Y0 <= float(np.median([c[1] for c in cents]))
             <= SAFE_Y1
             and min(tops) >= REFRAME_HEAD_TOP_PLAN_MIN)
-        return plan_hook(text, sample, canvas), geo_ok
+        return plan_hook(text, sample, canvas,
+                         text_size=text_size), geo_ok
 
-    best: HookEffectPlan | None = None
-    for lift in lift_steps:
-        pad = base_reframe.pad_bottom_px + int(lift)
-        if lift != 0 and not (face_bottom_max + 4 <= sh + pad <= 4 * sh):
-            continue  # outside the reframe clamps; not a legal lift
-        placement, geo_ok = evaluate(pad)
-        cand = HookEffectPlan(
-            pad, int(lift), placement, geo_ok,
-            note=(f"lift +{lift}px: predicted occlusion "
-                  f"{placement.predicted_occlusion:.3f} "
-                  f"({placement.effect_status}), geometry ok {geo_ok}"))
-        if geo_ok and placement.effect_status == "in_band":
-            cand.note = (
-                f"in-band at lift +{lift}px: predicted occlusion "
-                f"{placement.predicted_occlusion:.3f}")
-            return cand
-        if best is None or (
-            geo_ok and not best.geometry_ok
-        ) or (
-            geo_ok == best.geometry_ok
-            and abs(placement.predicted_occlusion
-                    - EFFECT_OCCLUSION_TARGET)
-            < abs(best.placement.predicted_occlusion
-                  - EFFECT_OCCLUSION_TARGET)
-        ):
-            best = cand
-    assert best is not None  # lift_steps always contains 0 in practice
-    best.note = (
-        f"no lift in {list(lift_steps)} reached the effect band; "
-        f"best is lift +{best.lift_px}px at predicted occlusion "
-        f"{best.placement.predicted_occlusion:.3f} "
-        f"({best.placement.effect_status}) - effect below target, "
-        "declared")
-    return best
+    def search(text_size: int) -> HookEffectPlan:
+        best: HookEffectPlan | None = None
+        for lift in lift_steps:
+            pad = base_reframe.pad_bottom_px + int(lift)
+            if lift != 0 and not (face_bottom_max + 4 <= sh + pad
+                                  <= 4 * sh):
+                continue  # outside the reframe clamps; not a legal lift
+            placement, geo_ok = evaluate(pad, text_size)
+            cand = HookEffectPlan(
+                pad, int(lift), placement, geo_ok,
+                note=(f"lift +{lift}px: predicted occlusion "
+                      f"{placement.predicted_occlusion:.3f} "
+                      f"({placement.effect_status}), geometry ok "
+                      f"{geo_ok}"),
+                text_size=text_size)
+            if geo_ok and placement.effect_status == "in_band":
+                cand.note = (
+                    f"in-band at lift +{lift}px: predicted occlusion "
+                    f"{placement.predicted_occlusion:.3f}")
+                return cand
+            if best is None or (
+                geo_ok and not best.geometry_ok
+            ) or (
+                geo_ok == best.geometry_ok
+                and abs(placement.predicted_occlusion
+                        - EFFECT_OCCLUSION_TARGET)
+                < abs(best.placement.predicted_occlusion
+                      - EFFECT_OCCLUSION_TARGET)
+            ):
+                best = cand
+        assert best is not None  # lift_steps always contains 0
+        best.note = (
+            f"no lift in {list(lift_steps)} reached the effect band; "
+            f"best is lift +{best.lift_px}px at predicted occlusion "
+            f"{best.placement.predicted_occlusion:.3f} "
+            f"({best.placement.effect_status}) - effect below target, "
+            "declared")
+        return best
+
+    # Fix round 2 (Fix E.3): the hook SIZE is part of the geometry
+    # solution against the enlarged Stage speaker - try the
+    # historic size first, then step down; the largest size whose
+    # lift search reaches the occlusion band wins. If no size
+    # reaches it, the historic-size result stands (declared).
+    fallback: HookEffectPlan | None = None
+    for size in HOOK_TEXT_SIZE_LADDER:
+        plan = search(size)
+        if fallback is None:
+            fallback = plan
+        if plan.geometry_ok \
+                and plan.placement.effect_status == "in_band":
+            if size != HOOK_TEXT_SIZE_LADDER[0]:
+                plan.note += (f"; hook size stepped down to {size} "
+                              "to hold the occlusion band")
+            return plan
+    assert fallback is not None
+    if len(HOOK_TEXT_SIZE_LADDER) > 1:
+        fallback.note += ("; hook sizes "
+                          f"{list(HOOK_TEXT_SIZE_LADDER)} all tried, "
+                          "none reached the band")
+    return fallback
 
 
 CAPTION_PILL_FILL = (8, 8, 10, 168)
 CAPTION_PILL_PAD_X = 16
 CAPTION_PILL_INSET_Y = 5
+
+# Caption style (extension Stage 4, 2026-11-01): emphasis words -
+# numbers and named entities taken from the phrase text itself -
+# render in Viral Pink #FF3D7E (the brand value graphics_layer
+# carries as VIRAL_PINK), and a brief scale pop lands at each
+# phrase start. The word-sweep highlight (the word being spoken
+# right now, also pink) exists ONLY when real word timings back
+# it (word_timing: DSP or MMS) - see caption_word_colors.
+CAPTION_EMPHASIS_RGBA = (255, 61, 126, 255)
+CAPTION_TEXT_RGBA = (255, 255, 255, 255)
+CAPTION_POP_S = 0.15       # the pop's duration at a phrase start
+CAPTION_POP_SCALE = 1.05   # ... and its peak scale
+# Fix round 2 (Fix F, 2026-11-02): display chunking + three-state
+# word colouring. A cue renders in chunks of at most
+# CAPTION_CHUNK_MAX_WORDS words (timing from the word timings
+# themselves - see rescue_loop's renderer), and with a sweep
+# active the words carry three unmistakable states: UPCOMING dim,
+# ACTIVE Viral Pink with a slight scale pop, SPOKEN plain white
+# at full alpha. Emphasis words keep their pink ONLY in the
+# spoken state - while a word is active the ACTIVE state wins,
+# so the eye can always tell which word is being spoken now.
+CAPTION_CHUNK_MAX_WORDS = 4
+CAPTION_UPCOMING_RGBA = (255, 255, 255, 140)
+CAPTION_ACTIVE_SCALE = 1.10
+
+_NUMBER_WORD_TOKENS = {
+    "zero", "one", "two", "three", "four", "five", "six",
+    "seven", "eight", "nine", "ten", "eleven", "twelve",
+    "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+    "eighteen", "nineteen", "twenty", "thirty", "forty",
+    "fifty", "sixty", "seventy", "eighty", "ninety", "hundred",
+    "thousand", "million", "billion",
+}
+_TOKEN_STRIP = ".,;:!?\"'()[]$€£%"
+
+
+def caption_emphasis_indices(text: str) -> set[int]:
+    """Word indices (over ``text.split()``) that earn emphasis.
+
+    Two classes, both read off the phrase text itself - nothing
+    is looked up or invented:
+    - numbers: a token containing a digit, or a number word
+      ("twenty", "million", ...);
+    - named entities: a capitalised token that does NOT start a
+      sentence - in punctuation-restored caption text the only
+      mid-sentence capitals are proper nouns and acronyms (the
+      pronoun "I" is excluded by name).
+    """
+    out: set[int] = set()
+    sentence_start = True
+    for i, tok in enumerate(text.split()):
+        core = tok.strip(_TOKEN_STRIP)
+        lowered = core.lower()
+        if any(ch.isdigit() for ch in tok) \
+                or lowered in _NUMBER_WORD_TOKENS:
+            out.add(i)
+        elif not sentence_start and core and core != "I" and (
+                (core[0].isupper() and any(c.islower() for c in core))
+                or (len(core) >= 2 and core.isalpha()
+                    and core.isupper())):
+            out.add(i)
+        if tok.rstrip("\"' )]").endswith((".", "!", "?")):
+            sentence_start = True
+        elif core:
+            sentence_start = False
+    return out
+
+
+def caption_word_colors(text: str, active_index: int | None = None,
+                        *, emphasis: set[int] | None = None,
+                        spoken_count: int | None = None,
+                        ) -> dict[int, tuple[int, int, int, int]] | None:
+    """Per-word fill colours for one cue/chunk, or None for plain.
+
+    Without a sweep (``active_index`` None - no real word timings
+    back the render): emphasis words (numbers / named entities)
+    are pink, everything else inherits the plain white path, and
+    None comes back when nothing colours (the historic fast path).
+
+    With a sweep (fix round 2 three-state colouring): EVERY word
+    gets an explicit state colour - upcoming words dim white, the
+    active word Viral Pink, spoken words full white - except that
+    an emphasis word in the SPOKEN state keeps its pink. The
+    active state always wins while a word is being spoken: an
+    emphasis word is dim while upcoming and pink while active
+    like any other word, and only turns emphasis-pink once it has
+    been spoken. ``emphasis`` may carry a precomputed index set
+    (chunk rendering slices the parent cue's set).
+    """
+    words = text.split()
+    emph = emphasis if emphasis is not None \
+        else caption_emphasis_indices(text)
+    if (active_index is None or not (
+            0 <= active_index < len(words))) \
+            and spoken_count is None:
+        colors = {i: CAPTION_EMPHASIS_RGBA for i in emph
+                  if 0 <= i < len(words)}
+        return colors or None
+    # Three-state sweep colouring. With no word active at this
+    # instant (a pause inside the chunk), ``spoken_count`` says
+    # how many leading words are already spoken - the states hold
+    # through the pause instead of flashing back to plain.
+    n_spoken = active_index if (
+        active_index is not None and 0 <= active_index < len(words)
+    ) else int(spoken_count or 0)
+    colors: dict[int, tuple[int, int, int, int]] = {}
+    for i in range(len(words)):
+        if active_index is not None and i == active_index \
+                and 0 <= active_index < len(words):
+            colors[i] = CAPTION_EMPHASIS_RGBA
+        elif i < n_spoken:
+            colors[i] = CAPTION_EMPHASIS_RGBA if i in emph \
+                else CAPTION_TEXT_RGBA
+        else:
+            colors[i] = CAPTION_UPCOMING_RGBA
+    return colors
 
 
 def caption_layer(
@@ -1297,6 +1865,8 @@ def caption_layer(
     *,
     font_size: int = CAPTION_FONT_SIZE,
     pill: bool = True,
+    word_colors: dict[int, tuple[int, int, int, int]] | None = None,
+    active_index: int | None = None,
 ) -> np.ndarray:
     """Render one cue's text as an RGBA layer inside the block rect.
 
@@ -1309,6 +1879,11 @@ def caption_layer(
     treated backdrop's bright patches; the pill holds contrast
     constant wherever the block lands. Captions render IN FRONT of
     the speaker - this layer is composited last by the caller.
+
+    ``word_colors`` (Stage 4) maps word indices over the cue text
+    to fill colours (see caption_word_colors): emphasis words and
+    the word-sweep highlight. None - the default - renders exactly
+    the historic single-draw white text.
     """
     cw, ch = canvas
     img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
@@ -1319,8 +1894,25 @@ def caption_layer(
     x0, y0, x1, y1 = rect
     total_h = line_h * len(lines)
     y = y0 + max(0, ((y1 - y0) - total_h) // 2)
+    word_index = 0
     for line in lines:
-        w = draw.textlength(line, font=font)
+        line_words = line.split()
+        advances: list[float] | None = None
+        if word_colors:
+            # Per-word drawing (Stage 4 emphasis / sweep): each
+            # word is drawn at its own advance so its fill can
+            # differ. Advances come from the same font metrics;
+            # the line is centred on their sum, and the pill hugs
+            # exactly the drawn words, as on the plain path.
+            advances = [
+                draw.textlength(
+                    wtok + (" " if k < len(line_words) - 1 else ""),
+                    font=font)
+                for k, wtok in enumerate(line_words)
+            ]
+            w = sum(advances)
+        else:
+            w = draw.textlength(line, font=font)
         x = x0 + ((x1 - x0) - w) / 2
         if pill:
             draw.rounded_rectangle(
@@ -1331,13 +1923,52 @@ def caption_layer(
                 radius=(line_h - 2 * CAPTION_PILL_INSET_Y) // 2,
                 fill=CAPTION_PILL_FILL,
             )
-        draw.text(
-            (x, y),
-            line,
-            font=font,
-            fill=(255, 255, 255, 255),
-            stroke_width=max(2, font_size // 28),
-            stroke_fill=(10, 10, 12, 255),
-        )
+        stroke = max(2, font_size // 28)
+        if word_colors and advances is not None:
+            # Fix F: the ACTIVE word also pops (scale
+            # CAPTION_ACTIVE_SCALE, centred on its line band -
+            # the same containment precedent as the phrase pop).
+            active_font = None
+            active_dy = 0
+            if active_index is not None:
+                active_size = max(
+                    font_size + 1,
+                    int(round(font_size * CAPTION_ACTIVE_SCALE)))
+                active_font = _load_font(active_size)
+                active_dy = (line_h - int(active_size * 1.25)) // 2
+            for k, wtok in enumerate(line_words):
+                if active_font is not None \
+                        and word_index == active_index:
+                    draw.text(
+                        (x, y + active_dy),
+                        wtok,
+                        font=active_font,
+                        fill=word_colors.get(word_index,
+                                             CAPTION_TEXT_RGBA),
+                        stroke_width=stroke,
+                        stroke_fill=(10, 10, 12, 255),
+                    )
+                else:
+                    draw.text(
+                        (x, y),
+                        wtok,
+                        font=font,
+                        fill=word_colors.get(word_index,
+                                             CAPTION_TEXT_RGBA),
+                        stroke_width=stroke,
+                        stroke_fill=(10, 10, 12, 255),
+                    )
+                x += advances[k]
+                word_index += 1
+        else:
+            draw.text(
+                (x, y),
+                line,
+                font=font,
+                fill=CAPTION_TEXT_RGBA,
+                stroke_width=stroke,
+                stroke_fill=(10, 10, 12, 255),
+            )
+            word_index += len(line_words)
         y += line_h
     return np.asarray(img)

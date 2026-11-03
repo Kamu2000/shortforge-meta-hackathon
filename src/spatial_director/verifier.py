@@ -79,6 +79,14 @@ disagree is reconciled in the BUILDLOG and in layout_law):
   render against the level YouTube/Shorts will normalise it to.
   The measured integrated / true peak / LRA are recorded next
   to the thresholds, like every other check.
+- Layout states (extension, 2026-11-01): when a render declares
+  layout spans (Spotlight / Split / Cutaway), F8 gains
+  declared-box legs (graphic inside its declared box; speaker
+  inside the declared PiP / Split box; Cutaway speaker absence),
+  and F3/F4 evaluate span-aware against the declared boxes -
+  Stage spans keep the historic code paths and every threshold
+  above is unchanged. Per-Short graphics coverage is declared
+  on the receipt (union of placed spans), never capped.
 
 Written fresh in-repo on 2026-10-29.
 """
@@ -106,6 +114,8 @@ from .graphics_layer import (
     PATH_TRAVEL_S,
     BackdropSpec,
     GraphicSpec,
+    graphics_coverage,
+    path_travel_s,
 )
 from .layout_law import (
     CAPTION_BOTTOM_MARGIN,
@@ -117,6 +127,7 @@ from .layout_law import (
     face_pixels,
     frame_geometry,
     hook_glyph_mask,
+    hook_variant_layers,
     rect_overlap_px,
     render_hook_layer,
 )
@@ -130,6 +141,11 @@ AUDIO_RMS_MIN_DB = -32.0
 HOOK_MIN_CONTENT_WORDS = 3
 SPEECH_ONSET_DEADLINE_S = 2.0
 CAPTION_FACE_OVERLAP_MAX_PX = 0
+# F2 variant leg (extension Stage 5): a foreground hook variant's
+# text renders IN FRONT of the speaker, so text-over-face is a
+# hard 0 px - a separate cap from the Stage depth-effect band,
+# which exists to be partially occluded.
+HOOK_VARIANT_TEXT_OVER_FACE_MAX_PX = 0
 CONTAINMENT_MIN_FRAC = 0.98
 HEAD_MARGIN_MIN_PX = 90
 MAX_WORD_GAP_S = 0.45
@@ -214,17 +230,50 @@ class HookSpec:
     # AND a measured one: the renderer composites exactly this
     # offset function, and F7 reads the speed back off it.
     slide: tuple[float, float] | None = None
+    # Foreground variant (extension Stage 5): "stage" (default -
+    # the historic behind-speaker hook, byte-identical) or a
+    # foreground bar variant ("banner" | "lower_third",
+    # layout_law.HOOK_VARIANTS). A variant's layer is the bar +
+    # text drawn for the FRONT of the stack; its glyphs are the
+    # text ink only, and F2 measures them under the variant leg
+    # (text-over-face = 0 px), not the depth-effect cap.
+    variant: str = "stage"
+    # Fix round 2 (Fix E): two-tone styling of the stage hook -
+    # the accent word index (Viral Pink) and the solved text size
+    # from plan_hook_effect's ladder. The glyph is derived from
+    # the STYLED layer, so F1/F2 measure exactly what renders.
+    accent_index: int | None = None
+    text_size: int = 170
 
     def layer(self, canvas: tuple[int, int] = DEFAULT_CANVAS) -> np.ndarray:
+        if self.variant != "stage":
+            layer, _mask, _bbox = hook_variant_layers(
+                self.text, canvas, self.variant,
+                y_center_frac=self.y_center_frac)
+            return layer
         if self.layout_rendered:
             return render_hook_layer(
-                self.text, canvas, y_center_frac=self.y_center_frac)
+                self.text, canvas, y_center_frac=self.y_center_frac,
+                accent_index=self.accent_index,
+                start_size=self.text_size)
         return hook_layer(self.text, canvas, y_center_frac=self.y_center_frac)
 
     def glyph(self, canvas: tuple[int, int] = DEFAULT_CANVAS):
+        if self.variant != "stage":
+            _layer, mask, bbox = hook_variant_layers(
+                self.text, canvas, self.variant,
+                y_center_frac=self.y_center_frac)
+            return mask, bbox
         if self.layout_rendered:
-            return hook_glyph_mask(
-                self.text, canvas, y_center_frac=self.y_center_frac)
+            layer = self.layer(canvas)
+            mask = layer[..., 3] > 0
+            ys, xs = np.nonzero(mask)
+            if ys.size == 0:
+                raise ValueError(
+                    f"hook text rendered no glyphs: {self.text!r}")
+            bbox = (int(xs.min()), int(ys.min()),
+                    int(xs.max()) + 1, int(ys.max()) + 1)
+            return mask, bbox
         layer = self.layer(canvas)
         mask = layer[..., 3] > 0
         ys, xs = np.nonzero(mask)
@@ -304,6 +353,44 @@ class VerifyInputs:
     # F3/F4 verify the render as-is; this section is the record,
     # not a check input.
     speaker_forward: list[dict[str, Any]] | None = None
+    # Layout-state declarations (extension Stage 2/3): per-span
+    # records (layout_states LayoutPlan.declaration) for spans
+    # rendered under a non-Stage layout - span, layout, the
+    # declared speaker box, the declared graphic box, and the
+    # Split caption rect where the state moves it. F8 measures
+    # the declared boxes against the render; F3/F4 evaluate
+    # their span-aware legs against them. None = no layout
+    # states in play (the historic measurement, unchanged).
+    # The canvas_alphas supplied alongside MUST be the
+    # layout-mapped ones (the geometry the render used).
+    layout_spans: list[dict[str, Any]] | None = None
+    # Caption word-timing source (extension Stage 4): the label
+    # of the implementation that produced this render's word
+    # timings ("dsp" | "mms", word_timing.TIMING_SOURCES), quoted
+    # verbatim onto the receipt. A record, not a check input -
+    # no F-check reads it. None = the render carried no word
+    # timings (the historic receipt shape).
+    caption_timing_source: str | None = None
+    # Fix round 2 declarations (records, not check inputs; no
+    # F-check reads them): cue-sanity repairs applied before word
+    # timing (Fix D), the Stage composition the construction
+    # applied (Fix A), and the canvas backdrop treatment (Fix B).
+    cue_repairs: list[dict[str, Any]] | None = None
+    stage_geometry: dict[str, Any] | None = None
+    canvas_backdrop: dict[str, Any] | None = None
+    hook_style: dict[str, Any] | None = None
+    caption_style: dict[str, Any] | None = None
+    # Fix round 4: valley-snap stats for the render's word
+    # timings (word_timing.snap_word_timings) - a record, not a
+    # check input; no F-check reads it.
+    caption_snap: dict[str, Any] | None = None
+    # Fix round 5: per-cue word-timing producers ("mms" |
+    # "dsp_phrase", one per cue, pipeline order) + the pace
+    # gate's records - the per-cue truth behind the
+    # caption_timing_source summary label. Records, not check
+    # inputs; no F-check reads them.
+    caption_cue_sources: list[str] | None = None
+    caption_timing_gate: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -350,6 +437,32 @@ class Receipt:
     # the emphasis transform (scale, centroid target) the
     # pipeline planned inside the F3/F4 limits.
     speaker_forward: list[dict[str, Any]] | None = None
+    # Layout-state declarations (extension): the VerifyInputs
+    # declarations, quoted verbatim - additive, receipt_version
+    # stays 1; absent when no layout states were in play.
+    layout_spans: list[dict[str, Any]] | None = None
+    # Graphics coverage declaration (span-law amendment): the
+    # union of placed graphic spans over the render's duration.
+    # Declared, never capped.
+    graphics_coverage: dict[str, Any] | None = None
+    # Caption word-timing source label (extension Stage 4):
+    # which implementation produced the render's word timings,
+    # quoted from the inputs - additive, receipt_version stays 1.
+    caption_timing_source: str | None = None
+    # Fix round 2 declarations, quoted from the inputs - additive,
+    # receipt_version stays 1; absent on historic renders.
+    cue_repairs: list[dict[str, Any]] | None = None
+    stage_geometry: dict[str, Any] | None = None
+    canvas_backdrop: dict[str, Any] | None = None
+    hook_style: dict[str, Any] | None = None
+    caption_style: dict[str, Any] | None = None
+    # Fix round 4: valley-snap stats, quoted from the inputs -
+    # additive, receipt_version stays 1.
+    caption_snap: dict[str, Any] | None = None
+    # Fix round 5: per-cue timing producers + pace-gate records,
+    # quoted from the inputs - additive, receipt_version stays 1.
+    caption_cue_sources: list[str] | None = None
+    caption_timing_gate: list[dict[str, Any]] | None = None
 
     @property
     def failed(self) -> list[str]:
@@ -376,6 +489,28 @@ class Receipt:
             out["backdrops"] = self.backdrops
         if self.speaker_forward is not None:
             out["speaker_forward"] = self.speaker_forward
+        if self.layout_spans is not None:
+            out["layout_spans"] = self.layout_spans
+        if self.graphics_coverage is not None:
+            out["graphics_coverage"] = self.graphics_coverage
+        if self.caption_timing_source is not None:
+            out["caption_timing_source"] = self.caption_timing_source
+        if self.cue_repairs is not None:
+            out["cue_repairs"] = self.cue_repairs
+        if self.stage_geometry is not None:
+            out["stage_geometry"] = self.stage_geometry
+        if self.canvas_backdrop is not None:
+            out["backdrop"] = self.canvas_backdrop
+        if self.hook_style is not None:
+            out["hook_style"] = self.hook_style
+        if self.caption_style is not None:
+            out["caption_style"] = self.caption_style
+        if self.caption_snap is not None:
+            out["caption_snap"] = self.caption_snap
+        if self.caption_cue_sources is not None:
+            out["caption_cue_sources"] = self.caption_cue_sources
+        if self.caption_timing_gate is not None:
+            out["caption_timing_gate"] = self.caption_timing_gate
         return out
 
     def to_json(self) -> str:
@@ -571,6 +706,170 @@ def _check_loudness(inputs: VerifyInputs) -> CheckResult:
 # ---------------------------------------------------------------- F8
 
 
+# Layout-state legs (extension Stage 3): the transition width is
+# the layout track's own ease (layout_states.TRANSITION_S,
+# mirrored read-only - the verifier never imports a threshold
+# it could move). Declared-box containment allows 2px of
+# rounding/feather at the edges; the fractions reuse F8's
+# existing presence/absence numbers (0.75 / 0.5 / 0.5s), plus a
+# 0.99 in-box fraction for the graphic mask (a placed graphic's
+# pixels are inside its declared box by construction; anything
+# materially outside it is a misdeclaration or a render bug).
+LAYOUT_TRANSITION_S = 0.30
+LAYOUT_BOX_TOL_PX = 2
+LAYOUT_GRAPHIC_IN_BOX_MIN_FRAC = 0.99
+
+
+def _active_layout_spans(inputs: VerifyInputs) -> list[dict[str, Any]]:
+    """The feasible non-Stage layout declarations in play.
+
+    Stage spans and infeasible declarations (which the planner
+    already downgraded to Stage on the record) carry no legs -
+    the render they produced IS Stage geometry, measured by the
+    historic paths.
+    """
+    out: list[dict[str, Any]] = []
+    for d in inputs.layout_spans or []:
+        if not isinstance(d, dict):
+            continue
+        if d.get("layout") in (None, "stage"):
+            continue
+        if d.get("feasible") is False:
+            continue
+        span = d.get("span")
+        if not (isinstance(span, (list, tuple)) and len(span) == 2):
+            continue
+        out.append(d)
+    return out
+
+
+def _layout_span_at(spans: Sequence[dict[str, Any]],
+                    t: float) -> dict[str, Any] | None:
+    for d in spans:
+        s, e = d["span"]
+        if float(s) <= t < float(e):
+            return d
+    return None
+
+
+def _layout_interior_idx(d: dict[str, Any], fps: float,
+                         n_frames: int) -> list[int]:
+    """Frame indices strictly inside a declared span (past the
+    eased transitions at both edges). A span shorter than the
+    two transitions stands on its middle frame."""
+    s, e = float(d["span"][0]), float(d["span"][1])
+    idx = [i for i in range(n_frames)
+           if s + LAYOUT_TRANSITION_S <= i / fps
+           < e - LAYOUT_TRANSITION_S]
+    if not idx:
+        mid = int(round((s + e) / 2.0 * fps))
+        idx = [mid] if 0 <= mid < n_frames else []
+    return idx
+
+
+def _layout_legs(inputs: VerifyInputs,
+                 alphas: Sequence[np.ndarray],
+                 specs: Sequence[GraphicSpec]
+                 ) -> tuple[list[dict[str, Any]], list[int]]:
+    """F8's layout-state legs, measured on the actual render.
+
+    Per declared non-Stage span (declared-vs-measured, in F8's
+    existing style):
+    - the span's graphic: its measured mask must lie inside the
+      declared graphic box (fraction >= 0.99);
+    - Spotlight/Split: the speaker's face must lie inside the
+      declared speaker box on >= 0.75 of the span's interior
+      frames (the presence fraction, reused);
+    - Cutaway: the speaker must be ABSENT mid-span (canvas
+      alpha max <= 0.5, the absence number, reused) and present
+      at the tolerance samples outside the span, when the
+      render has room to sample there.
+    """
+    spans = _active_layout_spans(inputs)
+    fps = inputs.fps
+    n_frames = len(alphas)
+    records: list[dict[str, Any]] = []
+    offending: list[int] = []
+    for k, d in enumerate(spans):
+        s, e = float(d["span"][0]), float(d["span"][1])
+        layout = d["layout"]
+        box = d.get("speaker_box")
+        rec: dict[str, Any] = {"index": k, "layout": layout,
+                               "span": [s, e]}
+        ok = True
+        match = next(
+            (g for g in specs
+             if g.layout == layout
+             and abs(g.start_s - s) < 0.01
+             and abs(g.end_s - e) < 0.01), None)
+        gfrac: float | None = None
+        gbox = d.get("graphic_box")
+        if gbox is not None and match is not None:
+            mask = match.mask()
+            total = int(mask.sum())
+            if total == 0:
+                gfrac = 1.0
+            else:
+                x0, y0, x1, y1 = (int(v) for v in gbox)
+                inside = int(mask[max(0, y0):max(y1, 0),
+                                  max(0, x0):max(x1, 0)].sum())
+                gfrac = round(inside / total, 4)
+            ok = ok and gfrac >= LAYOUT_GRAPHIC_IN_BOX_MIN_FRAC
+        rec["graphic_in_box_frac"] = gfrac
+        interior = _layout_interior_idx(d, fps, n_frames)
+        if layout in ("spotlight", "split") and box is not None:
+            bx0, by0, bx1, by1 = (int(v) for v in box)
+            present = 0
+            inside_frames = 0
+            cents: list[tuple[float, float]] = []
+            for i in interior:
+                g = frame_geometry(alphas[i])
+                if g.face_box is None:
+                    continue
+                present += 1
+                fb = g.face_box
+                if (fb[0] >= bx0 - LAYOUT_BOX_TOL_PX
+                        and fb[1] >= by0 - LAYOUT_BOX_TOL_PX
+                        and fb[2] <= bx1 + LAYOUT_BOX_TOL_PX
+                        and fb[3] <= by1 + LAYOUT_BOX_TOL_PX):
+                    inside_frames += 1
+                if g.face_centroid is not None:
+                    cents.append(g.face_centroid)
+            frac = (round(inside_frames / present, 4)
+                    if present else None)
+            rec["speaker_in_box_frac"] = frac
+            rec["speaker_frames_present"] = present
+            if cents:
+                rec["median_centroid"] = [
+                    round(float(np.median([c[0] for c in cents])), 1),
+                    round(float(np.median([c[1] for c in cents])), 1)]
+            ok = ok and frac is not None \
+                and frac >= GRAPHIC_MATCH_MIN
+        if layout == "cutaway":
+            amax = max((float(alphas[i].max()) for i in interior),
+                       default=0.0)
+            rec["speaker_alpha_max_mid_span"] = round(amax, 4)
+            ok = ok and amax <= GRAPHIC_ABSENT_MATCH_MAX
+            outside: list[bool] = []
+            before = int(np.floor(
+                (s - GRAPHIC_SPAN_TOLERANCE_S - 0.25) * fps))
+            after = int(np.ceil(
+                (e + GRAPHIC_SPAN_TOLERANCE_S + 0.25) * fps))
+            for idx in (before, after):
+                if 0 <= idx < n_frames:
+                    outside.append(
+                        frame_geometry(alphas[idx]).face_centroid
+                        is not None)
+            rec["speaker_present_outside"] = (
+                any(outside) if outside else None)
+            ok = ok and rec["speaker_present_outside"] is not False
+        rec["ok"] = bool(ok)
+        if not ok:
+            offending.append(k)
+        records.append(rec)
+    return records, offending
+
+
 def _grab_frame(video_path: str | Path, t_s: float,
                 canvas: tuple[int, int]) -> np.ndarray | None:
     """One frame of the render at ``t_s`` (RGB uint8), or None.
@@ -657,6 +956,20 @@ def _check_graphics(inputs: VerifyInputs,
     speaker, captions, hook glyphs and graphics do not cover,
     and must NOT match at samples beyond its span edges - the
     scene exists only inside its declared span.
+
+    Layout legs (extension Stage 3): when layout spans are
+    declared, each non-Stage span additionally certifies its
+    declared boxes against the (layout-mapped) alphas - graphic
+    inside its declared box, speaker inside the declared PiP /
+    Split box, and for Cutaway the speaker absent mid-span and
+    present outside it. See _layout_legs. A declared Cutaway
+    span is excluded from the speaker-presence legs (the S0
+    spike's recorded rule: Cutaway = absence leg only): its own
+    graphic is full-frame BY DESIGN while the speaker eases
+    out, so the face-overlap union - which could only ever see
+    the boundary fades - does not apply to it; the absence leg
+    replaces it. Every other graphic keeps the face leg in
+    full, threshold unchanged.
     """
     specs = list(inputs.graphics or [])
     cw, ch = inputs.canvas
@@ -680,25 +993,39 @@ def _check_graphics(inputs: VerifyInputs,
             return None
         return _graphic_match(rgb, spec, idx / fps, alphas[idx])
 
+    declared_spans = _active_layout_spans(inputs)
     per_graphic: list[dict[str, Any]] = []
     offending: list[int] = []
     for i, spec in enumerate(specs):
         gmask = spec.mask()
+        # Declared-Cutaway exemption (Stage 3): the span's own
+        # graphic is exempt from the face-overlap leg - the
+        # speaker is faded out under it BY DESIGN and the layout
+        # absence leg certifies that fade. Matched to the
+        # declaration exactly as _layout_legs matches (layout
+        # kind + span within 0.01s).
+        cutaway_declared = spec.layout == "cutaway" and any(
+            d["layout"] == "cutaway"
+            and abs(float(d["span"][0]) - spec.start_s) < 0.01
+            and abs(float(d["span"][1]) - spec.end_s) < 0.01
+            for d in declared_spans)
         # Face + margin overlap: the union of face pixels over
         # the span's sampled frames, dilated by FACE_MARGIN_PX -
         # exactly the exclusion zone placement enforces, so F8
         # certifies the guarantee placement claims.
-        f0 = max(0, int(spec.start_s * fps))
-        f1 = min(n_frames, max(f0 + 1, int(np.ceil(spec.end_s * fps))))
-        step = max(1, (f1 - f0) // 5)
-        face_union = np.zeros((ch, cw), dtype=bool)
-        for f in range(f0, f1, step):
-            face_union |= face_pixels(alphas[f])
         face_overlap = 0
-        if face_union.any():
-            dist = ndimage.distance_transform_edt(~face_union)
-            face_overlap = int(
-                (gmask & (dist <= FACE_MARGIN_PX)).sum())
+        if not cutaway_declared:
+            f0 = max(0, int(spec.start_s * fps))
+            f1 = min(n_frames,
+                     max(f0 + 1, int(np.ceil(spec.end_s * fps))))
+            step = max(1, (f1 - f0) // 5)
+            face_union = np.zeros((ch, cw), dtype=bool)
+            for f in range(f0, f1, step):
+                face_union |= face_pixels(alphas[f])
+            if face_union.any():
+                dist = ndimage.distance_transform_edt(~face_union)
+                face_overlap = int(
+                    (gmask & (dist <= FACE_MARGIN_PX)).sum())
         caption_overlap = (
             rect_overlap_px(gmask, inputs.caption_rect)
             if inputs.caption_rect is not None else 0)
@@ -777,7 +1104,8 @@ def _check_graphics(inputs: VerifyInputs,
         path_match = None
         if spec.path is not None:
             idx_travel = int(round(
-                (spec.start_s + 0.35 * PATH_TRAVEL_S) * fps))
+                (spec.start_s + 0.35 * path_travel_s(
+                    spec.end_s - spec.start_s)) * fps))
             if 0 <= idx_travel < n_frames:
                 path_match = match_at(idx_travel, spec)
         ok = bool(
@@ -808,6 +1136,9 @@ def _check_graphics(inputs: VerifyInputs,
                            else round(path_match, 3)),
             "ok": ok,
         })
+        if cutaway_declared:
+            per_graphic[-1]["face_overlap_exempt"] = (
+                "declared_cutaway")
 
     # Pairwise collision: spans overlapping in time AND boxes
     # intersecting. Placement prevents this by construction
@@ -949,8 +1280,13 @@ def _check_graphics(inputs: VerifyInputs,
                                   else round(absence, 3)),
             "ok": ok,
         })
+    layout_records, offending_layout = [], []
+    if inputs.layout_spans:
+        layout_records, offending_layout = _layout_legs(
+            inputs, alphas, specs)
     passed = not offending and not collision_violations \
-        and not sfx_violations and not offending_backdrops
+        and not sfx_violations and not offending_backdrops \
+        and not offending_layout
     return CheckResult(
         check_id="F8", name="context graphics integrity",
         passed=passed,
@@ -961,6 +1297,8 @@ def _check_graphics(inputs: VerifyInputs,
             "collision_violations": collision_violations,
             "backdrops": per_backdrop,
             "offending_backdrop_indices": offending_backdrops,
+            "layout_spans": layout_records,
+            "offending_layout_indices": offending_layout,
             "sfx": sfx_measured,
             "duration_s": round(duration, 3),
         },
@@ -977,6 +1315,10 @@ def _check_graphics(inputs: VerifyInputs,
             "path_travel_s": PATH_TRAVEL_S,
             "sfx_gap_lift_min_db": SFX_GAP_LIFT_MIN_DB,
             "sfx_gap_floor_db": SFX_GAP_FLOOR_DB,
+            "layout_speaker_in_box_min_frac": GRAPHIC_MATCH_MIN,
+            "layout_graphic_in_box_min_frac":
+                LAYOUT_GRAPHIC_IN_BOX_MIN_FRAC,
+            "layout_cutaway_alpha_max": GRAPHIC_ABSENT_MATCH_MAX,
         },
         note=("the count is uncapped by design and the timing is "
               "free (2026-10-31 ruling, reversing 2026-10-30): "
@@ -1094,13 +1436,45 @@ def verify(inputs: VerifyInputs, *,
         aw_mean = round(float(np.mean(aws)), 4) if aws else 0.0
     caption_overlap = 0
     if inputs.cues and inputs.caption_rect is not None:
+        # Span-aware (extension Stage 3): during a declared span
+        # that moves the caption zone (Split), captions render at
+        # the span's declared rect, so F2 measures the overlap
+        # against the rect in force at that frame. Without layout
+        # declarations this is exactly the historic measurement.
+        f2_spans = _active_layout_spans(inputs)
+
+        def rect_at(t: float):
+            d = _layout_span_at(f2_spans, t) if f2_spans else None
+            if d is not None and d.get("caption_rect") is not None:
+                return tuple(int(v) for v in d["caption_rect"])
+            return inputs.caption_rect
+
         for cue in inputs.cues:
             for f in frames_in(cue.start_s, cue.end_s):
                 caption_overlap = max(
                     caption_overlap,
                     rect_overlap_px(face_pixels(alphas[f]),
-                                    inputs.caption_rect),
+                                    rect_at(f / fps)),
                 )
+    # Variant leg (extension Stage 5): a FOREGROUND hook variant
+    # (banner / lower_third) renders its text IN FRONT of the
+    # speaker, so any text ink over the face hides the face - the
+    # exact failure the variant exists to avoid. Measured against
+    # the variant's own declared geometry (its text glyph mask):
+    # the maximum text-over-face pixels over the hook window must
+    # be 0. Stage hooks carry no variant leg - this block is
+    # skipped and F2's measured/threshold dicts keep their exact
+    # historic shape.
+    variant = inputs.hook.variant if inputs.hook is not None \
+        else "stage"
+    variant_over_face: int | None = None
+    if variant != "stage" and inputs.hook is not None:
+        v_glyph, _vb = inputs.hook.glyph(inputs.canvas)
+        variant_over_face = 0
+        for f in frames_in(*inputs.hook.window):
+            variant_over_face = max(
+                variant_over_face,
+                int((face_pixels(alphas[f]) & v_glyph).sum()))
     ghosting = aw_mean - occ_mean
     f2_note = ""
     if ghosting > GHOSTING_DELTA:
@@ -1120,20 +1494,38 @@ def verify(inputs: VerifyInputs, *,
         f2_note = (f2_note + " " if f2_note else "") + (
             "no captions rendered on this artifact; caption-face "
             "overlap is vacuously 0 - caption presence is F5's check.")
+    f2_measured: dict[str, Any] = {
+        "glyph_occlusion_mean": occ_mean,
+        "glyph_occlusion_max": occ_max,
+        "glyph_occlusion_alpha_weighted_mean": aw_mean,
+        "caption_face_overlap_max_px": caption_overlap,
+    }
+    f2_threshold: dict[str, Any] = {
+        "glyph_occlusion_mean_max": GLYPH_OCCLUSION_CAP,
+        "caption_face_overlap_max_px": CAPTION_FACE_OVERLAP_MAX_PX,
+    }
+    f2_passed = bool(occ_mean <= GLYPH_OCCLUSION_CAP
+                     and caption_overlap <= CAPTION_FACE_OVERLAP_MAX_PX)
+    if variant_over_face is not None:
+        f2_measured["hook_variant"] = variant
+        f2_measured["variant_text_over_face_max_px"] = variant_over_face
+        f2_threshold["variant_text_over_face_max_px"] = \
+            HOOK_VARIANT_TEXT_OVER_FACE_MAX_PX
+        f2_passed = bool(
+            f2_passed
+            and variant_over_face <= HOOK_VARIANT_TEXT_OVER_FACE_MAX_PX)
+        f2_note = (f2_note + " " if f2_note else "") + (
+            f"foreground hook variant {variant!r}: text-over-face "
+            f"measured against the variant's declared geometry at "
+            f"{variant_over_face}px (cap "
+            f"{HOOK_VARIANT_TEXT_OVER_FACE_MAX_PX}px) - a foreground "
+            "bar hides whatever it covers, so its text may not "
+            "touch the face at all.")
     checks.append(CheckResult(
         check_id="F2", name="face/mouth obstruction",
-        passed=bool(occ_mean <= GLYPH_OCCLUSION_CAP
-                    and caption_overlap <= CAPTION_FACE_OVERLAP_MAX_PX),
-        measured={
-            "glyph_occlusion_mean": occ_mean,
-            "glyph_occlusion_max": occ_max,
-            "glyph_occlusion_alpha_weighted_mean": aw_mean,
-            "caption_face_overlap_max_px": caption_overlap,
-        },
-        threshold={
-            "glyph_occlusion_mean_max": GLYPH_OCCLUSION_CAP,
-            "caption_face_overlap_max_px": CAPTION_FACE_OVERLAP_MAX_PX,
-        },
+        passed=f2_passed,
+        measured=f2_measured,
+        threshold=f2_threshold,
         note=f2_note,
     ))
 
@@ -1152,7 +1544,23 @@ def verify(inputs: VerifyInputs, *,
             "top": max(0, SAFE_Y0 - y0),
             "bottom": max(0, y1 - (ch - CAPTION_BOTTOM_MARGIN)),
         }
-    cents = [g.face_centroid for g in geos if g.face_centroid is not None]
+    # Span-aware (extension Stage 3): with layout declarations,
+    # the whole-Short median is computed over Stage frames only -
+    # a PiP centroid at y=470 would drag the historic median -
+    # and each declared non-Stage span's median centroid is
+    # evaluated against its DECLARED speaker box instead of the
+    # central band. Declared Cutaway spans are excluded (the
+    # speaker is absent there by design; F8's absence leg is
+    # their speaker check). Without declarations, every line
+    # below is the historic measurement.
+    f3_spans = _active_layout_spans(inputs)
+    if f3_spans:
+        cents = [g.face_centroid for i, g in enumerate(geos)
+                 if g.face_centroid is not None
+                 and _layout_span_at(f3_spans, i / fps) is None]
+    else:
+        cents = [g.face_centroid for g in geos
+                 if g.face_centroid is not None]
     centroid_in = None
     if cents:
         cx = float(np.median([c[0] for c in cents]))
@@ -1160,14 +1568,50 @@ def verify(inputs: VerifyInputs, *,
         centroid_in = bool(SAFE_X0 <= cx <= SAFE_X1
                            and SAFE_Y0 <= cy <= SAFE_Y1)
         violations["face_centroid_median"] = [round(cx, 1), round(cy, 1)]
+    f3_layout_records: list[dict[str, Any]] = []
+    f3_span_ok = True
+    for d in f3_spans:
+        layout = d["layout"]
+        if layout == "cutaway":
+            f3_layout_records.append({
+                "layout": layout, "span": list(d["span"]),
+                "excluded": "speaker absent by declaration",
+                "ok": True})
+            continue
+        box = d.get("speaker_box")
+        span_cents = [
+            geos[i].face_centroid
+            for i in _layout_interior_idx(d, fps, n_frames)
+            if geos[i].face_centroid is not None]
+        rec: dict[str, Any] = {"layout": layout,
+                               "span": list(d["span"])}
+        if box is None or not span_cents:
+            rec["median_centroid"] = None
+            rec["in_declared_box"] = None
+            rec["ok"] = False
+            f3_span_ok = False
+        else:
+            mcx = float(np.median([c[0] for c in span_cents]))
+            mcy = float(np.median([c[1] for c in span_cents]))
+            in_box = bool(box[0] <= mcx <= box[2]
+                          and box[1] <= mcy <= box[3])
+            rec["median_centroid"] = [round(mcx, 1), round(mcy, 1)]
+            rec["in_declared_box"] = in_box
+            rec["ok"] = in_box
+            f3_span_ok = f3_span_ok and in_box
+        f3_layout_records.append(rec)
     f3_pass = centroid_in is not False and all(
         v == 0 for item in violations.values() if isinstance(item, dict)
         for v in item.values()
-    )
+    ) and f3_span_ok
+    f3_measured: dict[str, Any] = {
+        "violations": violations,
+        "face_centroid_in_central_band": centroid_in}
+    if f3_spans:
+        f3_measured["layout_spans"] = f3_layout_records
     checks.append(CheckResult(
         check_id="F3", name="safe zone", passed=bool(f3_pass),
-        measured={"violations": violations,
-                  "face_centroid_in_central_band": centroid_in},
+        measured=f3_measured,
         threshold={
             "central_band": [SAFE_X0, SAFE_Y0, SAFE_X1, SAFE_Y1],
             "caption_bottom_max": ch - CAPTION_BOTTOM_MARGIN,
@@ -1192,17 +1636,83 @@ def verify(inputs: VerifyInputs, *,
             contained += 1
     contained_frac = round(contained / n_frames, 4) if n_frames else 0.0
     min_margin = min(margins) if margins else None
+    # Span-aware (extension Stage 3): with layout declarations,
+    # containment is evaluated per frame against the geometry in
+    # force: interior frames of a declared non-Stage span count
+    # as contained when the face lies inside the DECLARED speaker
+    # box (the PiP / Split frame is the subject's container
+    # there, not the canvas edge); interior Cutaway frames leave
+    # the denominator entirely (the speaker is absent by
+    # declaration - counting them would fail every honest
+    # cutaway); and a frame with no measurable face inside a
+    # declared transition window (the eased fade at a Cutaway
+    # boundary - nothing is clipped because nothing is there)
+    # leaves it too. Transition frames WITH a face and Stage
+    # frames keep the canvas rule above. The head-margin leg is
+    # unchanged (it reads canvas coordinates, and the plans
+    # guarantee it by construction). Without declarations this
+    # block does not run and the measurement is the historic one.
+    f4_layout: dict[str, Any] | None = None
+    if f3_spans:
+        interiors = {id(d): set(_layout_interior_idx(d, fps,
+                                                     n_frames))
+                     for d in f3_spans}
+        boundaries = [float(v) for d in f3_spans
+                      for v in d["span"]]
+        c2 = 0
+        denom = 0
+        excluded = 0
+        for i, (g, a) in enumerate(zip(geos, alphas)):
+            d = _layout_span_at(f3_spans, i / fps)
+            if d is not None and d["layout"] == "cutaway" \
+                    and i in interiors[id(d)]:
+                excluded += 1
+                continue
+            if not g.present and any(
+                    abs(i / fps - b) <= LAYOUT_TRANSITION_S + 1e-9
+                    for b in boundaries):
+                excluded += 1
+                continue
+            denom += 1
+            if not g.present:
+                continue
+            if d is not None and d["layout"] != "cutaway" \
+                    and i in interiors[id(d)] \
+                    and d.get("speaker_box") is not None \
+                    and g.face_box is not None:
+                fb = g.face_box
+                bx0, by0, bx1, by1 = (int(v)
+                                      for v in d["speaker_box"])
+                if (fb[0] >= bx0 - LAYOUT_BOX_TOL_PX
+                        and fb[1] >= by0 - LAYOUT_BOX_TOL_PX
+                        and fb[2] <= bx1 + LAYOUT_BOX_TOL_PX
+                        and fb[3] <= by1 + LAYOUT_BOX_TOL_PX):
+                    c2 += 1
+                continue
+            face = face_pixels(a)
+            ys, xs = np.nonzero(face)
+            clipped = bool(
+                xs.size and (xs.min() <= 0 or xs.max() >= cw - 1
+                             or ys.min() <= 0))
+            if not clipped:
+                c2 += 1
+        contained_frac = round(c2 / denom, 4) if denom else 0.0
+        f4_layout = {"frames_excluded_declared": excluded,
+                     "frames_denominator": denom}
+    f4_measured: dict[str, Any] = {
+        "frames_contained_frac": contained_frac,
+        "head_margin_min_px": min_margin,
+        "frames_with_speaker": present_frames,
+        "frames_total": n_frames,
+    }
+    if f4_layout is not None:
+        f4_measured["layout"] = f4_layout
     checks.append(CheckResult(
         check_id="F4", name="subject containment",
         passed=bool(contained_frac >= CONTAINMENT_MIN_FRAC
                     and min_margin is not None
                     and min_margin >= HEAD_MARGIN_MIN_PX),
-        measured={
-            "frames_contained_frac": contained_frac,
-            "head_margin_min_px": min_margin,
-            "frames_with_speaker": present_frames,
-            "frames_total": n_frames,
-        },
+        measured=f4_measured,
         threshold={
             "frames_contained_min_frac": CONTAINMENT_MIN_FRAC,
             "head_margin_min_px": HEAD_MARGIN_MIN_PX,
@@ -1378,6 +1888,20 @@ def verify(inputs: VerifyInputs, *,
         sfx=inputs.sfx,
         backdrops=backdrops_section,
         speaker_forward=inputs.speaker_forward,
+        layout_spans=inputs.layout_spans,
+        caption_timing_source=inputs.caption_timing_source,
+        cue_repairs=inputs.cue_repairs,
+        stage_geometry=inputs.stage_geometry,
+        canvas_backdrop=inputs.canvas_backdrop,
+        hook_style=inputs.hook_style,
+        caption_style=inputs.caption_style,
+        caption_snap=inputs.caption_snap,
+        caption_cue_sources=inputs.caption_cue_sources,
+        caption_timing_gate=inputs.caption_timing_gate,
+        graphics_coverage=(
+            graphics_coverage(inputs.graphics,
+                              n_frames / fps if fps else 0.0)
+            if inputs.graphics is not None else None),
         inputs_sha256={
             "video": _sha256_file(inputs.video_path)
             if Path(inputs.video_path).exists() else None,

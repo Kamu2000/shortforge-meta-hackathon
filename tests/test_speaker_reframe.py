@@ -70,18 +70,35 @@ class ReframePlanTests(unittest.TestCase):
         self.assertAlmostEqual(top_min, plan.placed_head_top_min,
                                delta=3.0)
 
-    def test_face_already_in_band_is_identity(self):
-        # 4:3 source: the placed strip is tall, the face lands
-        # mid-band with no transform.
+    def test_face_at_stage_target_is_identity(self):
+        # Fix round 2: identity means AT the Stage centroid target
+        # (930 +/- 60), not merely inside the wide F3 band. A
+        # canvas-sized source whose face centroid already lands on
+        # the target needs no transform.
+        alphas = [block_alpha((1920, 1080), (802, 1602), (340, 740))
+                  for _ in range(4)]
+        _x, cy0, _t = placed_stats(alphas)
+        self.assertAlmostEqual(cy0, 930, delta=60.0)
+        plan = plan_speaker_reframe(alphas, CANVAS)
+        self.assertTrue(plan.identity)
+        self.assertEqual(plan.pad_bottom_px, 0)
+        self.assertTrue(plan.feasible)
+
+    def test_in_band_but_off_target_now_moves(self):
+        # The pre-fix identity rule accepted any centroid deep in
+        # the F3 band - including y~1296, the low-parked framing
+        # fix round 2 exists to correct. The same fixture now plans
+        # a real transform onto the 930 target.
         alphas = [block_alpha((360, 480), (30, 360), (140, 340))
                   for _ in range(4)]
         _x, cy0, _t = placed_stats(alphas)
         self.assertGreaterEqual(cy0, SAFE_Y0 + 60)
         self.assertLessEqual(cy0, SAFE_Y1 - 60)
         plan = plan_speaker_reframe(alphas, CANVAS)
-        self.assertTrue(plan.identity)
-        self.assertEqual(plan.pad_bottom_px, 0)
-        self.assertTrue(plan.feasible)
+        self.assertFalse(plan.identity)
+        self.assertTrue(plan.feasible, plan.note)
+        self.assertAlmostEqual(plan.placed_centroid[1], 930,
+                               delta=3.0)
 
     def test_high_face_crops_down_into_band(self):
         # Portrait source, speaker at the very top: the centroid

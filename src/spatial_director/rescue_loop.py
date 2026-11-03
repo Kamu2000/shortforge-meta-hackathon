@@ -56,21 +56,27 @@ from .caption_align import CaptionCue, active_segments, load_energy
 from .compositor import (
     DEFAULT_BACKDROP,
     DEFAULT_CANVAS,
+    HOOK_ENTRY_S,
     GraphicEntry,
     composite_frame,
+    hook_entry_layer,
     graphics_layer_at,
     hook_slide_dx_at,
     hook_visible_at,
     shift_layer_x,
 )
 from .layout_law import (
+    CAPTION_CHUNK_MAX_WORDS,
+    CAPTION_POP_SCALE,
     GLYPH_OCCLUSION_CAP,
     SAFE_X0,
     SAFE_X1,
     SAFE_Y0,
     SAFE_Y1,
     apply_speaker_reframe,
+    caption_emphasis_indices,
     caption_layer,
+    caption_word_colors,
     hook_glyph_mask,
     occupancy_map,
     plan_captions,
@@ -78,7 +84,12 @@ from .layout_law import (
     plan_speaker_reframe,
     predict_occlusion,
 )
-from .graphics_layer import BackdropSpec, GraphicSpec
+from .word_timing import (
+    WordTiming,
+    active_index_from_spans,
+    effective_word_spans,
+)
+from .graphics_layer import BackdropSpec, GraphicSpec, plan_layout
 from .sfx import SfxEvent, mix_to_file, plan_sfx
 from .spark_client import SparkClient
 from .verifier import (
@@ -243,6 +254,49 @@ class RenderArtifacts:
     # graphics - TRIM_SILENCE retimes them, DROP_GRAPHICS removes
     # the offending ones. None = backdrop mode not in play.
     backdrops: list[BackdropSpec] | None = None
+    # Layout states (extension Stage 2): the per-frame placement
+    # track draft 1 was rendered with, its receipt declarations,
+    # and the Split caption-rect overrides. Carried through every
+    # repair exactly like the graphics; executors that rebuild
+    # frames/alphas re-plan the track from the carried specs via
+    # the SAME builder the pipeline used (graphics_layer.
+    # plan_layout), so a re-render can never diverge in layout.
+    layout_track: Sequence[object | None] | None = None
+    layout_spans: list[dict[str, Any]] | None = None
+    span_caption_rects: list[
+        tuple[float, float, tuple[int, int, int, int]]] | None = None
+    # Caption word timings + style (extension Stage 4): the per-cue
+    # WordTiming lists draft 1 was rendered with (word sweep) and
+    # the phrase-pop window. Carried into a repair render ONLY
+    # when the repair keeps draft 1's exact cue list - an executor
+    # that retimes cues (TRIM_SILENCE) renders without the sweep
+    # rather than with timings that no longer match the cues.
+    caption_word_timings: list | None = None
+    caption_timing_source: str | None = None
+    caption_pop_s: float = 0.0
+    # Fix round 2 declarations carried from the construction
+    # (records for the receipt; repairs do not change them).
+    cue_repairs: list[dict[str, Any]] | None = None
+    stage_geometry: dict[str, Any] | None = None
+    canvas_backdrop: dict[str, Any] | None = None
+    # Canvas backdrop render selection (fix round 3): the mode +
+    # studio seed draft 1 rendered with, carried so a repair
+    # re-renders over the SAME backdrop. The defaults describe a
+    # legacy artifact (studio default, unseeded).
+    backdrop_mode: str = DEFAULT_BACKDROP
+    backdrop_seed: int | None = None
+    # Fix E/F: the hook's per-word entry layers (render-time only)
+    # and the style declarations for the receipt.
+    hook_word_layers: list | None = None
+    hook_style: dict[str, Any] | None = None
+    caption_style: dict[str, Any] | None = None
+    # Fix round 4: valley-snap stats for draft 1's word timings
+    # (a construction record, like cue_repairs).
+    caption_snap: dict[str, Any] | None = None
+    # Fix round 5: per-cue timing producers + pace-gate records
+    # (construction records, like cue_repairs).
+    caption_cue_sources: list[str] | None = None
+    caption_timing_gate: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -270,6 +324,26 @@ class RepairExecution:
     # Backdrop-mode spans as rendered in THIS execution (retimed
     # or filtered by the repair); None = not in play.
     backdrops: list[BackdropSpec] | None = None
+    # Layout declarations as rendered in THIS execution (carried
+    # or re-planned by the repair); the re-verify measures its
+    # span-aware legs against these. None = not in play.
+    layout_spans: list[dict[str, Any]] | None = None
+    # Word-timing source label for THIS execution's render
+    # (Stage 4): set only when the render actually carried word
+    # timings from that source; a repair that retimed the cues
+    # and dropped the sweep leaves it None - the receipt never
+    # claims a timing source the render did not use.
+    caption_timing_source: str | None = None
+    # Fix round 2 declarations for THIS execution's render,
+    # carried from the artifacts (construction records).
+    cue_repairs: list[dict[str, Any]] | None = None
+    stage_geometry: dict[str, Any] | None = None
+    canvas_backdrop: dict[str, Any] | None = None
+    hook_style: dict[str, Any] | None = None
+    caption_style: dict[str, Any] | None = None
+    caption_snap: dict[str, Any] | None = None
+    caption_cue_sources: list[str] | None = None
+    caption_timing_gate: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -361,6 +435,38 @@ def _scaled_speaker_inputs(
     return out_frames, out_alphas
 
 
+def _pop_caption_layer(layer: np.ndarray,
+                       rect: tuple[int, int, int, int],
+                       scale: float) -> np.ndarray:
+    """Scale a caption layer about its block's centre by ``scale``.
+
+    The phrase pop (Stage 4): the block (pill + text) swells from
+    CAPTION_POP_SCALE and settles to 1.0 across the pop window.
+    Only the block's neighbourhood is touched - the region is the
+    rect plus a margin, scaled about the rect's own centre; the
+    rest of the layer is pixel-identical.
+    """
+    if scale == 1.0:
+        return layer
+    img = Image.fromarray(layer)
+    x0, y0, x1, y1 = rect
+    mx = int((x1 - x0) * 0.2) + 8
+    my = int((y1 - y0) * 0.2) + 8
+    box = (max(0, x0 - mx), max(0, y0 - my),
+           min(img.width, x1 + mx), min(img.height, y1 + my))
+    region = img.crop(box)
+    nw = max(1, round(region.width * scale))
+    nh = max(1, round(region.height * scale))
+    scaled = region.resize((nw, nh), Image.BILINEAR)
+    out = img.copy()
+    out.paste((0, 0, 0, 0), box)
+    cx, cy = (box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0
+    tmp = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    tmp.alpha_composite(
+        scaled, (round(cx - nw / 2), round(cy - nh / 2)))
+    return np.asarray(Image.alpha_composite(out, tmp))
+
+
 def render_composite_with_captions(
     frames: list[np.ndarray],
     src_alphas: list[np.ndarray],
@@ -378,6 +484,14 @@ def render_composite_with_captions(
     graphics: Sequence[GraphicEntry] | None = None,
     hook_slide: tuple[float, float] | None = None,
     backdrop_spans: Sequence[GraphicEntry] | None = None,
+    layout_track: Sequence[object | None] | None = None,
+    span_caption_rects: Sequence[
+        tuple[float, float, tuple[int, int, int, int]]] | None = None,
+    caption_word_timings: Sequence[Sequence[WordTiming]] | None = None,
+    caption_pop_s: float = 0.0,
+    hook_in_front: bool = False,
+    hook_word_layers: Sequence[np.ndarray] | None = None,
+    backdrop_seed: int | None = None,
 ) -> Path:
     """The shared render path: composite + captions IN FRONT.
 
@@ -391,23 +505,118 @@ def render_composite_with_captions(
     historic static hook. ``backdrop_spans`` (block 2) are
     (provider, start_s, end_s) entries whose provider(t) returns
     a full-canvas treated RGB backdrop for inside the span -
-    backdrop mode; outside every span the frame's own treated
-    backdrop shows, exactly as before.
+    backdrop mode; outside every span the canvas backdrop shows
+    (``backdrop`` names the treatment - studio_procedural by
+    default since fix round 3 - and ``backdrop_seed`` its
+    deterministic seed). ``layout_track``
+    (extension, 2026-11-01) is a per-frame sequence of explicit
+    speaker placements (layout_states.build_track; entries may be
+    None for the historic fit) and ``span_caption_rects`` a list
+    of (start_s, end_s, rect) caption-rect overrides for spans
+    whose layout moves the caption zone (Split); both default to
+    None = the historic render, byte-identical.
+    ``caption_word_timings`` (extension Stage 4) carries one
+    WordTiming list per cue, from a real timing source
+    (word_timing: DSP or MMS, labelled on the plan/receipt); it
+    drives the word-sweep highlight. None = no sweep.
+    ``caption_pop_s`` > 0 enables the phrase pop: each cue's
+    block starts at CAPTION_POP_SCALE and settles to 1.0 over
+    that many seconds. Both default off. The static emphasis
+    colours (numbers / named entities in Viral Pink, a pure
+    function of the cue text) are always applied.
+    ``hook_in_front`` (Stage 5) renders the hook layer OVER the
+    speaker instead of behind it - the foreground hook variants
+    (banner / lower_third); captions still composite last.
+    Default False = the historic behind-speaker stack.
     """
     from .compositor import _encode_video
 
     if speaker_scale != 1.0:
         frames, src_alphas = _scaled_speaker_inputs(
             frames, src_alphas, speaker_scale)
-    cue_layers: dict[int, np.ndarray] = {}
-    if caption_rect is not None:
-        for i, cue in enumerate(cues):
-            cue_layers[i] = caption_layer(cue.text, caption_rect, canvas)
+    if layout_track is not None and len(layout_track) != len(frames):
+        raise ValueError("layout_track must align 1:1 with the frames")
+    if caption_word_timings is not None \
+            and len(caption_word_timings) != len(cues):
+        raise ValueError(
+            "caption_word_timings must align 1:1 with the cues")
+    cue_layers: dict[tuple[int, tuple[int, int, int, int], int, int],
+                     np.ndarray] = {}
+
+    # Fix F chunking: display chunks are derived ONCE from the
+    # word timings themselves (never from cue spans), so the
+    # chunking and the sweep cannot disagree - every word belongs
+    # to exactly one chunk, shown over its own words' timings.
+    # Without timings there is nothing honest to chunk against:
+    # cues render whole, exactly as before.
+    chunks: list[dict[str, Any]] = []
+    for j, cue in enumerate(cues):
+        timings = caption_word_timings[j] \
+            if caption_word_timings is not None else None
+        words = cue.text.split()
+        if timings is None or len(timings) != len(words) or not words:
+            chunks.append({
+                "start": cue.start_s, "end": cue.end_s,
+                "text": cue.text, "timings": None, "emphasis": None})
+            continue
+        emph_full = caption_emphasis_indices(cue.text)
+        # Fix round 4 span hygiene: chunk windows and the sweep
+        # read the EFFECTIVE spans (each word held to at least
+        # MIN_ACTIVE_WORD_S, capped at the next word's start), so
+        # a 40ms CTC sliver cannot flicker for a single frame and
+        # the chunk's window ends at its last word's effective
+        # end, not its raw CTC end.
+        eff_spans = effective_word_spans(timings)
+        for k0 in range(0, len(words), CAPTION_CHUNK_MAX_WORDS):
+            k1 = min(len(words), k0 + CAPTION_CHUNK_MAX_WORDS)
+            chunks.append({
+                "start": timings[k0].start_s,
+                "end": eff_spans[k1 - 1][1],
+                "text": " ".join(words[k0:k1]),
+                "timings": list(timings[k0:k1]),
+                "spans": eff_spans[k0:k1],
+                "emphasis": {i - k0 for i in emph_full
+                             if k0 <= i < k1}})
+
+    def chunk_layer(ci: int, rect, active_idx: int | None,
+                    spoken_count: int | None) -> np.ndarray:
+        # The layer depends on the chunk, the rect, and the sweep
+        # state (active word / spoken count). Emphasis indices are
+        # the parent cue's, sliced - a pure function of the text.
+        chunk = chunks[ci]
+        key = (ci, tuple(rect),
+               -1 if active_idx is None else active_idx,
+               -1 if spoken_count is None else spoken_count)
+        if key not in cue_layers:
+            colors = caption_word_colors(
+                chunk["text"], active_idx,
+                emphasis=chunk["emphasis"],
+                spoken_count=spoken_count)
+            cue_layers[key] = caption_layer(
+                chunk["text"], rect, canvas, word_colors=colors,
+                active_index=active_idx)
+        return cue_layers[key]
+
+    def rect_at(t: float):
+        if span_caption_rects:
+            for s0, e0, rect in span_caption_rects:
+                if s0 <= t < e0:
+                    return rect
+        return caption_rect
 
     def gen():
         for i, (frame, alpha) in enumerate(zip(frames, src_alphas)):
             t = i / fps
             hook = hook_rgba if hook_visible_at(t, hook_window) else None
+            if hook is not None and hook_word_layers is not None \
+                    and hook_slide is None and hook_window is not None:
+                # Fix E entry: word-stagger pop-in over the first
+                # HOOK_ENTRY_S of the window; the resting (styled)
+                # layer takes over after. A slide repair supersedes
+                # the entry (its own motion law applies).
+                rel = t - hook_window[0]
+                if 0.0 <= rel < HOOK_ENTRY_S:
+                    hook = hook_entry_layer(hook_word_layers, rel)
             if hook is not None and hook_slide is not None:
                 dx = hook_slide_dx_at(t, hook_window, hook_slide)
                 if dx != 0.0:
@@ -420,18 +629,63 @@ def render_composite_with_captions(
                     if s0 <= t < e0:
                         bg = np.asarray(provider(t))[..., :3]
                         break
-            out = composite_frame(frame, alpha, hook, canvas,
-                                  backdrop=backdrop, graphics_rgba=plane,
-                                  backdrop_rgb=bg)
-            for j, cue in enumerate(cues):
-                if cue.start_s <= t < cue.end_s:
-                    cap = cue_layers[j].astype(np.float64)
-                    ca = cap[..., 3:4] / 255.0
-                    out = np.clip(
-                        cap[..., :3] * ca
-                        + out.astype(np.float64) * (1.0 - ca),
-                        0, 255).astype(np.uint8)
-                    break
+            front_hook = None
+            if hook_in_front and hook is not None:
+                # Foreground hook variant (Stage 5): the hook is
+                # NOT part of the behind-speaker stack - it is
+                # composited over the speaker below, under the
+                # captions (the caption plane stays front-most).
+                front_hook, hook = hook, None
+            out = composite_frame(
+                frame, alpha, hook, canvas,
+                backdrop=backdrop, graphics_rgba=plane,
+                backdrop_rgb=bg,
+                backdrop_seed=backdrop_seed,
+                backdrop_progress=(t * fps / len(frames))
+                if frames else 0.0,
+                speaker_placement=(layout_track[i]
+                                   if layout_track is not None
+                                   else None))
+            if front_hook is not None:
+                fh = front_hook.astype(np.float64)
+                fa = fh[..., 3:4] / 255.0
+                out = np.clip(
+                    fh[..., :3] * fa
+                    + out.astype(np.float64) * (1.0 - fa),
+                    0, 255).astype(np.uint8)
+            rect = rect_at(t)
+            if rect is not None:
+                for ci, chunk in enumerate(chunks):
+                    if chunk["start"] <= t < chunk["end"]:
+                        active_idx = None
+                        spoken_count = None
+                        if chunk["timings"] is not None:
+                            # Held sweep (fix round 4): the last
+                            # started word stays active until the
+                            # next word starts - no dark gaps
+                            # inside a chunk.
+                            active_idx = active_index_from_spans(
+                                chunk["spans"], t)
+                            if active_idx is None:
+                                spoken_count = sum(
+                                    1 for _s, e in chunk["spans"]
+                                    if e <= t)
+                        cap = chunk_layer(ci, rect, active_idx,
+                                          spoken_count)
+                        if caption_pop_s > 0.0 \
+                                and t - chunk["start"] < caption_pop_s:
+                            p = (t - chunk["start"]) / caption_pop_s
+                            cap = _pop_caption_layer(
+                                cap, rect,
+                                1.0 + (CAPTION_POP_SCALE - 1.0)
+                                * (1.0 - p))
+                        cap = cap.astype(np.float64)
+                        ca = cap[..., 3:4] / 255.0
+                        out = np.clip(
+                            cap[..., :3] * ca
+                            + out.astype(np.float64) * (1.0 - ca),
+                            0, 255).astype(np.uint8)
+                        break
             yield out
 
     _encode_video(gen(), out_path, fps=fps, canvas=canvas,
@@ -574,6 +828,11 @@ def _render_execution(
     hook_slide: tuple[float, float] | None = None,
     sfx_plan: list[SfxEvent] | None = None,
     backdrops: list[BackdropSpec] | None = None,
+    layout_track: Sequence[object | None] | None = None,
+    span_caption_rects: list[
+        tuple[float, float, tuple[int, int, int, int]]] | None = None,
+    layout_spans: list[dict[str, Any]] | None = None,
+    layout_override: bool = False,
 ) -> RepairExecution:
     hook_rgba = hook.layer(artifacts.canvas) if hook.text else None
     out_path = Path(artifacts.work_dir) / out_name
@@ -592,6 +851,56 @@ def _render_execution(
         kwargs["backdrop_spans"] = backdrop_entries(carried_bd)
     if hook_slide is not None:
         kwargs["hook_slide"] = hook_slide
+    # Layout track (extension Stage 2): carried from the artifacts
+    # unless the executor rebuilt frames/alphas and passes its
+    # re-planned track with layout_override=True (the override
+    # values may legitimately be None = layout could not be
+    # re-planned, recorded on the execution as no layout).
+    if layout_override:
+        eff_track, eff_rects, eff_spans = (
+            layout_track, span_caption_rects, layout_spans)
+    else:
+        eff_track = artifacts.layout_track
+        eff_rects = artifacts.span_caption_rects
+        eff_spans = artifacts.layout_spans
+    if eff_track is not None:
+        kwargs["layout_track"] = eff_track
+        if eff_rects:
+            kwargs["span_caption_rects"] = eff_rects
+    # Caption word timings (Stage 4): carried only when this
+    # render keeps draft 1's exact cue list (identity, not
+    # equality - a retimed cue list with the same words would
+    # silently misalign the sweep). The pop depends only on the
+    # rendered cues' own start times, so it carries regardless.
+    eff_timing_source = None
+    eff_caption_style = None
+    eff_cue_sources = None
+    eff_timing_gate = None
+    if cues is artifacts.cues \
+            and artifacts.caption_word_timings is not None:
+        kwargs["caption_word_timings"] = artifacts.caption_word_timings
+        eff_timing_source = artifacts.caption_timing_source
+        eff_caption_style = artifacts.caption_style
+        eff_cue_sources = artifacts.caption_cue_sources
+        eff_timing_gate = artifacts.caption_timing_gate
+    if artifacts.hook_word_layers is not None:
+        kwargs["hook_word_layers"] = artifacts.hook_word_layers
+    # The hook style declaration describes THIS render: a slide
+    # repair supersedes the stagger entry in the renderer, and
+    # the declaration says so rather than claiming the entry ran.
+    eff_hook_style = artifacts.hook_style
+    if hook_slide is not None and eff_hook_style is not None:
+        eff_hook_style = {**eff_hook_style, "entry": "slide_repair"}
+    if artifacts.caption_pop_s > 0.0:
+        kwargs["caption_pop_s"] = artifacts.caption_pop_s
+    # Canvas backdrop (fix round 3): a repair re-renders over the
+    # same backdrop draft 1 used - the studio seed whenever one
+    # was set, the mode whenever it is not the default. A legacy
+    # artifact (no seed, default mode) keeps the historic call.
+    if artifacts.backdrop_seed is not None:
+        kwargs["backdrop_seed"] = artifacts.backdrop_seed
+    if artifacts.backdrop_mode != DEFAULT_BACKDROP:
+        kwargs["backdrop"] = artifacts.backdrop_mode
     # SFX (block 2): when the layer's effects are in play, the
     # render's audio is the speech source with the carried plan
     # mixed over it, and the execution records the pre-mix source
@@ -632,7 +941,50 @@ def _render_execution(
         detail=detail, graphics=carried,
         hook_slide_px_s=slide_speed,
         sfx_events=applied_sfx, speech_audio_from=speech_from,
-        backdrops=carried_bd)
+        backdrops=carried_bd, layout_spans=eff_spans,
+        caption_timing_source=eff_timing_source,
+        cue_repairs=artifacts.cue_repairs,
+        stage_geometry=artifacts.stage_geometry,
+        canvas_backdrop=artifacts.canvas_backdrop,
+        hook_style=eff_hook_style,
+        caption_style=eff_caption_style,
+        caption_snap=artifacts.caption_snap,
+        caption_cue_sources=eff_cue_sources,
+        caption_timing_gate=eff_timing_gate)
+
+
+def _rebuild_layout(
+    artifacts: RenderArtifacts,
+    graphics: list[GraphicSpec] | None,
+    src_alphas: list[np.ndarray],
+    n_frames: int,
+) -> tuple[Sequence[np.ndarray], Any, list, list] | None:
+    """Re-plan the layout track for rebuilt frames/alphas.
+
+    For executors that change the frame sequence or the source
+    alphas (TRIM_SILENCE, RESCALE_SPEAKER, REFRAME_SPEAKER): the
+    carried track no longer aligns, so the track is rebuilt from
+    the (possibly retimed) graphic specs via the pipeline's own
+    builder - same function, same inputs, same result. Returns
+    (canvas_alphas, track, span_rects, declarations) with the
+    placements folded into the canvas alphas, or None when no
+    layout is in play / the canvas factory cannot carry
+    placements (the execution then honestly renders Stage and
+    declares no layout).
+    """
+    if not artifacts.layout_spans or not graphics:
+        return None
+    built = plan_layout(graphics, src_alphas, fps=artifacts.fps,
+                        canvas=artifacts.canvas, n_frames=n_frames)
+    if built is None:
+        return None
+    track, declarations, span_rects = built
+    canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+    if track is not None:
+        if not hasattr(canvas_alphas, "placements"):
+            return None
+        canvas_alphas.placements = track  # type: ignore[attr-defined]
+    return canvas_alphas, track, span_rects, declarations
 
 
 def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
@@ -674,7 +1026,25 @@ def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
         raise RepairNotApplicable("trim would remove every frame")
     frames = [artifacts.frames[i] for i in keep_idx]
     src_alphas = [artifacts.src_alphas[i] for i in keep_idx]
-    canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+    retimed_graphics = _retime_graphics(
+        artifacts.graphics,
+        lambda t: map_time(t, is_end=False),
+        lambda t: map_time(t, is_end=True))
+    # Layout (extension Stage 2): the carried track no longer
+    # aligns with the trimmed frames - rebuild it from the
+    # retimed specs through the shared builder, and measure the
+    # caption re-plan against the layout-mapped alphas.
+    layout_kw: dict[str, Any] = {}
+    rebuilt = _rebuild_layout(artifacts, retimed_graphics,
+                              src_alphas, len(frames))
+    if rebuilt is not None:
+        canvas_alphas, _lt, _lr, _ld = rebuilt
+        layout_kw = dict(layout_override=True, layout_track=_lt,
+                         span_caption_rects=_lr, layout_spans=_ld)
+    else:
+        canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+        if artifacts.layout_spans:
+            layout_kw = dict(layout_override=True)
 
     # Trimmed audio: decode the window audio, cut the same ranges,
     # write a WAV for the encoder to mux.
@@ -708,10 +1078,6 @@ def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
         "trimmed " + ", ".join(
             f"{r1 - r0:.2f}s at {r0:.2f}s" for r0, r1 in removals)
         + f"; {len(artifacts.frames)} -> {len(frames)} frames")
-    retimed_graphics = _retime_graphics(
-        artifacts.graphics,
-        lambda t: map_time(t, is_end=False),
-        lambda t: map_time(t, is_end=True))
     retimed_backdrops = _retime_backdrops(
         artifacts.backdrops,
         lambda t: map_time(t, is_end=False),
@@ -728,7 +1094,8 @@ def _exec_trim_silence(artifacts: RenderArtifacts, receipt: Receipt,
         caption_rect=layout.rect, audio_from=audio_path,
         out_name="draft2-trim-silence.mp4", detail=detail,
         renderer=renderer, graphics=retimed_graphics,
-        sfx_plan=retimed_sfx, backdrops=retimed_backdrops)
+        sfx_plan=retimed_sfx, backdrops=retimed_backdrops,
+        **layout_kw)
 
 
 def _decode_samples(media_path: str | Path) -> np.ndarray:
@@ -855,7 +1222,17 @@ def _exec_rescale_speaker(artifacts: RenderArtifacts, receipt: Receipt,
                           renderer, **_) -> RepairExecution:
     frames, src_alphas = _scaled_speaker_inputs(
         artifacts.frames, artifacts.src_alphas, RESCALE_FACTOR)
-    canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+    layout_kw: dict[str, Any] = {}
+    rebuilt = _rebuild_layout(artifacts, artifacts.graphics,
+                              src_alphas, len(frames))
+    if rebuilt is not None:
+        canvas_alphas, _lt, _lr, _ld = rebuilt
+        layout_kw = dict(layout_override=True, layout_track=_lt,
+                         span_caption_rects=_lr, layout_spans=_ld)
+    else:
+        canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+        if artifacts.layout_spans:
+            layout_kw = dict(layout_override=True)
     return _render_execution(
         artifacts, frames=frames, src_alphas=src_alphas,
         canvas_alphas=canvas_alphas, hook=artifacts.hook,
@@ -864,7 +1241,7 @@ def _exec_rescale_speaker(artifacts: RenderArtifacts, receipt: Receipt,
         out_name="draft2-rescale-speaker.mp4",
         detail=f"speaker re-rendered at {RESCALE_FACTOR} scale "
                "(inputs pre-shrunk; placement unchanged)",
-        renderer=renderer, speaker_scale=1.0)
+        renderer=renderer, speaker_scale=1.0, **layout_kw)
 
 
 def _exec_reframe_speaker(artifacts: RenderArtifacts, receipt: Receipt,
@@ -904,7 +1281,17 @@ def _exec_reframe_speaker(artifacts: RenderArtifacts, receipt: Receipt,
             "placement this repair can change")
     frames, src_alphas = apply_speaker_reframe(
         artifacts.frames, artifacts.src_alphas, plan.pad_bottom_px)
-    canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+    layout_kw: dict[str, Any] = {}
+    rebuilt = _rebuild_layout(artifacts, artifacts.graphics,
+                              src_alphas, len(frames))
+    if rebuilt is not None:
+        canvas_alphas, _lt, _lr, _ld = rebuilt
+        layout_kw = dict(layout_override=True, layout_track=_lt,
+                         span_caption_rects=_lr, layout_spans=_ld)
+    else:
+        canvas_alphas = artifacts.make_canvas_alphas(src_alphas)
+        if artifacts.layout_spans:
+            layout_kw = dict(layout_override=True)
     f0 = max(0, int(round(artifacts.hook.window[0] * artifacts.fps)))
     f1 = min(len(canvas_alphas),
              max(f0 + 1, int(round(artifacts.hook.window[1]
@@ -926,7 +1313,7 @@ def _exec_reframe_speaker(artifacts: RenderArtifacts, receipt: Receipt,
                f"{plan.feasible}); hook re-planned at band "
                f"{placement.y_center_frac:.2f}; caption rect "
                f"{layout.rect}",
-        renderer=renderer)
+        renderer=renderer, **layout_kw)
 
 
 def _exec_regenerate_hook(artifacts: RenderArtifacts, receipt: Receipt,
@@ -1138,10 +1525,28 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
     # re-derived from the kept list.
     kept_sfx = plan_sfx(kept) if artifacts.sfx_plan is not None \
         else None
+    # Layout (extension Stage 2): a dropped graphic takes its
+    # layout span with it - the declarations (and track) are
+    # re-planned from the KEPT specs through the shared builder,
+    # so the re-verify never measures a span that is not rendered.
+    layout_kw: dict[str, Any] = {}
+    exec_canvas_alphas = artifacts.canvas_alphas
+    if artifacts.layout_spans:
+        rebuilt = _rebuild_layout(artifacts, kept,
+                                  artifacts.src_alphas,
+                                  len(artifacts.frames))
+        if rebuilt is not None:
+            exec_canvas_alphas, _lt, _lr, _ld = rebuilt
+            layout_kw = dict(layout_override=True,
+                             layout_track=_lt,
+                             span_caption_rects=_lr,
+                             layout_spans=_ld)
+        else:
+            layout_kw = dict(layout_override=True)
     return _render_execution(
         artifacts, frames=artifacts.frames,
         src_alphas=artifacts.src_alphas,
-        canvas_alphas=artifacts.canvas_alphas, hook=artifacts.hook,
+        canvas_alphas=exec_canvas_alphas, hook=artifacts.hook,
         cues=artifacts.cues, caption_rect=artifacts.caption_rect,
         audio_from=artifacts.window_clip,
         out_name="draft2-drop-graphics.mp4",
@@ -1152,7 +1557,7 @@ def _exec_drop_graphics(artifacts: RenderArtifacts, receipt: Receipt,
                 f"backdrops kept"),
         renderer=renderer, graphics=kept, sfx_plan=kept_sfx,
         backdrops=kept_bd if artifacts.backdrops is not None
-        else None)
+        else None, **layout_kw)
 
 
 # NORMALIZE_LOUDNESS aims loudnorm's own TP target below the
@@ -1439,7 +1844,8 @@ def _exec_normalize_loudness(artifacts: RenderArtifacts,
         speech_audio_from=(artifacts.window_clip
                            if artifacts.sfx_plan is not None
                            else None),
-        backdrops=artifacts.backdrops)
+        backdrops=artifacts.backdrops,
+        layout_spans=artifacts.layout_spans)
 
 
 _EXECUTORS: dict[str, Callable[..., RepairExecution]] = {

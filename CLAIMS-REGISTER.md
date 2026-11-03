@@ -1,4 +1,4 @@
-# Claims register — Verifiable Spatial Director
+# Claims register — AI Spatial Director
 
 Every claim that may appear in the demo, README, one-pager, or
 submission is listed here with its evidence. Statuses: **PROVEN**

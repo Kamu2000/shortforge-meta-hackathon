@@ -52,6 +52,7 @@ import uuid
 import wave
 from collections import OrderedDict
 from dataclasses import dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -62,23 +63,49 @@ from .caption_align import (
     build_captions,
     load_energy,
     plan_audio_normalisation,
+    repair_cue_spans,
+    speech_activity_span,
 )
-from .compositor import DEFAULT_CANVAS, read_video_frames, video_fps
-from .graphics_layer import build_graphics
+from .compositor import (
+    BACKDROP_FILL,
+    BACKDROP_GRADE_BRIGHTNESS,
+    BACKDROP_GRADE_SATURATION,
+    BACKDROP_SOURCE_MINUS_SPEAKER,
+    BACKDROP_STUDIO,
+    DEFAULT_BACKDROP,
+    DEFAULT_CANVAS,
+    read_video_frames,
+    studio_seed,
+    video_fps,
+)
+from .graphics_layer import build_graphics, plan_layout
 from .image_client import ImageClient
 from .layout_law import (
+    CAPTION_CHUNK_MAX_WORDS,
+    CAPTION_POP_S,
     EFFECT_OCCLUSION_BAND,
     SAFE_Y0,
     SAFE_Y1,
     apply_speaker_emphasis,
     apply_speaker_reframe,
+    apply_stage_zoom,
     effect_note,
+    hook_accent_index,
+    hook_word_layers,
     plan_captions,
     plan_hook_effect,
     plan_speaker_emphasis,
     plan_speaker_reframe,
+    plan_stage_zoom,
     render_hook_layer,
     to_canvas_alpha,
+)
+from .geometry_bundle import (
+    DRAFT2_BUNDLE_REPAIRS,
+    alpha_recipe_dict,
+    draft_bundle_dict,
+    hook_to_dict,
+    write_bundle,
 )
 from .mask_decode import finished_alpha, parse_sam_response
 from .rescue_loop import (
@@ -96,6 +123,16 @@ from .spark_open_client import Candidate, SparkOpenClient
 from .spend_ledger import SpendLedger
 from .verifier import HookSpec, Receipt, VerifyInputs, _content_words, verify
 from .voice_transcribe import TranscriptTurn, VoiceTranscribeClient
+from .word_timing import (
+    MMS_SAMPLE_RATE,
+    TIMING_SOURCES,
+    WordTiming,
+    WordTimingError,
+    load_samples,
+    pace_gate_failure,
+    snap_word_timings,
+    word_timings,
+)
 from .wonder_client import WonderClient
 
 # ---------------------------------------------------------------- constants
@@ -103,6 +140,35 @@ from .wonder_client import WonderClient
 MIN_WINDOW_S = 14.0    # a Short shorter than this is not a Short
 MAX_WINDOW_S = 22.0    # memory ceiling for the finish stack at 30fps
 HOOK_WINDOW_S = 6.0
+# Word-timing source for caption sweeps (extension Stage 4):
+# the DSP floor is the code default. CAPTION_TIMING_SOURCE in the
+# environment REQUESTS a source ("dsp" | "mms"); an unrecognised
+# value falls back to "dsp" rather than failing the run over a
+# typo. The request is not the label: _caption_word_timings
+# returns the EFFECTIVE source that actually produced a Short's
+# timings, and that is what captions.json and every receipt
+# carry - an MMS request the aligner cannot serve falls back to
+# DSP for the whole Short, labelled "dsp", never "mms".
+CAPTION_TIMING_SOURCE = os.environ.get(
+    "CAPTION_TIMING_SOURCE", "dsp").strip().lower()
+if CAPTION_TIMING_SOURCE not in TIMING_SOURCES:
+    CAPTION_TIMING_SOURCE = "dsp"
+# Canvas backdrop mode (fix round 3, 2026-11-02): the
+# studio_procedural canvas is the code default - it carries no
+# source pixels, so the ghost the founder rejected cannot
+# exist. CANVAS_BACKDROP in the environment may select a
+# surviving source-derived treatment ("source_minus_speaker" |
+# "treated" | "brand" | "naive"); an unrecognised value falls
+# back to the default rather than failing the run over a typo.
+# The EFFECTIVE mode is declared per Short on the receipt's
+# backdrop dict, together with the deterministic studio seed
+# when the studio mode renders.
+CANVAS_BACKDROP_MODE = os.environ.get(
+    "CANVAS_BACKDROP", DEFAULT_BACKDROP).strip().lower()
+if CANVAS_BACKDROP_MODE not in (
+        BACKDROP_STUDIO, BACKDROP_SOURCE_MINUS_SPEAKER,
+        "treated", "brand", "naive"):
+    CANVAS_BACKDROP_MODE = DEFAULT_BACKDROP
 VT_CHUNK_S = 540.0     # under the API's 600s / 32MB per-request caps
 HOOK_MAX_TOKENS = 2500  # Spark reasons first; tight budgets return empty
 
@@ -290,11 +356,19 @@ class LazyCanvasAlphas:
     """
 
     def __init__(self, src_alphas: list[np.ndarray],
-                 canvas: tuple[int, int] = DEFAULT_CANVAS, cap: int = 32):
+                 canvas: tuple[int, int] = DEFAULT_CANVAS, cap: int = 32,
+                 placements: Sequence[object | None] | None = None):
         self.src = src_alphas
         self.canvas = canvas
         self.cache: OrderedDict[int, np.ndarray] = OrderedDict()
         self.cap = cap
+        # Layout states (extension): an optional per-frame explicit
+        # speaker placement aligned with src_alphas, so the geometry
+        # the verifier measures is the layout render's geometry.
+        # None (everywhere) = the historic Stage mapping, unchanged.
+        if placements is not None and len(placements) != len(src_alphas):
+            raise ValueError("placements must align 1:1 with src_alphas")
+        self.placements = placements
 
     def __len__(self) -> int:
         return len(self.src)
@@ -305,7 +379,10 @@ class LazyCanvasAlphas:
         if i in self.cache:
             self.cache.move_to_end(i)
             return self.cache[i]
-        a = to_canvas_alpha(self.src[i], self.canvas).astype(np.float32)
+        placement = (self.placements[i]
+                     if self.placements is not None else None)
+        a = to_canvas_alpha(self.src[i], self.canvas,
+                            placement=placement).astype(np.float32)
         self.cache[i] = a
         if len(self.cache) > self.cap:
             self.cache.popitem(last=False)
@@ -345,6 +422,12 @@ def normalize_window(start_s: float, end_s: float,
     return round(start_s, 3), round(end_s, 3)
 
 
+def _windows_overlap(s: float, e: float, cs: float, ce: float) -> bool:
+    """The window-selection disqualifier: overlap beyond 50% of
+    the smaller window."""
+    return min(e, ce) - max(s, cs) > 0.5 * min(e - s, ce - cs)
+
+
 def select_windows(candidates: Sequence[Candidate], duration_s: float,
                    max_shorts: int) -> list[tuple[Candidate, float, float]]:
     """Top-scoring, non-overlapping candidate windows, in score order."""
@@ -357,13 +440,242 @@ def select_windows(candidates: Sequence[Candidate], duration_s: float,
         if window is None:
             continue
         s, e = window
-        overlap = any(
-            min(e, ce) - max(s, cs) > 0.5 * min(e - s, ce - cs)
-            for _c, cs, ce in chosen)
-        if overlap:
+        if any(_windows_overlap(s, e, cs, ce) for _c, cs, ce in chosen):
             continue
         chosen.append((cand, s, e))
     return chosen
+
+
+# ------------------------------------------------- SAM coverage guard
+
+# Threshold derivation (measured 2026-11-02 on cached runs; parse
+# coverage = SAM-parsed frames / decoded window frames): every
+# healthy window measured >= 0.991 (the lowest: McArthur graphics
+# Short 2 in both runs, 650/656); the one coverage failure -
+# McArthur Short 3 in BOTH graphics runs, SAM returning masks for
+# only part of a split-screen window - measured 155/659 = 0.235
+# both times. The threshold is the midpoint of the empty band
+# between the failing and passing clusters - the maximum-margin
+# separator the measured data supports: (0.235 + 0.991) / 2.
+MIN_SAM_COVERAGE_FRAC = 0.613
+
+
+class SamCoverageError(RuntimeError):
+    """A selected window's SAM coverage cannot sustain a Short.
+
+    Carries the measured counts so the run loop can record the
+    rejection with its evidence and take the next candidate.
+    """
+
+    def __init__(self, parsed_frames: int, window_frames: int,
+                 coverage: float) -> None:
+        super().__init__(
+            f"SAM covered {parsed_frames} of {window_frames} "
+            f"window frames (coverage {coverage:.3f} below the "
+            f"{MIN_SAM_COVERAGE_FRAC} floor) - the window cannot "
+            "sustain a Short")
+        self.parsed_frames = parsed_frames
+        self.window_frames = window_frames
+        self.coverage = coverage
+
+
+def sam_coverage(parsed_frames: int, window_frames: int) -> float:
+    """SAM parse coverage of a window: parsed / decoded frames."""
+    if window_frames <= 0:
+        return 0.0
+    return parsed_frames / window_frames
+
+
+def _next_untried_candidate(
+        candidates: Sequence[Candidate], duration_s: float,
+        reserved: Sequence[tuple[float, float]],
+        tried: set[tuple[float, float]],
+        ) -> tuple[Candidate, float, float] | None:
+    """The highest-ranked candidate whose normalised window has
+    not been tried and does not overlap a reserved window (the
+    select_windows disqualifier) - the coverage guard's
+    replacement pick. None when the pool is exhausted."""
+    for cand in sorted(candidates, key=lambda c: -c.score):
+        window = normalize_window(cand.start_s, cand.end_s, duration_s)
+        if window is None:
+            continue
+        s, e = window
+        if (round(s, 3), round(e, 3)) in tried:
+            continue
+        if any(_windows_overlap(s, e, rs, re) for rs, re in reserved):
+            continue
+        return cand, s, e
+    return None
+
+
+# Fix round 5: how far an alignment slice may reach past the
+# DSP speech-activity bounds of its cue - roughly one word of
+# spill in either direction. The slice is bounded by MEASURED
+# activity; the margin exists because a word's acoustic edge can
+# sit a few frames outside the thresholded activity map, not
+# because the layout's proportions deserve a vote.
+ALIGN_MARGIN_S = 0.25
+
+
+@dataclass
+class CaptionTimingResult:
+    """One Short's word timings + their truthful provenance.
+
+    ``source`` is the summary label: "dsp" when every cue is the
+    DSP phrase split (or MMS was never requested), "mms" when
+    every cue is a genuine forced alignment that passed the
+    pace gate, "mms+dsp" for the honest mix. ``cue_sources``
+    names each cue's producer ("mms" | "dsp_phrase");
+    ``gate_records`` carries every pace-gate event (a rejected
+    alignment, the one re-slice, a per-cue fallback) - the
+    record the receipt and captions.json quote.
+    """
+
+    timings: list[list[WordTiming]]
+    source: str
+    cue_sources: list[str]
+    gate_records: list[dict[str, Any]]
+
+
+def _caption_word_timings(cues: Sequence[Any], energy: Any,
+                          window_clip: str | Path,
+                          requested_source: str,
+                          log: Callable[[str], None],
+                          ) -> CaptionTimingResult:
+    """Per-cue word timings for one Short + truthful provenance.
+
+    DSP (the default and the floor) is exactly the Stage 4 path:
+    every cue is the DSP phrase split, labelled per cue as
+    "dsp_phrase", summary "dsp".
+
+    An MMS request aligns PER CUE (fix round 5 - the round-4
+    whole-Short fallback let one bad cue silently relabel every
+    cue, and the slices were the cues' own layout spans, which
+    is how a uniform word grid got certified as measured
+    timing):
+
+    - The cue's slice is bounded by the DSP speech-activity
+      span of its own span (caption_align.speech_activity_span)
+      plus a small fixed margin - measured activity, never a
+      word-count proportion.
+    - The aligned result must pass the pace sanity gate
+      (word_timing.pace_gate_failure): sustained pace over the
+      words' own extent, and the extent against the passage's
+      activity span. A failure re-slices ONCE to the exact
+      activity span and realigns; a second failure (or any
+      aligner failure) falls back for THAT CUE ONLY to the DSP
+      phrase split, labelled "dsp_phrase", on the record.
+    - The summary label reflects the mix exactly.
+    """
+    def dsp_cue(c: Any) -> list[WordTiming]:
+        return word_timings(c.text.split(), c.start_s, c.end_s,
+                            source="dsp", profile=energy)
+
+    if requested_source != "mms":
+        return CaptionTimingResult(
+            timings=[dsp_cue(c) for c in cues], source="dsp",
+            cue_sources=["dsp_phrase"] * len(cues),
+            gate_records=[])
+    try:
+        samples = load_samples(window_clip)
+    except Exception as exc:
+        log(f"caption timing: MMS requested but the window "
+            f"audio could not be decoded ({exc}); DSP floor "
+            f"used and labelled")
+        return CaptionTimingResult(
+            timings=[dsp_cue(c) for c in cues], source="dsp",
+            cue_sources=["dsp_phrase"] * len(cues),
+            gate_records=[{"cue_index": None, "action": "dsp_fallback",
+                           "reason": f"audio decode failed: {exc}"}])
+
+    total_s = samples.shape[0] / MMS_SAMPLE_RATE
+    out: list[list[WordTiming]] = []
+    cue_sources: list[str] = []
+    records: list[dict[str, Any]] = []
+
+    def align(words: list[str], w0: float, w1: float,
+              ) -> list[WordTiming]:
+        i0 = max(0, int(round(w0 * MMS_SAMPLE_RATE)))
+        i1 = min(samples.shape[0], int(round(w1 * MMS_SAMPLE_RATE)))
+        return word_timings(words, w0, w1, source="mms",
+                            samples=samples[i0:i1])
+
+    for ci, c in enumerate(cues):
+        words = c.text.split()
+        act = speech_activity_span(energy, c.start_s, c.end_s)
+        if act is not None:
+            act_span_s = act[1] - act[0]
+            w0 = max(0.0, act[0] - ALIGN_MARGIN_S)
+            w1 = min(total_s, act[1] + ALIGN_MARGIN_S)
+        else:
+            act_span_s = None
+            w0, w1 = c.start_s, c.end_s
+        timings: list[WordTiming] | None = None
+        try:
+            timings = align(words, w0, w1)
+        except WordTimingError as exc:
+            records.append({
+                "cue_index": ci, "action": "dsp_fallback",
+                "reason": f"aligner failed on the activity-bounded "
+                          f"slice [{w0:.2f}, {w1:.2f}]: {exc}"})
+        if timings is not None:
+            failure = pace_gate_failure(timings, act_span_s)
+            if failure is not None:
+                records.append({
+                    "cue_index": ci, "action": "pace_gate_rejected",
+                    "slice": [round(w0, 3), round(w1, 3)],
+                    "reason": failure})
+                timings = None
+                if act is not None:
+                    try:
+                        retry = align(words, act[0], act[1])
+                    except WordTimingError as exc:
+                        records.append({
+                            "cue_index": ci, "action": "dsp_fallback",
+                            "reason": f"aligner failed on the DSP "
+                                      f"re-slice: {exc}"})
+                        retry = None
+                    if retry is not None:
+                        failure2 = pace_gate_failure(retry, act_span_s)
+                        if failure2 is None:
+                            records.append({
+                                "cue_index": ci,
+                                "action": "realigned_on_dsp_span",
+                                "slice": [round(act[0], 3),
+                                          round(act[1], 3)]})
+                            timings = retry
+                        else:
+                            records.append({
+                                "cue_index": ci,
+                                "action": "dsp_fallback",
+                                "reason": f"re-slice still fails the "
+                                          f"pace gate: {failure2}"})
+                else:
+                    records.append({
+                        "cue_index": ci, "action": "dsp_fallback",
+                        "reason": "pace gate failed and the cue has "
+                                  "no DSP activity span to re-slice "
+                                  "to"})
+        if timings is None:
+            out.append(dsp_cue(c))
+            cue_sources.append("dsp_phrase")
+        else:
+            out.append(timings)
+            cue_sources.append("mms")
+    n_mms = cue_sources.count("mms")
+    if n_mms == len(cues):
+        summary = "mms"
+    elif n_mms == 0:
+        summary = "dsp"
+    else:
+        summary = "mms+dsp"
+    if records:
+        log(f"caption timing: {n_mms}/{len(cues)} cues MMS-aligned; "
+            f"{len(records)} gate/fallback record(s); effective "
+            f"source {summary}")
+    return CaptionTimingResult(timings=out, source=summary,
+                               cue_sources=cue_sources,
+                               gate_records=records)
 
 
 # ---------------------------------------------------------------- hook
@@ -497,9 +809,44 @@ def _transcribe_all(video: Path, work_dir: Path, clients: _Clients,
     return turns, duration
 
 
+def _clip_turn_text(text: str, start: float, end: float,
+                    w0: float, w1: float) -> str:
+    """The words of a turn that belong to the window's slice.
+
+    Fix round 5 root cause: _local_turns clipped a turn's SPAN
+    to the window but kept its FULL text. A 30s turn (91 words)
+    overlapping a 14s window by its second half became a 14s
+    turn carrying all 91 words, and the caption layout - which
+    flows a turn's words uniformly over its active time - laid
+    them out at a constant, superhuman ~6.9 words/s. Forced
+    alignment then "confirmed" the grid cue by cue, and the
+    receipt called it mms (QM6; QH5 carried the same defect at
+    a plausible-looking 3.44 wps). The span and the text are
+    now clipped together: words are apportioned over the
+    turn's span by time (the same flow assumption the layout
+    makes - word SELECTION only; the timings themselves are
+    measured by the aligner afterwards and audited by the
+    pace gate), and a word is kept when the centre of its
+    proportional slot falls inside the window.
+    """
+    words = text.split()
+    if not words or end <= start:
+        return text
+    if start >= w0 and end <= w1:
+        return text
+    n = len(words)
+    span = end - start
+    kept = [wd for i, wd in enumerate(words)
+            if w0 <= start + (i + 0.5) * span / n < w1]
+    return " ".join(kept)
+
+
 def _local_turns(turns: Sequence[TranscriptTurn], w0: float, w1: float
                  ) -> tuple[list[TranscriptTurn], str]:
-    """Turns overlapping the window, re-based to window-local seconds."""
+    """Turns overlapping the window, re-based to window-local
+    seconds - span AND text clipped to the window (fix round
+    5: see _clip_turn_text). A turn whose slice holds no words
+    is dropped rather than carried as an empty shell."""
     local: list[TranscriptTurn] = []
     texts: list[str] = []
     for t in turns:
@@ -509,12 +856,15 @@ def _local_turns(turns: Sequence[TranscriptTurn], w0: float, w1: float
             end = start + 5.0
         if end <= w0 or start >= w1:
             continue
+        clipped = _clip_turn_text(t.text, start, end, w0, w1)
+        if not clipped:
+            continue
         local.append(TranscriptTurn(
-            text=t.text,
+            text=clipped,
             start_ms=int(max(0.0, start - w0) * 1000),
             end_ms=int(min(w1 - w0, end - w0) * 1000),
             speaker=t.speaker))
-        texts.append(t.text)
+        texts.append(clipped)
     return local, " ".join(texts)
 
 
@@ -569,6 +919,17 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         log(f"short {index}: SAM segmented "
             f"({seg.billed_frames} frames billed)")
     parsed = parse_sam_response(raw_sam)
+    # SAM-coverage window guard (fix phase, 2026-11-02): when SAM
+    # returns masks for only a fraction of the window, the old
+    # tail-truncation below silently produced a stub Short
+    # (McArthur Short 3 twice: 155/659 frames -> a 5.2s stub that
+    # failed downstream). Reject the window HERE - before the
+    # finish/composite spend - and let the run loop take the next
+    # sweep candidate instead. The one-frame tail artifact (659
+    # of 660) is coverage 0.998 and passes far above the floor.
+    coverage = sam_coverage(len(parsed), len(frames))
+    if coverage < MIN_SAM_COVERAGE_FRAC:
+        raise SamCoverageError(len(parsed), len(frames), coverage)
     # Alignment policy: SAM may return one frame fewer than the container
     # decodes (a sub-frame tail artifact: a 22.0s window at 29.97fps is
     # 659.34 frames - ffmpeg yields 660, SAM returns 659). Both sequences
@@ -588,6 +949,22 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     # (the 2026-10-29 OOM - see mask_decode.finished_alpha).
     guides = (f.astype(np.float64).mean(axis=2) / 255.0 for f in frames)
     _indices, src_alphas = finished_alpha(parsed, guides)
+    # Source alpha frame size BEFORE any geometry transform bakes
+    # into the list (the geometry bundle's alpha provenance).
+    src_frame_shape = (tuple(src_alphas[0].shape)
+                       if src_alphas else None)
+
+    # Stage composition (fix round 2, Fix A): the tall-narrow
+    # Stage zoom is planned and baked FIRST, so the reframe, the
+    # hook effect, and every downstream consumer work from the
+    # enlarged speaker geometry. The reframe below then plans on
+    # the zoomed alphas (normally identity: the zoom already
+    # solved the centroid target).
+    stage_zoom = plan_stage_zoom(src_alphas, canvas)
+    if stage_zoom.feasible and not stage_zoom.identity:
+        frames, src_alphas = apply_stage_zoom(
+            frames, src_alphas, stage_zoom)
+    log(f"short {index}: stage zoom {stage_zoom.note}")
 
     # Speaker reframing by construction (F3): place the FACE, not
     # just the text around it. The transform is PLANNED here but
@@ -608,9 +985,65 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     cues, cap_report = build_captions(
         local_turns, energy, spark=clients.spark,
         purpose=f"pipeline-caption-punctuation-short{index}", ts=ts)
+    # Cue-sanity guard (fix round 2, Fix D): repair degenerate
+    # cue spans (compressed VT turns) BEFORE word timing and
+    # before graphics planning, so word timings and graphic span
+    # anchors are both derived from the repaired spans. Records
+    # ride captions.json and the receipt.
+    cues, cue_repairs = repair_cue_spans(cues, duration_s=length)
+    if cue_repairs:
+        log(f"short {index}: cue-sanity guard: "
+            f"{len(cue_repairs)} cue span repair(s)")
+    # Word-level caption timing (extension Stage 4; MMS wired
+    # live in the 2026-11-02 fix phase; per-cue provenance in
+    # fix round 5): per-cue word timings behind the word_timing
+    # interface - DSP floor by default, MMS forced alignment
+    # when CAPTION_TIMING_SOURCE=mms is requested, each cue
+    # aligned on its DSP-activity-bounded slice and held to the
+    # pace sanity gate. The EFFECTIVE per-cue sources and the
+    # summary label come back with the timings and are what
+    # captions.json and every receipt for this Short carry.
+    timing_result = _caption_word_timings(
+        cues, energy, window_clip, CAPTION_TIMING_SOURCE, log)
+    cue_word_timings = timing_result.timings
+    timing_source = timing_result.source
+    # Valley snap (fix round 4; scope narrowed in fix round 5):
+    # a deterministic DSP correction of the aligner's per-word
+    # jitter - each word start moves to the nearest speech-energy
+    # valley within +/-150ms (see word_timing.snap_word_timings).
+    # Only genuinely aligned (mms) words may move: snapping a
+    # proportional DSP split would manufacture false precision.
+    # The snap's own stats ride captions.json + the receipt as
+    # caption_snap. An audio decode failure keeps the unsnapped
+    # timings and records applied=False with the reason - the
+    # record never claims a correction that did not run.
+    caption_snap: dict[str, Any] | None = None
+    try:
+        snap_samples = load_samples(window_clip)
+        cue_word_timings, caption_snap = snap_word_timings(
+            cue_word_timings, snap_samples, snap_sources=("mms",))
+        if caption_snap.get("applied"):
+            log(f"short {index}: caption valley snap: "
+                f"{caption_snap['words_snapped']}/"
+                f"{caption_snap['words']} words moved, mean "
+                f"{caption_snap['mean_abs_shift_ms']}ms")
+    except Exception as exc:  # decode failure: keep, record
+        caption_snap = {"applied": False,
+                        "method": "energy_valley_snap",
+                        "reason": f"{type(exc).__name__}: {exc}"}
+        log(f"short {index}: caption valley snap unavailable "
+            f"({exc}); unsnapped timings kept")
     (short_dir / "captions.json").write_text(json.dumps({
-        "cues": [{"text": c.text, "start_s": c.start_s, "end_s": c.end_s}
-                 for c in cues],
+        "cues": [{"text": c.text, "start_s": c.start_s,
+                  "end_s": c.end_s,
+                  "word_timings": [w.to_dict() for w in timings]}
+                 for c, timings in zip(cues, cue_word_timings)],
+        "timing_source": timing_source,
+        "cue_sources": timing_result.cue_sources,
+        "timing_gate": timing_result.gate_records,
+        "caption_snap": caption_snap,
+        "cue_repairs": cue_repairs,
+        "chunk_max_words": CAPTION_CHUNK_MAX_WORDS,
         "turn_reports": [
             {"turn_index": t.turn_index, "used_fallback": t.used_fallback,
              "spark_request_id": t.spark_request_id,
@@ -639,6 +1072,45 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         f"(applied pad {effect.pad_bottom_px})")
     canvas_alphas = LazyCanvasAlphas(src_alphas, canvas)
 
+    # Fix round 2/3 receipt declarations (records, not checks):
+    # the Stage composition applied to this Short and the canvas
+    # backdrop treatment the renders use (fix round 3: the
+    # studio_procedural canvas is the default; its seed is
+    # derived deterministically from the run/window identity.
+    # The fix B minus-speaker declaration survives verbatim for
+    # runs that select that mode; "blur" only when no frame
+    # carries a speaker mask at all).
+    stage_geometry = stage_zoom.declaration()
+    stage_geometry["reframe_pad_bottom_px"] = reframe.pad_bottom_px
+    stage_geometry["effect_pad_bottom_px"] = effect.pad_bottom_px
+    maskless_frames = sum(
+        1 for a in src_alphas if not bool((a > 0.5).any()))
+    backdrop_seed = studio_seed(
+        f"{video.name}:{w0:.3f}-{w1:.3f}:short-{index}")
+    if CANVAS_BACKDROP_MODE == BACKDROP_STUDIO:
+        canvas_backdrop = {
+            "mode": BACKDROP_STUDIO,
+            "seed": backdrop_seed,
+            "drift": "ken_burns_1.12",
+            "shadow": "mask_base_ellipse",
+            "maskless_frames": maskless_frames,
+        }
+    elif CANVAS_BACKDROP_MODE == BACKDROP_SOURCE_MINUS_SPEAKER:
+        canvas_backdrop = {
+            "mode": ("source_minus_speaker"
+                     if maskless_frames < len(src_alphas) else "blur"),
+            "darken": BACKDROP_GRADE_BRIGHTNESS,
+            "saturation": BACKDROP_GRADE_SATURATION,
+            "drift": "ken_burns_1.12",
+            "fill": BACKDROP_FILL,
+            "maskless_frames": maskless_frames,
+        }
+    else:
+        canvas_backdrop = {
+            "mode": CANVAS_BACKDROP_MODE,
+            "maskless_frames": maskless_frames,
+        }
+
     # Layout from the decoded geometry.
     placement = effect.placement
     cap_layout = plan_captions(
@@ -650,10 +1122,39 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         f"{placement.effect_status}); caption rect "
         f"{cap_layout.rect} feasible {cap_layout.feasible}")
 
+    # Fix round 2 (Fix E): two-tone hook - the accent word
+    # (deterministic selection) in Viral Pink, the solved text
+    # size from the effect plan, and per-word layers for the
+    # stagger-pop entry.
+    accent_index = hook_accent_index(hook_text)
+    hook_style = {
+        "tone": "two_tone",
+        "accent_word": (hook_text.split()[accent_index]
+                        if accent_index is not None else None),
+        "accent_index": accent_index,
+        "accent_rgb": [255, 61, 126],
+        "entry": "stagger_pop",
+        "text_size": placement.text_size,
+    }
+    caption_style = {
+        "chunk_max_words": CAPTION_CHUNK_MAX_WORDS,
+        "word_states": {
+            "upcoming": "white_alpha_140",
+            "active": "viral_pink_scale_1.10",
+            "spoken": "white_full_alpha",
+            "spoken_emphasis": "viral_pink",
+        },
+    }
     hook_spec = HookSpec(hook_text, (0.0, min(HOOK_WINDOW_S, length)),
-                         placement.y_center_frac, layout_rendered=True)
+                         placement.y_center_frac, layout_rendered=True,
+                         accent_index=accent_index,
+                         text_size=placement.text_size)
     hook_rgba = render_hook_layer(
-        hook_text, canvas, y_center_frac=placement.y_center_frac)
+        hook_text, canvas, y_center_frac=placement.y_center_frac,
+        accent_index=accent_index, start_size=placement.text_size)
+    hook_word_layers_list = hook_word_layers(
+        hook_text, canvas, y_center_frac=placement.y_center_frac,
+        accent_index=accent_index, start_size=placement.text_size)
 
     # Context graphics (flag-gated, default OFF - Kamlesh's
     # 2026-10-30 feature): planned from the caption phrases against
@@ -663,6 +1164,10 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     placed_graphics = None
     placed_backdrops = None
     speaker_forward_decls = None
+    speaker_forward_recipe = None
+    layout_track = None
+    layout_decls = None
+    layout_rects = None
     graphics_report = None
     sfx_plan_events = None
     applied_sfx = None
@@ -685,6 +1190,7 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         # standard framing with the reason on the record.
         if build.speaker_forward:
             decls: list[dict[str, Any]] = []
+            sf_recipe_entries: list[dict[str, Any]] = []
             for span in build.speaker_forward:
                 f0 = max(0, int(round(span.start_s * fps)))
                 f1 = min(len(src_alphas),
@@ -711,11 +1217,44 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                     "placed_head_top_min":
                         plan.placed_head_top_min,
                     "note": plan.note})
+                # Geometry-bundle capture: the applied transform
+                # itself (crop + pad), which the receipt-facing
+                # declaration above does not carry.
+                sf_recipe_entries.append({
+                    "span": {"start_s": span.start_s,
+                             "end_s": span.end_s},
+                    "scale": plan.scale,
+                    "crop": list(plan.crop),
+                    "pad_bottom_px": plan.pad_bottom_px,
+                    "placed_centroid": plan.placed_centroid,
+                    "placed_head_top_min":
+                        plan.placed_head_top_min})
             if decls:
                 canvas_alphas = make_canvas(src_alphas)
                 speaker_forward_decls = decls
+                speaker_forward_recipe = sf_recipe_entries
                 log(f"short {index}: speaker-forward emphasis "
                     f"applied on {len(decls)} span(s)")
+        # Layout states (extension Stage 2): plan the layout
+        # track for the placed specs through the SHARED builder
+        # (graphics_layer.plan_layout - the same function the
+        # rescue executors rebuild from), so the pipeline render
+        # and any rescue re-render of this Short use the identical
+        # track. The verifier then measures the layout-mapped
+        # alphas - the geometry the render actually used.
+        layout_built = plan_layout(
+            build.placed, src_alphas, fps=fps, canvas=canvas,
+            n_frames=len(frames)) if build.placed else None
+        if layout_built is not None:
+            layout_track, layout_decls, layout_rects = layout_built
+            build.layout_spans = layout_decls
+            if layout_track is not None:
+                canvas_alphas = LazyCanvasAlphas(
+                    src_alphas, canvas, placements=layout_track)
+                states = [d["layout"] for d in layout_decls
+                          if d.get("feasible")]
+                log(f"short {index}: layout states planned "
+                    f"{states}")
         placed_graphics = build.placed
         placed_backdrops = build.backdrops
         graphics_report = build.to_dict()
@@ -749,6 +1288,17 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     if placed_backdrops is not None:
         render_kwargs["backdrop_spans"] = backdrop_entries(
             placed_backdrops)
+    if layout_track is not None:
+        render_kwargs["layout_track"] = layout_track
+        if layout_rects:
+            render_kwargs["span_caption_rects"] = layout_rects
+    render_kwargs["caption_word_timings"] = cue_word_timings
+    render_kwargs["caption_pop_s"] = CAPTION_POP_S
+    render_kwargs["hook_word_layers"] = hook_word_layers_list
+    if CANVAS_BACKDROP_MODE != DEFAULT_BACKDROP:
+        render_kwargs["backdrop"] = CANVAS_BACKDROP_MODE
+    if CANVAS_BACKDROP_MODE == BACKDROP_STUDIO:
+        render_kwargs["backdrop_seed"] = backdrop_seed
     render_composite_with_captions(
         frames, src_alphas, hook_rgba=hook_rgba,
         hook_window=hook_spec.window, cues=cues,
@@ -762,12 +1312,46 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
             graphics=placed_graphics,
             backdrops=placed_backdrops,
             speaker_forward=speaker_forward_decls,
+            layout_spans=layout_decls,
+            caption_timing_source=timing_source,
+            caption_cue_sources=timing_result.cue_sources,
+            caption_timing_gate=timing_result.gate_records or None,
+            cue_repairs=cue_repairs or None,
+            stage_geometry=stage_geometry,
+            canvas_backdrop=canvas_backdrop,
+            hook_style=hook_style,
+            caption_style=caption_style,
+            caption_snap=caption_snap,
             speech_audio=energy if graphics_enabled else None,
             sfx=applied_sfx),
         wonder=clients.wonder, draft=1, ts=ts)
     _annotate_effect(receipt1)
     log(f"short {index}: draft 1 verdict {receipt1.verdict} "
         f"failed {receipt1.failed}")
+
+    # Geometry bundle (reverify closure, 2026-11-03): record the
+    # exact geometry draft 1's verifier measured with, copied from
+    # the objects above — never recomputed — so the offline
+    # re-verifier builds its inputs from the record instead of
+    # re-deriving them. Draft 2's entry is written after the
+    # rescue, when the executed repair is known.
+    bundle_drafts: dict[int, dict[str, Any]] = {
+        1: draft_bundle_dict(
+            stage_geometry=stage_geometry,
+            alpha_recipe=alpha_recipe_dict(
+                src_frame_size=src_frame_shape,
+                stage_geometry=stage_geometry,
+                speaker_forward=(speaker_forward_recipe
+                                 if speaker_forward_recipe
+                                 is not None
+                                 else speaker_forward_decls)),
+            hook=hook_to_dict(hook_spec),
+            caption_rect=cap_layout.rect,
+            layout_spans=layout_decls,
+            hook_slide_px_s=0.0,
+            inputs_sha256=receipt1.inputs_sha256),
+    }
+    write_bundle(short_dir, bundle_drafts)
 
     # Rescue (short-circuits when draft 1 passed).
     artifacts = RenderArtifacts(
@@ -777,9 +1361,30 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         cues=cues, caption_rect=cap_layout.rect,
         sam_response_path=sam_path, transcript_text=excerpt,
         work_dir=short_dir, canvas=canvas, graphics=placed_graphics,
-        sfx_plan=sfx_plan_events, backdrops=placed_backdrops)
+        sfx_plan=sfx_plan_events, backdrops=placed_backdrops,
+        layout_track=layout_track, layout_spans=layout_decls,
+        span_caption_rects=layout_rects,
+        caption_word_timings=cue_word_timings,
+        caption_timing_source=timing_source,
+        caption_cue_sources=timing_result.cue_sources,
+        caption_timing_gate=timing_result.gate_records or None,
+        caption_pop_s=CAPTION_POP_S,
+        cue_repairs=cue_repairs or None,
+        stage_geometry=stage_geometry,
+        canvas_backdrop=canvas_backdrop,
+        backdrop_mode=CANVAS_BACKDROP_MODE,
+        backdrop_seed=(backdrop_seed
+                       if CANVAS_BACKDROP_MODE == BACKDROP_STUDIO
+                       else None),
+        hook_word_layers=hook_word_layers_list,
+        hook_style=hook_style,
+        caption_style=caption_style,
+        caption_snap=caption_snap)
+
+    captured_execution: dict[str, Any] = {}
 
     def verify_fn(execution) -> Any:
+        captured_execution["execution"] = execution
         receipt2 = verify(
             VerifyInputs(
                 video_path=execution.render_path, fps=fps,
@@ -791,6 +1396,16 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
                 graphics=execution.graphics,
                 backdrops=execution.backdrops,
                 speaker_forward=speaker_forward_decls,
+                layout_spans=execution.layout_spans,
+                caption_timing_source=execution.caption_timing_source,
+                caption_cue_sources=execution.caption_cue_sources,
+                caption_timing_gate=execution.caption_timing_gate,
+                cue_repairs=execution.cue_repairs,
+                stage_geometry=execution.stage_geometry,
+                canvas_backdrop=execution.canvas_backdrop,
+                hook_style=execution.hook_style,
+                caption_style=execution.caption_style,
+                caption_snap=execution.caption_snap,
                 speech_audio=(
                     load_energy(execution.speech_audio_from)
                     if execution.speech_audio_from is not None
@@ -806,6 +1421,28 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
     log(f"short {index}: final verdict {chain.final_verdict} "
         f"(repair: {chain.repair.status} {chain.repair.menu_id or ''})")
 
+    # Geometry bundle, draft 2: only when the executed repair
+    # touches geometry (audio-only repairs reuse draft 1's bundle
+    # by design). The entry points at draft 1's alpha recipe as
+    # its base and records the geometry draft 2's verifier
+    # actually consumed from the captured execution.
+    if (len(chain.drafts) > 1
+            and chain.repair.status == "executed"
+            and chain.repair.menu_id in DRAFT2_BUNDLE_REPAIRS
+            and "execution" in captured_execution):
+        execution = captured_execution["execution"]
+        bundle_drafts[2] = draft_bundle_dict(
+            stage_geometry=(execution.stage_geometry
+                            or stage_geometry),
+            alpha_recipe={"base_draft": 1,
+                          "repair": chain.repair.menu_id},
+            hook=hook_to_dict(execution.hook),
+            caption_rect=execution.caption_rect,
+            layout_spans=execution.layout_spans,
+            hook_slide_px_s=execution.hook_slide_px_s,
+            inputs_sha256=chain.drafts[1].inputs_sha256)
+        write_bundle(short_dir, bundle_drafts)
+
     final_path = short_dir / "final.mp4"
     if Path(chain.artifact) != final_path:
         shutil.copyfile(chain.artifact, final_path)
@@ -819,6 +1456,8 @@ def _process_short(index: int, cand: Candidate, w0: float, w1: float,
         "hook_text": hook_text,
         "hook_call": hook_call,
         "layout": {
+            "stage_geometry": stage_geometry,
+            "backdrop": canvas_backdrop,
             "hook_y_frac": placement.y_center_frac,
             "predicted_occlusion": round(placement.predicted_occlusion, 4),
             "caption_rect": list(cap_layout.rect),
@@ -913,11 +1552,54 @@ def run_pipeline(video_path: str | Path, out_dir: str | Path, *,
         log(f"selected {len(chosen)} windows")
         if graphics:
             summary["graphics_enabled"] = True
-        for i, (cand, w0, w1) in enumerate(chosen, start=1):
-            summary["shorts"].append(_process_short(
-                i, cand, w0, w1, video, turns, out, clients,
-                ts=ts, canvas=canvas, log=log,
-                graphics_enabled=graphics))
+        # SAM-coverage guard loop (fix phase, 2026-11-02): a
+        # window the guard rejects is recorded on the summary
+        # with its measured coverage and replaced by the next
+        # untried sweep candidate; when the pool runs out the
+        # run proceeds with fewer Shorts and says so - a window
+        # is never fabricated to fill the count.
+        pending = list(chosen)
+        reserved = [(w0, w1) for _c, w0, w1 in chosen]
+        tried: set[tuple[float, float]] = set()
+        rejections: list[dict[str, Any]] = []
+        attempt = 0
+        while pending and len(summary["shorts"]) < max_shorts:
+            cand, w0, w1 = pending.pop(0)
+            tried.add((round(w0, 3), round(w1, 3)))
+            attempt += 1
+            try:
+                summary["shorts"].append(_process_short(
+                    attempt, cand, w0, w1, video, turns, out,
+                    clients, ts=ts, canvas=canvas, log=log,
+                    graphics_enabled=graphics))
+            except SamCoverageError as exc:
+                rejections.append({
+                    "index": attempt,
+                    "window": {"start_s": w0, "end_s": w1},
+                    "candidate": {"score": cand.score,
+                                  "reason": cand.reason},
+                    "parsed_frames": exc.parsed_frames,
+                    "window_frames": exc.window_frames,
+                    "sam_coverage": round(exc.coverage, 4),
+                    "reason": str(exc),
+                })
+                log(f"short {attempt}: window rejected by the "
+                    f"SAM coverage guard - {exc}")
+                replacement = _next_untried_candidate(
+                    sweep.candidates, duration, reserved, tried)
+                if replacement is not None:
+                    pending.append(replacement)
+                    reserved.append((replacement[1], replacement[2]))
+                    log(f"coverage guard: next candidate "
+                        f"{replacement[1]:.1f}-{replacement[2]:.1f}s "
+                        "queued as a replacement window")
+        if rejections:
+            summary["window_rejections"] = rejections
+            if len(summary["shorts"]) < max_shorts:
+                log(f"coverage guard: candidate pool exhausted - "
+                    f"run proceeds with {len(summary['shorts'])} "
+                    f"of {max_shorts} Shorts "
+                    f"({len(rejections)} window(s) rejected)")
     except Exception as exc:
         summary["error"] = f"{type(exc).__name__}: {exc}"
         summary["door_to_door_s"] = round(time.monotonic() - started, 1)

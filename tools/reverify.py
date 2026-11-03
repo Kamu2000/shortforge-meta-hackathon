@@ -69,6 +69,21 @@ sam-response.json, window.mp4), it is adopted as the evidence
 directory — also reported — so the shipped set re-measures in
 full from a fresh clone with no flags at all.
 
+Geometry bundles (2026-11-03 closure): when the evidence
+directory holds a ``geometry-bundle.json`` written by the
+pipeline at verify time — or the receipt itself records the
+geometry declarations a bundle is made of (stage geometry,
+layout spans, hook style, speaker-forward spans, the summary's
+hook band and caption rect) — the verifier's inputs are built
+FROM THE BUNDLE: the recorded stage zoom, effect pad, emphasis
+spans and layout placements are replayed with the pipeline's own
+functions, and the hook / caption rect / layout spans are the
+recorded ones. File bundles are trusted only after their
+``inputs_hash`` verifies against the receipt draft's recorded
+input hashes. A draft with no graphics and no backdrops reports
+F8 as NOT-APPLICABLE (excluded from findings) instead of
+NOT-REPRODUCIBLE.
+
 No threshold in this file is a copy of a verifier threshold: the
 comparison reuses ``verifier.verify`` itself, so thresholds can
 never drift between the gate and this tool. No verifier behaviour
@@ -110,10 +125,14 @@ from spatial_director.graphics_layer import (  # noqa: E402
     path_box_at,
     prepare_card,
 )
+from spatial_director import geometry_bundle as gb  # noqa: E402
 from spatial_director.layout_law import (  # noqa: E402
+    apply_speaker_emphasis,
     apply_speaker_reframe,
+    apply_stage_zoom,
     plan_captions,
     plan_hook_effect,
+    plan_speaker_emphasis,
     plan_speaker_reframe,
     to_canvas_alpha,
 )
@@ -121,7 +140,10 @@ from spatial_director.mask_decode import (  # noqa: E402
     finished_alpha,
     parse_sam_response,
 )
-from spatial_director.rescue_loop import TRIM_KEEP_SILENCE_S  # noqa: E402
+from spatial_director.rescue_loop import (  # noqa: E402
+    RESCALE_FACTOR,
+    TRIM_KEEP_SILENCE_S,
+)
 from spatial_director.verifier import (  # noqa: E402
     MAX_WORD_GAP_S,
     HookSpec,
@@ -429,11 +451,21 @@ class LazyAlphas:
     """
 
     def __init__(self, src_alphas: list[np.ndarray],
-                 canvas: tuple[int, int], cap: int = 32):
+                 canvas: tuple[int, int], cap: int = 32,
+                 placements: list | None = None):
         self.src = src_alphas
         self.canvas = canvas
         self.cache: OrderedDict[int, np.ndarray] = OrderedDict()
         self.cap = cap
+        # Layout states: an optional per-frame explicit speaker
+        # placement aligned with src_alphas (the pipeline's
+        # LazyCanvasAlphas carries the same), so bundle-path
+        # geometry is measured in the layout render's space.
+        if placements is not None \
+                and len(placements) != len(src_alphas):
+            raise ValueError("placements must align 1:1 with "
+                             "src_alphas")
+        self.placements = placements
 
     def __len__(self) -> int:
         return len(self.src)
@@ -444,7 +476,10 @@ class LazyAlphas:
         if i in self.cache:
             self.cache.move_to_end(i)
             return self.cache[i]
-        a = to_canvas_alpha(self.src[i], self.canvas).astype(np.float32)
+        placement = (self.placements[i]
+                     if self.placements is not None else None)
+        a = to_canvas_alpha(self.src[i], self.canvas,
+                            placement=placement).astype(np.float32)
         self.cache[i] = a
         if len(self.cache) > self.cap:
             self.cache.popitem(last=False)
@@ -537,6 +572,360 @@ def decode_canvas_alphas(evidence_dir: Path, canvas: tuple[int, int],
     return LazyAlphas(src_alphas, canvas)
 
 
+# ---------------------------------------------------------------- geometry bundles
+#
+# The closure (reverify-geometry-closure-spec-2026-11-03.md): when
+# a draft carries a geometry bundle — written by the pipeline at
+# verify time, or backfilled below from the receipt's own recorded
+# declarations — VerifyInputs are built FROM THE BUNDLE (placement,
+# spans, caption rect, hook) instead of recomputing the reframe /
+# effect / layout from decoded alphas. The transforms the bundle
+# names are replayed with the pipeline's own functions (the same
+# deterministic-replay discipline as TRIM_SILENCE below); the
+# geometry DECISIONS are always the recorded ones.
+
+
+class BundleError(Exception):
+    """A bundle exists but its recorded geometry cannot be built.
+
+    Carries the checks whose legs the failure takes out; the
+    caller declares those NOT-REPRODUCIBLE rather than comparing
+    against known-wrong inputs."""
+
+    def __init__(self, reason: str,
+                 checks: Sequence[str] = ("F2", "F3", "F4", "F7",
+                                          "F8")):
+        super().__init__(reason)
+        self.checks = tuple(checks)
+
+
+def _rescale_alphas(alphas: list[np.ndarray],
+                    scale: float) -> list[np.ndarray]:
+    """RESCALE_SPEAKER's alpha transform, replayed exactly.
+
+    Mirrors the alpha half of rescue_loop._scaled_speaker_inputs
+    (same PIL path, same bottom-anchored pad) — the repair's own
+    math, applied to the bundle-path alphas at the recorded
+    RESCALE_FACTOR.
+    """
+    from PIL import Image
+    out: list[np.ndarray] = []
+    for alpha in alphas:
+        h, w = alpha.shape
+        nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+        left, top = (w - nw) // 2, h - nh
+        small = np.asarray(
+            Image.fromarray(
+                (np.clip(alpha, 0.0, 1.0) * 255).astype(np.uint8)
+            ).resize((nw, nh), Image.BILINEAR)
+        ).astype(np.float64) / 255.0
+        padded = np.zeros((h, w), dtype=np.float64)
+        padded[top:top + nh, left:left + nw] = small
+        out.append(padded)
+    return out
+
+
+# The emphasis planner's note format (layout_law
+# .plan_speaker_emphasis): receipt-era declarations record the
+# applied crop + pad ONLY inside this note, so recovering them
+# from it is recovery of recorded values, not a recomputation.
+_EMPHASIS_NOTE_RE = re.compile(
+    r"^emphasis x(\d+\.\d+): crop "
+    r"\((-?\d+), (-?\d+), (\d+), (\d+)\) \+ pad (-?\d+);")
+
+
+def _emphasis_from_record(decl: dict[str, Any]):
+    """Rebuild the applied SpeakerEmphasis from the record.
+
+    Preference order: (1) the transform itself (crop + pad),
+    carried by bundles the pipeline writes; (2) the same values
+    recovered from the planner's recorded note (receipt-era
+    declarations), cross-checked against the recorded scale;
+    (3) None — the caller falls back to re-planning.
+    """
+    from spatial_director.layout_law import SpeakerEmphasis
+    scale = decl.get("scale")
+    crop = decl.get("crop")
+    pad = decl.get("pad_bottom_px")
+    if crop is None and decl.get("note"):
+        m = _EMPHASIS_NOTE_RE.match(str(decl["note"]))
+        if (m and scale is not None
+                and abs(float(m.group(1)) - float(scale)) < 0.005):
+            crop = [int(m.group(i)) for i in (2, 3, 4, 5)]
+            pad = int(m.group(6))
+    if crop is None or pad is None or scale is None:
+        return None
+    placed = decl.get("placed_centroid")
+    head_top = decl.get("placed_head_top_min")
+    return SpeakerEmphasis(
+        feasible=True, scale=float(scale),
+        crop=tuple(int(v) for v in crop),
+        pad_bottom_px=int(pad),
+        placed_centroid=(tuple(float(v) for v in placed)
+                         if placed else None),
+        placed_head_top_min=(float(head_top)
+                             if head_top is not None else None),
+        note="replayed from the recorded transform")
+
+
+def replay_speaker_forward(src_alphas: list[np.ndarray],
+                           decls: Sequence[dict[str, Any]], *,
+                           fps: float,
+                           canvas: tuple[int, int]
+                           ) -> list[np.ndarray]:
+    """Replay the recorded speaker-forward emphasis spans.
+
+    The applied transform is reconstructed from the record
+    wherever the record carries it (bundle field, or the
+    planner's note on receipt-era declarations) and re-applied
+    as-is. Where the record does not carry it, the plan is
+    RE-SOLVED on the bundle-path alphas (the planner is a
+    deterministic function of the span's alphas, called with
+    the pipeline's own arguments) and CROSS-CHECKED against
+    the recorded declaration (scale, placed centroid, placed
+    head-top) before anything is applied: a replay that
+    diverges from the record raises instead of measuring
+    against invented geometry.
+    """
+    out = list(src_alphas)
+    for decl in decls:
+        s, e = float(decl["span"][0]), float(decl["span"][1])
+        f0 = max(0, int(round(s * fps)))
+        f1 = min(len(out), int(round(e * fps)))
+        if f1 <= f0:
+            raise BundleError(
+                f"speaker-forward span [{s}, {e}] covers no frames")
+        plan = _emphasis_from_record(decl)
+        if plan is None:
+            plan = plan_speaker_emphasis(out[f0:f1], canvas)
+            if not plan.feasible:
+                raise BundleError(
+                    "speaker-forward replay: emphasis "
+                    "infeasible on the bundle-path alphas, but "
+                    "the receipt records an applied span at "
+                    f"[{s}, {e}]")
+            rec_centroid = decl.get("placed_centroid")
+            got_centroid = (list(plan.placed_centroid)
+                            if plan.placed_centroid else None)
+            if (plan.scale != decl.get("scale")
+                    or got_centroid != rec_centroid
+                    or plan.placed_head_top_min
+                    != decl.get("placed_head_top_min")):
+                raise BundleError(
+                    "speaker-forward replay diverges from the "
+                    f"recorded declaration for span [{s}, {e}]: "
+                    f"replanned scale {plan.scale} / centroid "
+                    f"{got_centroid} / head-top "
+                    f"{plan.placed_head_top_min} vs recorded "
+                    f"{decl.get('scale')} / {rec_centroid} / "
+                    f"{decl.get('placed_head_top_min')}")
+        # apply_speaker_emphasis transforms frames alongside
+        # alphas; the frames are discarded here, so one shared
+        # dummy stands in for all of them (it is only ever read
+        # by slicing/padding, never mutated).
+        h, w = out[0].shape
+        dummy = np.zeros((h, w, 3), dtype=np.uint8)
+        _frames, out = apply_speaker_emphasis(
+            [dummy] * len(out), out, plan, f0, f1)
+    return out
+
+
+def build_bundle_alphas(evidence_dir: Path, bundle: dict[str, Any], *,
+                        canvas: tuple[int, int], fps: float,
+                        keep: list[int] | None,
+                        alpha_cache: dict | None = None
+                        ) -> LazyAlphas:
+    """Build a draft's canvas alphas from its geometry bundle.
+
+    Replays, in the pipeline's order: SAM decode -> Stage zoom
+    (recorded crop + pad) -> hook-effect pad (the recorded total)
+    -> speaker-forward emphasis (recorded spans, cross-checked)
+    -> the repair's own replay (TRIM keep / RESCALE / REFRAME)
+    -> the layout placement track rebuilt from the recorded
+    declarations. Raises BundleError on anything the record
+    cannot support.
+    """
+    recipe = bundle.get("alpha_recipe") or {}
+    try:
+        src = list(load_src_alphas(evidence_dir, alpha_cache))
+    except (FileNotFoundError, RuntimeError, ValueError,
+            json.JSONDecodeError, OSError) as exc:
+        raise BundleError(f"canvas alphas unavailable: {exc}")
+    if not src:
+        raise BundleError("SAM decode produced no alphas")
+    recorded_size = recipe.get("src_frame_size")
+    if recorded_size is not None \
+            and list(src[0].shape) != list(recorded_size):
+        raise BundleError(
+            f"source alpha frame size {list(src[0].shape)} does "
+            f"not match the bundle's recorded {recorded_size}: "
+            "the evidence does not belong to this bundle")
+    zoom = gb.stage_zoom_from_recipe(recipe)
+    if zoom is not None:
+        _f, src = apply_stage_zoom([], src, zoom)
+    pad = int(recipe.get("effect_pad_bottom_px") or 0)
+    if pad != 0:
+        _f, src = apply_speaker_reframe([], src, pad)
+    if recipe.get("speaker_forward"):
+        src = replay_speaker_forward(
+            src, recipe["speaker_forward"], fps=fps, canvas=canvas)
+    repair = recipe.get("repair")
+    if repair == "RESCALE_SPEAKER":
+        src = _rescale_alphas(src, RESCALE_FACTOR)
+    elif repair == "REFRAME_SPEAKER":
+        # The executor re-plans from the receipt's measured
+        # centroid with fixed repair settings; replaying the same
+        # planner on the same alphas with the same settings is
+        # the deterministic replay (cf. TRIM_SILENCE's removals).
+        plan = plan_speaker_reframe(
+            src, canvas, target_frac=0.5, head_top_plan_min=100)
+        if plan.identity or plan.pad_bottom_px == 0:
+            raise BundleError(
+                "REFRAME_SPEAKER replay lands on the current "
+                "placement; the repair's reframed geometry cannot "
+                "be reproduced from the bundle")
+        _f, src = apply_speaker_reframe([], src, plan.pad_bottom_px)
+    if keep is not None:
+        src = [src[i] for i in keep]
+    placements = None
+    if bundle.get("layout_spans"):
+        try:
+            placements = gb.placements_from_declarations(
+                bundle["layout_spans"], src[0].shape, len(src),
+                fps, canvas)
+        except ValueError as exc:
+            raise BundleError(str(exc))
+    return LazyAlphas(src, canvas, placements=placements)
+
+
+def _backfill_draft_bundle(receipt: dict[str, Any],
+                           run_summary: dict[str, Any]
+                           ) -> dict[str, Any] | None:
+    """Draft 1's bundle, backfilled from the receipt's records.
+
+    Receipts issued before bundles existed still RECORDED the
+    geometry their verifier consumed: the draft's stage_geometry
+    declaration (the StageZoom declaration plus the applied
+    pads), its layout_spans declarations, its hook_style (text
+    size + accent), its speaker-forward declarations, and the
+    run-summary's layout (hook band + caption rect). The backfill
+    copies those records into the bundle shape — nothing is
+    recomputed. Returns None when the records are absent (the
+    pre-geometry receipt era), leaving the legacy path in charge.
+    """
+    drafts = receipt.get("drafts") or []
+    if not drafts and receipt.get("checks") is not None:
+        drafts = [receipt]
+    if not drafts:
+        return None
+    draft = drafts[0]
+    stage_geometry = draft.get("stage_geometry")
+    if not stage_geometry:
+        return None
+    layout = run_summary.get("layout", {})
+    hook_text = recover_hook_text(draft)
+    y_frac = layout.get("hook_y_frac")
+    if hook_text is None or y_frac is None:
+        return None
+    hook_style = draft.get("hook_style") or {}
+    recipe = gb.alpha_recipe_dict(
+        src_frame_size=None, stage_geometry=stage_geometry,
+        speaker_forward=draft.get("speaker_forward"))
+    return {
+        "stage_geometry": stage_geometry,
+        "alpha_recipe": recipe,
+        "hook": {
+            "text": hook_text,
+            "window": [0.0, HOOK_WINDOW_S],
+            "y_center_frac": float(y_frac),
+            "layout_rendered": True,
+            "accent_index": hook_style.get("accent_index"),
+            "text_size": int(hook_style.get("text_size", 170)),
+            "slide": None,
+            "variant": "stage",
+        },
+        "caption_rect": layout.get("caption_rect"),
+        "layout_spans": draft.get("layout_spans"),
+        "hook_slide_px_s": 0.0,
+        "inputs_hash": None,
+        "backfilled": True,
+    }
+
+
+def load_geometry_bundles(evidence_dir: Path | None,
+                          receipt: dict[str, Any],
+                          run_summary: dict[str, Any]
+                          ) -> tuple[dict[int, dict], list[str]]:
+    """All per-draft geometry bundles for a receipt.
+
+    A bundle FILE wins when present; each entry's inputs_hash is
+    verified against its receipt draft before it is trusted (a
+    mismatch is reported and the entry dropped, never used).
+    Without a file, draft 1's bundle is backfilled from the
+    receipt's recorded declarations when they exist.
+    """
+    notes: list[str] = []
+    if evidence_dir is not None:
+        raw = gb.read_bundle_file(evidence_dir)
+        if raw:
+            drafts = receipt.get("drafts") or []
+            trusted: dict[int, dict] = {}
+            for idx, bundle in raw.items():
+                draft = (drafts[idx - 1]
+                         if 0 < idx <= len(drafts) else None)
+                recorded = (draft.get("inputs_sha256")
+                            if draft else None)
+                if draft is not None and gb.check_inputs_hash(
+                        bundle, recorded):
+                    trusted[idx] = bundle
+                else:
+                    notes.append(
+                        f"draft {idx}: geometry bundle inputs_hash "
+                        "does not match the receipt's recorded "
+                        "input hashes — bundle not trusted")
+            if trusted:
+                notes.append("geometry bundle: pipeline record "
+                             "(inputs_hash verified)")
+                return trusted, notes
+    backfilled = _backfill_draft_bundle(receipt, run_summary)
+    if backfilled is not None:
+        notes.append("geometry bundle: backfilled from the "
+                     "receipt's recorded declarations (no bundle "
+                     "file in the evidence directory)")
+        return {1: backfilled}, notes
+    return {}, notes
+
+
+def resolve_draft_bundle(bundles: dict[int, dict], draft_index: int,
+                         repair_menu: str | None
+                         ) -> dict[str, Any] | None:
+    """The bundle governing one draft.
+
+    A draft-2 entry recorded against draft 1's base recipe is
+    merged over it (its own hook / caption rect / layout spans,
+    draft 1's alpha transforms plus the repair replay). An
+    audio-only repair (NORMALIZE_LOUDNESS) has no entry of its
+    own by design: draft 1's bundle governs draft 2 unchanged.
+    """
+    entry = bundles.get(draft_index)
+    if entry is not None:
+        recipe = entry.get("alpha_recipe") or {}
+        base_idx = recipe.get("base_draft")
+        if base_idx is not None and base_idx in bundles:
+            merged = dict(bundles[base_idx])
+            merged.update(entry)
+            merged_recipe = dict(
+                bundles[base_idx].get("alpha_recipe") or {})
+            merged_recipe["repair"] = recipe.get("repair")
+            merged["alpha_recipe"] = merged_recipe
+            return merged
+        return entry
+    if draft_index > 1 and repair_menu in (None,
+                                          "NORMALIZE_LOUDNESS"):
+        return bundles.get(1)
+    return None
+
+
 def rebuild_graphics(draft: dict[str, Any],
                      cues: Sequence[CaptionCue]) -> list[GraphicSpec] | None:
     """Rebuild GraphicSpecs from the receipt's graphics section.
@@ -608,6 +997,7 @@ class Reconstruction:
         self.inputs: VerifyInputs | None = None
         self.unreproducible: dict[str, str] = {}  # check id -> reason
         self.notes: list[str] = []
+        self.bundle_used: bool = False
 
 
 def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
@@ -630,10 +1020,39 @@ def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
     canvas = artifact_canvas(artifact)
     duration = artifact_duration(artifact)
 
+    # ---- geometry bundle ------------------------------------------
+    bundles, bundle_notes = load_geometry_bundles(
+        evidence_dir, receipt, run_summary)
+    out.notes.extend(bundle_notes)
+    bundle = resolve_draft_bundle(
+        bundles, int(draft.get("draft", 1)), repair_menu)
+    if bundle is not None:
+        out.bundle_used = True
+        out.notes.append(
+            "geometry bundle governs this draft's reconstruction")
+
     # ---- hook text + layout -------------------------------------
     hook_text = recover_hook_text(draft)
     hook = None
-    if hook_text is not None:
+    if bundle is not None:
+        try:
+            recorded = gb.hook_from_dict(bundle["hook"])
+            hook = HookSpec(
+                recorded.text,
+                (recorded.window[0],
+                 min(recorded.window[1], duration)),
+                recorded.y_center_frac,
+                layout_rendered=recorded.layout_rendered,
+                slide=recorded.slide, variant=recorded.variant,
+                accent_index=recorded.accent_index,
+                text_size=recorded.text_size)
+            hook_text = hook.text
+        except (KeyError, TypeError, ValueError) as exc:
+            out.notes.append(
+                f"geometry bundle hook unreadable: {exc}")
+            bundle = None
+            out.bundle_used = False
+    if hook is None and hook_text is not None:
         y_frac = None
         layout = run_summary.get("layout", {})
         if layout.get("hook_y_frac") is not None:
@@ -650,7 +1069,7 @@ def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
         else:
             hook = HookSpec(hook_text, (0.0, min(HOOK_WINDOW_S, duration)),
                             y_frac, layout_rendered=True)
-    else:
+    elif hook is None:
         for cid in ("F1", "F2", "F3", "F6"):
             out.unreproducible.setdefault(
                 cid, "hook text is not recoverable from this receipt "
@@ -691,8 +1110,11 @@ def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
             out.unreproducible.setdefault(
                 "F5", "TRIM_SILENCE repair: window.mp4 missing, "
                       "cue retime cannot be replayed")
-    elif repair_menu not in (None, "NORMALIZE_LOUDNESS", "DROP_GRAPHICS"):
+    elif bundle is None and repair_menu not in (
+            None, "NORMALIZE_LOUDNESS", "DROP_GRAPHICS"):
         # The repair changed inputs the receipt does not record.
+        # (With a geometry bundle, the changed inputs ARE recorded
+        # — the bundle governs, and these legs compare.)
         if repair_menu in ("REPOSITION_HOOK", "REFIT_HOOK_INK",
                            "REGENERATE_HOOK_TEXT"):
             for cid in ("F1", "F2", "F3"):
@@ -714,7 +1136,22 @@ def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
 
     # ---- alphas ---------------------------------------------------
     alphas = None
-    if evidence_dir is not None:
+    if bundle is not None and evidence_dir is not None:
+        try:
+            if removals:
+                # Frame count before trimming, from the SAM parse
+                # (the same keep computation the legacy path uses).
+                sam_path = evidence_dir / "sam-response.json"
+                raw = json.loads(sam_path.read_text(encoding="utf-8"))
+                n_parsed = len(parse_sam_response(raw))
+                keep = keep_indices(n_parsed, fps, removals)
+            alphas = build_bundle_alphas(
+                evidence_dir, bundle, canvas=canvas, fps=fps,
+                keep=keep, alpha_cache=alpha_cache)
+        except BundleError as exc:
+            for cid in exc.checks:
+                out.unreproducible.setdefault(cid, str(exc))
+    elif evidence_dir is not None:
         try:
             # Pad: run-summary's applied value when present, else
             # recompute the construction reframe + depth-effect
@@ -789,7 +1226,7 @@ def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
             out.unreproducible.setdefault(
                 cid, "no evidence directory: SAM masks unavailable")
 
-    if draft.get("speaker_forward"):
+    if bundle is None and draft.get("speaker_forward"):
         for cid in ("F3", "F4"):
             out.unreproducible.setdefault(
                 cid, "speaker-forward emphasis is baked into this "
@@ -850,7 +1287,9 @@ def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
                 cid, "canvas alphas unavailable")
 
     caption_rect = None
-    if alphas is not None and draft_cues:
+    if bundle is not None and bundle.get("caption_rect") is not None:
+        caption_rect = tuple(int(v) for v in bundle["caption_rect"])
+    if caption_rect is None and alphas is not None and draft_cues:
         try:
             caption_rect = plan_captions(
                 [(c.start_s, c.end_s) for c in draft_cues],
@@ -878,12 +1317,16 @@ def reconstruct_draft(receipt: dict[str, Any], draft: dict[str, Any],
         audio=audio, hook=hook, cues=draft_cues,
         caption_rect=caption_rect,
         sam_response_path=sam_file,
-        hook_slide_px_s=float(f7_recorded.get("hook_slide_px_s", 0.0)),
+        hook_slide_px_s=float(
+            bundle.get("hook_slide_px_s", 0.0) if bundle is not None
+            else f7_recorded.get("hook_slide_px_s", 0.0)),
         canvas=canvas, graphics=graphics,
         speech_audio=speech_audio,
         sfx=draft.get("sfx"),
         backdrops=backdrops,
-        speaker_forward=draft.get("speaker_forward"))
+        speaker_forward=draft.get("speaker_forward"),
+        layout_spans=(bundle.get("layout_spans")
+                      if bundle is not None else None))
     return out
 
 
@@ -992,12 +1435,20 @@ def verify_chain(receipt: dict[str, Any],
                     "detail": f"repair targets {target} but the "
                               "final draft still fails it",
                 })
-        if final_verdict != "PASSED_AFTER_REPAIR":
+        # An executed repair does NOT guarantee a pass: the
+        # pipeline's own derivation (rescue_loop.rescue) sets the
+        # final verdict to FAIL when draft 2 still fails any
+        # check. The structural demand is therefore consistency
+        # with the verdicts an executed repair can produce — the
+        # target rules above do the integrity work (the repair
+        # must have fixed the check it claimed to target).
+        if final_verdict not in ("PASSED_AFTER_REPAIR", "FAIL"):
             findings.append({
                 "kind": "structure", "status": "FAIL",
                 "detail": "repair executed but final verdict is "
-                          f"{final_verdict!r}, not "
-                          "PASSED_AFTER_REPAIR",
+                          f"{final_verdict!r}, not a verdict an "
+                          "executed repair can produce "
+                          "(PASSED_AFTER_REPAIR or FAIL)",
             })
     elif status == "not_needed":
         if final_verdict != "PASSED_FIRST_DRAFT":
@@ -1062,12 +1513,16 @@ def _values_match(recorded: Any, recomputed: Any, tol: float | None) -> bool:
 
 def _skip_fields(check_id: str, draft: dict[str, Any],
                  inputs: VerifyInputs | None,
-                 repair_menu: str | None) -> set[str]:
+                 repair_menu: str | None,
+                 bundle_used: bool = False) -> set[str]:
     """Measured fields that cannot be honestly compared for this draft.
 
     Derived from the rebuilt inputs' state, not from reasons:
     a field is skipped only when its measurement input is absent
-    or was changed by a repair the receipt does not record.
+    or was changed by a repair the receipt does not record. With
+    a geometry bundle the repair's changed inputs ARE recorded
+    (and were rebuilt from the record), so the repair-based and
+    speaker-forward skips do not apply.
     """
     skip: set[str] = set()
     if inputs is None:
@@ -1121,13 +1576,14 @@ def _skip_fields(check_id: str, draft: dict[str, Any],
             skip |= {"*"}
         if draft.get("backdrops"):
             skip |= {"backdrops"}
-    if draft.get("speaker_forward"):
+    if not bundle_used and draft.get("speaker_forward"):
         if check_id == "F3":
             skip |= {"face_centroid_median",
                      "face_centroid_in_central_band"}
         if check_id == "F4":
             skip |= {"*"}
-    if repair_menu in ("REPOSITION_HOOK", "REFIT_HOOK_INK"):
+    if not bundle_used and repair_menu in (
+            "REPOSITION_HOOK", "REFIT_HOOK_INK"):
         if check_id == "F1":
             skip |= {"hook_present_at_frame_0", "hook_present_by_1s",
                      "hook_opacity"}
@@ -1138,12 +1594,13 @@ def _skip_fields(check_id: str, draft: dict[str, Any],
             skip |= {"hook_px_outside_central_band"}
         if check_id == "F8":
             skip |= {"hook_glyph_overlap_px"}
-    if repair_menu == "REGENERATE_HOOK_TEXT":
+    if not bundle_used and repair_menu == "REGENERATE_HOOK_TEXT":
         if check_id in ("F1", "F2", "F3", "F6"):
             skip |= {"*"}
         if check_id == "F8":
             skip |= {"hook_glyph_overlap_px"}
-    if repair_menu in ("RESCALE_SPEAKER", "REFRAME_SPEAKER"):
+    if not bundle_used and repair_menu in (
+            "RESCALE_SPEAKER", "REFRAME_SPEAKER"):
         if check_id == "F3":
             skip |= {"face_centroid_median",
                      "face_centroid_in_central_band"}
@@ -1152,7 +1609,7 @@ def _skip_fields(check_id: str, draft: dict[str, Any],
         if check_id == "F7":
             skip |= {"speaker_scale_change_0_1p5s",
                      "mean_mask_iou_0_3s"}
-    if repair_menu == "ENGAGE_HOOK_SLIDE":
+    if not bundle_used and repair_menu == "ENGAGE_HOOK_SLIDE":
         if check_id == "F2":
             skip |= {"glyph_occlusion_mean", "glyph_occlusion_max",
                      "glyph_occlusion_alpha_weighted_mean"}
@@ -1268,7 +1725,8 @@ def _compare_f8_graphics(recorded: dict[str, Any],
 def compare_draft(draft: dict[str, Any], recomputed_checks: list[dict],
                   inputs: VerifyInputs | None,
                   repair_menu: str | None,
-                  unreproducible: dict[str, str]) -> dict[str, Any]:
+                  unreproducible: dict[str, str],
+                  bundle_used: bool = False) -> dict[str, Any]:
     """Compare one draft's recorded checks against a fresh verify()."""
     new_by_id = {c["id"]: c for c in recomputed_checks}
     results: list[dict[str, Any]] = []
@@ -1276,7 +1734,19 @@ def compare_draft(draft: dict[str, Any], recomputed_checks: list[dict],
     for recorded_check in draft.get("checks", []):
         cid = recorded_check["id"]
         rec_measured = recorded_check.get("measured", {})
-        skip = _skip_fields(cid, draft, inputs, repair_menu)
+        if cid == "F8" and not draft.get("graphics") \
+                and not draft.get("backdrops"):
+            # No graphics and no backdrops on this draft: F8 has
+            # nothing to certify. NOT-APPLICABLE (excluded from
+            # the findings), never NOT-REPRODUCIBLE.
+            results.append({
+                "check": cid, "status": "NOT-APPLICABLE",
+                "reason": "draft carries no graphics and no "
+                          "backdrops; F8 has nothing to certify",
+                "fields": []})
+            continue
+        skip = _skip_fields(cid, draft, inputs, repair_menu,
+                            bundle_used=bundle_used)
         if "*" in skip:
             results.append({
                 "check": cid, "status": "NOT-REPRODUCIBLE",
@@ -1490,7 +1960,8 @@ def reverify(receipt_path: str | Path, *,
         fresh = verify(rec.inputs, wonder=None, draft=i)
         fresh_checks = [c.to_dict() for c in fresh.checks]
         comp = compare_draft(draft, fresh_checks, rec.inputs, menu,
-                             rec.unreproducible)
+                             rec.unreproducible,
+                             bundle_used=rec.bundle_used)
         status = "MATCH"
         if any(c["status"] == "MISMATCH" for c in comp["checks"]):
             status = "MISMATCH"

@@ -131,6 +131,25 @@ class SamClient:
         self.ledger = ledger
         self._transport = transport or _urllib_transport
 
+    def _post(self, payload: dict) -> tuple[int, dict]:
+        try:
+            return self._transport(
+                "POST",
+                f"{API_BASE}/responses",
+                {
+                    "Authorization": f"Bearer {self._key()}",
+                    "Content-Type": "application/json",
+                },
+                json.dumps(payload).encode("utf-8"),
+            )
+        except SamClientError as exc:
+            # The urllib transport raises on HTTP errors instead of
+            # returning the status; normalise a 413 so the caller's
+            # store=false retry can see it.
+            if "413" in str(exc) and "payload_too_large" in str(exc):
+                return 413, {"error": str(exc)}
+            raise
+
     def _key(self) -> str:
         if self._api_key_provider is not None:
             return self._api_key_provider()
@@ -191,15 +210,13 @@ class SamClient:
                 }
             ],
         }
-        status, raw = self._transport(
-            "POST",
-            f"{API_BASE}/responses",
-            {
-                "Authorization": f"Bearer {self._key()}",
-                "Content-Type": "application/json",
-            },
-            json.dumps(payload).encode("utf-8"),
-        )
+        status, raw = self._post(payload)
+        if status == 413 and "payload_too_large" in json.dumps(raw):
+            # The API could not persist the oversized inline request
+            # under the default store=true; its own error prescribes
+            # retrying with store=false. One retry, same payload.
+            payload["store"] = False
+            status, raw = self._post(payload)
         if status != 200:
             raise SamClientError(f"SAM API returned HTTP {status}: {raw}")
 

@@ -45,6 +45,13 @@ provider spend; this is signal processing on masks SAM produced.
 Operates on 2D float arrays; masks come in as bool/float in [0, 1]
 and leave as float alpha in [0, 1].
 
+Fix round 4 adds ``refine_matte_banded``: the same guided finish
+confined to the matte's edge band (partial-alpha pixels,
+dilated), plus an optional support-erosion overshoot trim -
+the global pass could redistribute alpha onto background
+structure near the silhouette; the banded pass leaves the
+solid interior and the far exterior exactly as decoded.
+
 Written fresh in-repo on 2026-10-28.
 """
 
@@ -99,6 +106,42 @@ def largest_connected_component(mask: np.ndarray) -> np.ndarray:
     return labels == largest
 
 
+def fill_mask_holes(mask: np.ndarray) -> np.ndarray:
+    """Fill interior holes in a bool mask.
+
+    SAM rasters occasionally punch a hole in the silhouette -
+    a dark garment region or a specular patch the model reads
+    as background for a frame or two. A hole is background-
+    labelled area fully enclosed by the silhouette; the
+    speaker's body has no such enclosed background, so filling
+    is safe by construction and removes a class of one-frame
+    interior flicker the edge machinery cannot see (it lives
+    away from the edge band). scipy.ndimage classical CV.
+    """
+    m = np.asarray(mask, dtype=bool)
+    if m.ndim != 2:
+        raise ValueError(f"mask must be 2D, got shape {m.shape}")
+    if not m.any():
+        return m.copy()
+    from scipy import ndimage
+
+    return ndimage.binary_fill_holes(m)
+
+
+def cleanup_speaker_mask(mask: np.ndarray) -> np.ndarray:
+    """Full per-frame mask cleanup (fix round 6): largest
+    connected component, then hole fill.
+
+    The component pass (round 2) drops detached islands; the
+    fill pass closes interior holes. Order matters: filling
+    first could bridge an island to the body through a hole
+    rim and marry it; component-first cannot resurrect an
+    island, because the fill only adds pixels enclosed by the
+    surviving component.
+    """
+    return fill_mask_holes(largest_connected_component(mask))
+
+
 def guided_filter(
     guide: np.ndarray,
     src: np.ndarray,
@@ -140,6 +183,104 @@ def _erode(alpha: np.ndarray, px: int) -> np.ndarray:
             ]
         )
     return out
+
+
+EDGE_BAND_LO = 0.02
+EDGE_BAND_HI = 0.98
+EDGE_BAND_DILATE_PX = 3
+
+
+def edge_band(
+    alpha: np.ndarray,
+    *,
+    lo: float = EDGE_BAND_LO,
+    hi: float = EDGE_BAND_HI,
+    dilate_px: int = EDGE_BAND_DILATE_PX,
+) -> np.ndarray:
+    """Bool mask of a matte's edge band.
+
+    The band is the partial-alpha region (``lo < alpha < hi``)
+    dilated by ``dilate_px``: the only territory a refinement
+    may move. Solid interior (alpha >= hi) and clean exterior
+    (alpha <= lo) are identity there by definition - a filter
+    that runs globally can still shift both (the guided
+    filter's local means reach across the edge), which is how
+    faint alpha appears on background structure far from the
+    silhouette.
+    """
+    a = np.asarray(alpha, dtype=np.float64)
+    partial = (a > lo) & (a < hi)
+    if dilate_px > 0 and bool(partial.any()):
+        from scipy import ndimage
+
+        return ndimage.binary_dilation(partial,
+                                       iterations=int(dilate_px))
+    return partial
+
+
+def _erode_support(alpha: np.ndarray, px: int) -> np.ndarray:
+    """The alpha's support (alpha > EDGE_BAND_LO) eroded by px.
+
+    Binary erosion of WHERE any alpha lives - the overshoot
+    trim: SAM's raster and the temporal EMA both leave a faint
+    skirt of partial alpha just outside the true silhouette
+    (the hair smear); removing the support's outermost ring
+    removes the skirt's foothold before refinement.
+    """
+    support = (np.asarray(alpha, dtype=np.float64)
+               > EDGE_BAND_LO).astype(np.float64)
+    if px > 0:
+        support = _erode(support, px)
+    return support > 0.5
+
+
+def refine_matte_banded(
+    alpha: np.ndarray,
+    guide: np.ndarray,
+    *,
+    pre_erode_px: int = 0,
+    choke_px: int = DEFAULT_CHOKE_PX,
+    feather_r: int = DEFAULT_FEATHER_R,
+    gf_radius: int = DEFAULT_GF_RADIUS,
+    gf_eps: float = DEFAULT_GF_EPS,
+) -> np.ndarray:
+    """Banded matte finish (fix round 4): refine_matte's steps,
+    confined to the edge band.
+
+    Kamlesh's QA (2026-11-02): the cutout edge is not smooth -
+    distortions and slight background slivers on either side of
+    the silhouette, worst around hair and when the head turns.
+    The global guided filter cannot create alpha from nothing,
+    but its local statistics reach several px past the edge and
+    the choke/feather then redistribute what it made; confining
+    the whole finish to the edge band keeps the interior solid
+    and the far exterior exactly zero, so any remaining edge
+    error is the mask's own, at the edge, where the temporal
+    band blend (temporal_smooth) can steady it.
+
+    Steps: optional overshoot trim (support erosion by
+    ``pre_erode_px`` - evaluated on the banked fixtures, see
+    mask_decode.MATTE_PRE_ERODE_PX for the verdict), guided
+    filter against the source frame, choke, feather - then the
+    band composite: finished values inside the band, the
+    (trimmed) input everywhere else.
+    """
+    a = np.clip(np.asarray(alpha, dtype=np.float64), 0.0, 1.0)
+    if a.ndim != 2:
+        raise ValueError(f"alpha must be 2D, got shape {a.shape}")
+    if pre_erode_px > 0:
+        a = a * _erode_support(a, pre_erode_px)
+    band = edge_band(a)
+    if not bool(band.any()):
+        return a
+    finished = guided_filter(guide, a, radius=gf_radius, eps=gf_eps)
+    if choke_px > 0:
+        finished = _erode(finished, choke_px)
+    if feather_r > 0:
+        finished = _box_blur(finished, feather_r)
+        finished = _box_blur(finished, feather_r)
+    out = np.where(band, finished, a)
+    return np.clip(out, 0.0, 1.0)
 
 
 def refine_matte(

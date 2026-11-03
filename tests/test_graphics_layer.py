@@ -19,12 +19,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from spatial_director.caption_align import CaptionCue  # noqa: E402
 from spatial_director.spark_client import SparkClientError  # noqa: E402
 from spatial_director.graphics_layer import (  # noqa: E402
+    PLANNER_SYSTEM_PROMPT,
     GraphicSpan,
     _find_box,
     _path_legal,
     build_graphics,
+    find_anchor_passage,
+    graphics_coverage,
+    legibility_floor_s,
     parse_planner_reply,
     path_box_at,
+    path_travel_s,
     place_prepared,
     plan_graphics,
     prepare_backdrop,
@@ -32,6 +37,9 @@ from spatial_director.graphics_layer import (  # noqa: E402
     prepare_image,
     render_card_image,
     resolve_heroes,
+    snap_span_to_anchor,
+    snap_spans_to_anchors,
+    span_law_violation,
 )
 
 CANVAS = (1080, 1920)
@@ -322,6 +330,59 @@ class PlannerRetryTests(unittest.TestCase):
         self.assertEqual(outcome.spans, [])
         self.assertIn("planner call failed", outcome.error)
         self.assertEqual(len(spark.calls), 1)
+
+
+class PlannerMalformedRetryTests(unittest.TestCase):
+    """Fix 5 (2026-11-02): a MALFORMED planner reply (text arrived,
+    JSON did not parse) earns the same single doubled-budget retry
+    as an empty reply. Before the fix it degraded immediately -
+    one truncated completion cost the Short all its graphics."""
+
+    def _cues(self):
+        return [CaptionCue("one million dollars apart per year",
+                           4.0, 7.0)]
+
+    def test_malformed_then_valid_succeeds(self):
+        spark = BudgetFakeSpark([
+            "{\"graphics\": [{\"start_s\": 4.0, ",  # truncated JSON
+            json.dumps(span_json())])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(len(outcome.spans), 1)
+        self.assertEqual(
+            [c["max_tokens"] for c in spark.calls], [8000, 16000])
+        self.assertTrue(outcome.spark_call["malformed_first_attempt"])
+        self.assertFalse(outcome.spark_call["empty_first_attempt"])
+        self.assertIsNone(outcome.error)
+
+    def test_non_json_text_then_valid_succeeds(self):
+        spark = BudgetFakeSpark([
+            "Here are the graphics you asked for:",
+            json.dumps(span_json())])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(len(outcome.spans), 1)
+        self.assertTrue(outcome.spark_call["malformed_first_attempt"])
+
+    def test_malformed_twice_degrades_with_error_on_record(self):
+        spark = BudgetFakeSpark(["{not json", "{\"graphics\": ["])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(outcome.spans, [])
+        self.assertIsNotNone(outcome.error)
+        self.assertIn("not JSON at every budget", outcome.error)
+        # The parse-level rejection is on the record too.
+        self.assertTrue(any(
+            r["reason"] == "planner reply was not JSON"
+            for r in outcome.rejected))
+        self.assertEqual(len(spark.calls), 2)
+
+    def test_valid_json_all_spans_rejected_is_not_retried(self):
+        # Validation rejections are verdicts, not malformed JSON:
+        # a fresh sample must not be bought to relitigate them.
+        bad = span_json(source_quote="words that were never spoken")
+        spark = BudgetFakeSpark([json.dumps(bad)])
+        outcome = plan_graphics(spark, self._cues(), duration_s=20.0)
+        self.assertEqual(outcome.spans, [])
+        self.assertEqual(len(spark.calls), 1)
+        self.assertFalse(outcome.spark_call["malformed_first_attempt"])
 
 
 # ---------------------------------------------------------------- cards
@@ -918,6 +979,230 @@ class HeroResolutionTests(unittest.TestCase):
         kept, drops = resolve_heroes([fwd], hook_window=(0.0, 6.0))
         self.assertEqual(kept, [])
         self.assertIn("hook window", drops[0]["reason"])
+
+
+# ------------------------------------------------------- span law (S2)
+
+
+class SpanLawTests(unittest.TestCase):
+    """The amended span law (Kamlesh 2026-11-01): 1.0s floor, no
+    fixed ceiling, anchor-bound duration, legibility floor for
+    text cards, one hero at any instant."""
+
+    def parse(self, payload, duration=40.0):
+        return parse_planner_reply(json.dumps(payload), TRANSCRIPT,
+                                   duration_s=duration)
+
+    def test_one_second_image_span_passes(self):
+        spans, rejected = self.parse(span_json(
+            start_s=4.0, end_s=5.0, kind="image", headline="",
+            facts="", prompt="a football stadium tunnel at night",
+            source_quote="the crew on get up"))
+        self.assertEqual(rejected, [])
+        self.assertEqual(len(spans), 1)
+
+    def test_sub_second_span_rejected_at_the_floor(self):
+        spans, rejected = self.parse(span_json(
+            start_s=4.0, end_s=4.8, kind="image", headline="",
+            facts="", prompt="a football stadium tunnel at night",
+            source_quote="the crew on get up"))
+        self.assertEqual(spans, [])
+        self.assertIn("floor", rejected[0]["reason"])
+
+    def test_no_fixed_ceiling_at_parse(self):
+        # A 12s span is legal at parse: the ceiling is its anchor
+        # passage, which only the snap knows.
+        spans, rejected = self.parse(span_json(
+            start_s=4.0, end_s=16.0))
+        self.assertEqual(rejected, [])
+        self.assertEqual(len(spans), 1)
+
+    def test_legibility_floor_from_the_cards_own_words(self):
+        span = GraphicSpan(
+            start_s=4.0, end_s=6.0, kind="card",
+            headline="ONE MILLION DOLLARS APART PER YEAR",
+            facts="Cowboys and CeeDee Lamb deal",
+            source_quote="one million dollars apart")
+        # 11 words -> 3.85s floor; a 2.0s dwell flashes unreadably.
+        self.assertAlmostEqual(legibility_floor_s(span), 3.85)
+        self.assertIn("legibility", span_law_violation(span))
+        ok = GraphicSpan(
+            start_s=4.0, end_s=8.5, kind="card",
+            headline=span.headline, facts=span.facts,
+            source_quote=span.source_quote)
+        self.assertIsNone(span_law_violation(ok))
+
+    def test_span_past_anchor_end_plus_tail_rejected(self):
+        span = GraphicSpan(
+            start_s=4.4, end_s=10.0, kind="image",
+            prompt="a football stadium tunnel at night",
+            source_quote="the crew on get up")
+        violation = span_law_violation(span, anchor=(4.5, 7.0))
+        self.assertIn("outlives its anchor passage", violation)
+        inside = GraphicSpan(
+            start_s=4.4, end_s=7.3, kind="image",
+            prompt="a football stadium tunnel at night",
+            source_quote="the crew on get up")
+        self.assertIsNone(
+            span_law_violation(inside, anchor=(4.5, 7.0)))
+
+    def test_each_layout_value_accepted_on_a_card(self):
+        for layout in ("spotlight", "split", "cutaway"):
+            spans, rejected = self.parse(span_json(layout=layout))
+            self.assertEqual(rejected, [], layout)
+            self.assertEqual(spans[0].layout, layout)
+
+    def test_prompt_carries_the_role_and_span_law_guidance(self):
+        self.assertIn('"spotlight"', PLANNER_SYSTEM_PROMPT)
+        self.assertIn('"split"', PLANNER_SYSTEM_PROMPT)
+        self.assertIn('"cutaway"', PLANNER_SYSTEM_PROMPT)
+        self.assertIn("ONE HERO AT ANY INSTANT",
+                      PLANNER_SYSTEM_PROMPT)
+        self.assertIn("scene-setting only", PLANNER_SYSTEM_PROMPT)
+        self.assertIn("may not outlive", PLANNER_SYSTEM_PROMPT)
+
+
+class SnapTests(unittest.TestCase):
+    CUES = [CaptionCue("the cowboys and ceedee lamb are", 3.2, 4.5),
+            CaptionCue("one million dollars apart per year", 4.5, 7.0),
+            CaptionCue("and the crew on get up said so", 7.0, 9.5)]
+
+    def test_anchor_passage_is_the_quotes_cue_run(self):
+        found = find_anchor_passage("one million dollars apart",
+                                    self.CUES)
+        self.assertEqual(found[:2], (4.5, 7.0))
+        multi = find_anchor_passage("lamb are one million",
+                                    self.CUES)
+        self.assertEqual(multi[:2], (3.2, 7.0))
+
+    def test_snap_moves_span_onto_phrase_boundaries(self):
+        span = GraphicSpan(
+            start_s=4.0, end_s=7.0, kind="card",
+            headline="$1M PER YEAR APART",
+            facts="Cowboys - CeeDee Lamb",
+            source_quote="one million dollars apart")
+        snapped, reason = snap_span_to_anchor(
+            span, self.CUES, duration_s=20.0)
+        self.assertIsNone(reason)
+        self.assertEqual((snapped.start_s, snapped.end_s),
+                         (4.4, 7.3))
+        self.assertEqual(snapped.anchor_quality, "high")
+        self.assertNotIn("anchor_quality", snapped.to_dict())
+
+    def test_garbled_anchor_flags_low_quality(self):
+        cues = [CaptionCue("it smelled like like hamburger to me",
+                           2.0, 4.5)]
+        span = GraphicSpan(
+            start_s=2.2, end_s=4.2, kind="image",
+            prompt="a hamburger on a plate in a space station",
+            source_quote="smelled like like hamburger")
+        snapped, reason = snap_span_to_anchor(
+            span, cues, duration_s=20.0)
+        self.assertIsNone(reason)
+        self.assertEqual(snapped.anchor_quality, "low")
+        self.assertEqual(snapped.to_dict()["anchor_quality"],
+                         "low")
+
+    def test_unfindable_quote_falls_back_and_flags_low(self):
+        span = GraphicSpan(
+            start_s=12.0, end_s=15.0, kind="image",
+            prompt="a football stadium tunnel at night",
+            source_quote="words the cues never say")
+        snapped, reason = snap_span_to_anchor(
+            span, self.CUES, duration_s=20.0)
+        self.assertIsNone(reason)
+        self.assertEqual(snapped.anchor_quality, "low")
+        self.assertEqual((snapped.start_s, snapped.end_s),
+                         (11.9, 15.3))
+
+    def test_one_second_image_span_survives_the_snap(self):
+        cues = [CaptionCue("the crew on get up", 7.0, 7.6)]
+        span = GraphicSpan(
+            start_s=7.1, end_s=7.5, kind="image",
+            prompt="a football stadium tunnel at night",
+            source_quote="the crew on get up")
+        snapped, reason = snap_span_to_anchor(
+            span, cues, duration_s=20.0)
+        self.assertIsNone(reason)
+        self.assertEqual((snapped.start_s, snapped.end_s),
+                         (6.9, 7.9))
+
+    def test_card_below_legibility_floor_rejected_at_snap(self):
+        cues = [CaptionCue("one million dollars apart", 4.5, 5.8)]
+        span = GraphicSpan(
+            start_s=4.5, end_s=5.8, kind="card",
+            headline="ONE MILLION DOLLARS APART PER YEAR",
+            facts="Cowboys and CeeDee Lamb deal",
+            source_quote="one million dollars apart")
+        snapped, reason = snap_span_to_anchor(
+            span, cues, duration_s=20.0)
+        self.assertIsNone(snapped)
+        self.assertIn("legibility", reason)
+
+    def test_plan_graphics_snaps_and_records_the_call(self):
+        spark = FakeSpark([json.dumps(span_json(
+            layout="spotlight"))])
+        outcome = plan_graphics(spark, self.CUES, duration_s=20.0)
+        self.assertEqual(len(outcome.spans), 1)
+        span = outcome.spans[0]
+        self.assertEqual(span.layout, "spotlight")
+        self.assertEqual((span.start_s, span.end_s), (4.4, 7.3))
+        self.assertEqual(span.anchor_quality, "high")
+
+
+class HeroLayoutTests(unittest.TestCase):
+    def _layout_span(self, layout, start, end):
+        return GraphicSpan(
+            start_s=start, end_s=end, kind="card", headline="H",
+            source_quote="q", layout=layout)
+
+    def test_layout_span_overlapping_a_stage_card_drops_later(self):
+        spot = self._layout_span("spotlight", 2.0, 5.0)
+        card = _span("card", 4.0, 7.0)
+        kept, drops = resolve_heroes([spot, card])
+        self.assertEqual(kept, [spot])
+        self.assertEqual(len(drops), 1)
+
+    def test_two_layout_spans_may_not_overlap(self):
+        a = self._layout_span("spotlight", 2.0, 5.0)
+        b = self._layout_span("split", 4.0, 7.0)
+        kept, drops = resolve_heroes([a, b])
+        self.assertEqual(kept, [a])
+        self.assertEqual(len(drops), 1)
+
+    def test_back_to_back_layout_spans_chain_freely(self):
+        a = self._layout_span("spotlight", 2.0, 5.0)
+        b = self._layout_span("cutaway", 5.0, 7.0)
+        kept, drops = resolve_heroes([a, b])
+        self.assertEqual(kept, [a, b])
+        self.assertEqual(drops, [])
+
+
+class CoverageAndTravelTests(unittest.TestCase):
+    def test_coverage_is_the_union_of_spans(self):
+        from spatial_director.graphics_layer import GraphicSpec
+        layer = np.zeros((1920, 1080, 4), dtype=np.uint8)
+        specs = [
+            GraphicSpec(kind="card", start_s=2.0, end_s=5.0,
+                        box=(0, 0, 10, 10), layer_rgba=layer),
+            GraphicSpec(kind="card", start_s=4.0, end_s=6.0,
+                        box=(0, 0, 10, 10), layer_rgba=layer),
+            GraphicSpec(kind="card", start_s=8.0, end_s=9.0,
+                        box=(0, 0, 10, 10), layer_rgba=layer),
+        ]
+        cov = graphics_coverage(specs, 20.0)
+        self.assertEqual(cov["graphics_s"], 5.0)
+        self.assertEqual(cov["coverage_frac"], 0.25)
+
+    def test_travel_is_capped_at_a_quarter_of_the_span(self):
+        self.assertEqual(path_travel_s(10.0), 0.9)
+        self.assertEqual(path_travel_s(2.0), 0.5)
+        self.assertEqual(path_travel_s(1.0), 0.25)
+        box = (100, 800, 570, 940)
+        self.assertEqual(
+            path_box_at(box, "glide_in", 4.5, 4.0, CANVAS,
+                        travel_s=0.5),
+            box)
 
 
 class BackdropBuildTests(unittest.TestCase):

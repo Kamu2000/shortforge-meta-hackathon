@@ -1,4 +1,4 @@
-# ECONOMICS — Verifiable Spatial Director
+# ECONOMICS — AI Spatial Director
 
 Staged for the submission at the Nov 2 repo gate (2026-11-01). Every
 figure below is traced to a named receipt, a run-summary, or a ledger

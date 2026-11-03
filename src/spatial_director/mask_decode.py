@@ -54,8 +54,26 @@ from typing import Any, Iterable
 import numpy as np
 from meta_sam_parser import SegmentationMask, decode_mask_to_raster
 
-from .matte_finish import largest_connected_component, refine_matte
-from .temporal_smooth import ema_smooth
+from .matte_finish import (
+    cleanup_speaker_mask,
+    refine_matte_banded,
+)
+from .temporal_smooth import (
+    edge_band_temporal_blend_sequence,
+    ema_smooth,
+    smooth_mask_sequence,
+)
+
+# Fix round 4 overshoot-trim verdict (banked-fixture evaluation,
+# 2026-11-02 - numbers in the fix-round-4 BUILDLOG entry): the
+# 1px support erosion is NOT KEPT. It did cut the residual
+# skirt further (Holmes worst frame 641 -> 485 alpha mass,
+# McArthur 762 -> 708), but the 200% hair crops show it also
+# shaves the fine curl/wisp texture at the boundary - the
+# banded finish alone already removes ~80% of the skirt, and
+# the trim's margin is not worth hair. The parameter stays in
+# refine_matte_banded for the record; production runs at 0.
+MATTE_PRE_ERODE_PX = 0
 
 # <Nf> frame markers split the output text into per-frame chunks.
 _FRAME_RE = re.compile(r"<(\d+)f>")
@@ -342,9 +360,25 @@ def finished_alpha(
     copies, the EMA output and the refined output as four coexisting
     float64 lists: at 660 frames of 640x360 that peaked at ~4.1 GB
     and the kernel OOM-killed two production runs mid-render. The
-    math is untouched - the EMA is causal, refinement is per-frame,
-    and both consume the identical values in the identical order, so
-    the output is bit-identical to the materialised version.
+    finish up to the refinement is causal throughout - the EMA
+    and the per-frame banded refinement consume the identical
+    values in the identical order - so that part of the output
+    is bit-identical to a materialised version of the same
+    pass. (The finish MATH changed in fix round 4: banded
+    refinement + motion-scaled edge blend, replacing the global
+    refine_matte call; fix round 5 moved the edge blend into a
+    sequence-level gate with a smoothed motion signal - see
+    matte_finish / temporal_smooth.)
+
+    Fix round 6 changes the math again, upstream of all of
+    that: per-frame cleanup now also fills interior holes, and
+    a centred temporal smoother (radius 2, IoU-guarded,
+    edge-replicated) steadies the raw masks before the EMA -
+    the one stage that is deliberately not causal, like the
+    round-5 sequence blend below. Its streaming window holds
+    only a handful of canvases, so the memory layout above is
+    intact (the EMA still materialises the output list, as
+    before).
     """
     ordered = sorted(frames, key=lambda f: f.index)
     if hasattr(guides, "__len__") and len(guides) != len(ordered):  # type: ignore[arg-type]
@@ -376,21 +410,54 @@ def finished_alpha(
             if canvas is None:
                 canvas = np.zeros(frame_shape, dtype=bool)
             else:
-                # Drop detached islands BEFORE the temporal EMA:
+                # Clean the mask BEFORE any temporal smoothing:
                 # smoothed, a one-frame island would bleed into
-                # neighbouring frames' mattes; unsmoothed it is one
-                # frame's noise. The speaker is one connected mass;
-                # anything not touching it is not the speaker.
-                # (Refinement block, 2026-10-29 - see matte_finish.)
-                canvas = largest_connected_component(canvas)
+                # neighbouring frames' mattes; unsmoothed it is
+                # one frame's noise. The speaker is one connected
+                # mass; anything not touching it is not the
+                # speaker, and a fully enclosed hole is not
+                # background - it is a garment/specular patch SAM
+                # dropped for a frame. (Refinement block,
+                # 2026-10-29; hole fill added fix round 6 - see
+                # matte_finish.cleanup_speaker_mask.)
+                canvas = cleanup_speaker_mask(canvas)
             yield canvas
 
-    alphas = ema_smooth(_canvases())
+    # Fix round 6: the centred mask-sequence smoother runs on
+    # the raw masks BEFORE the causal EMA. Round 5's sweep
+    # proved the finish-side blend family caps at -17.2%
+    # worst-2s flicker because a blend can only scale the
+    # previous frame's edge into the current one; the masks
+    # themselves carry the spikes and boundary crawl, so they
+    # are steadied first (temporal_smooth.smooth_mask_sequence:
+    # triangular window, IoU guard, edge replication), and the
+    # EMA then smooths an already-steady sequence.
+    alphas = ema_smooth(smooth_mask_sequence(_canvases()))
     n_guides = 0
     for i, guide in enumerate(guides):
         n_guides = i + 1
         if i < len(alphas):
-            alphas[i] = refine_matte(alphas[i], guide)
+            # Fix round 4 finish: the guided refinement runs
+            # confined to the edge band (matte_finish.
+            # refine_matte_banded), so the solid interior and
+            # the far exterior stay exactly as decoded - the
+            # head-turn crawl Kamlesh flagged lives in that band.
+            alphas[i] = refine_matte_banded(
+                alphas[i], guide, pre_erode_px=MATTE_PRE_ERODE_PX)
+    # Fix round 5: the temporal edge steadying now runs as a
+    # SEQUENCE pass over the refined alphas (temporal_smooth.
+    # edge_band_temporal_blend_sequence): the blend weight is
+    # gated on the 9-frame-smoothed band-motion series and
+    # moves under a slew limit with a deadband, so it cannot
+    # oscillate at frame rate the way the round-4 pairwise gate
+    # did under continuous low-amplitude motion. The gate's
+    # smoothing window looks a few frames ahead, so this pass
+    # is deliberately not causal - the finish is an offline
+    # render step. The alphas list is already fully
+    # materialised (ema_smooth returns it whole); the pass
+    # blends in place and adds no frame-sized buffers beyond
+    # one frame's working copy.
+    alphas, _blend_stats = edge_band_temporal_blend_sequence(alphas)
     if n_guides != len(ordered):
         raise MaskDecodeError(
             f"guide count {n_guides} != frame count {len(ordered)}; "

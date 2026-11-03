@@ -2,15 +2,26 @@
 
 The Director's signature frame, back to front:
 
-1. **Back** - a treated backdrop. The original treatment (the
-   source frame scaled to cover and blur-36'd) failed the founder's
-   eye: at that radius the speaker's own blurred silhouette sits
-   behind him as a readable ghost person. The shipped default is
-   therefore the TREATED backdrop (heavy blur + darkening +
-   desaturation, so no person-shape survives), with a clean
-   near-black brand gradient as a selectable alternative and the
-   naive scale-blur kept for comparison. See ``background_layer``
-   and the 2026-10-29 BUILDLOG entry for the ghost-test numbers.
+1. **Back** - the canvas backdrop. History: the original
+   treatment (the source frame scaled to cover and blur-36'd)
+   failed the founder's eye: at that radius the speaker's own
+   blurred silhouette sits behind him as a readable ghost person.
+   The heavy-blur TREATED backdrop replaced it; fix round 2
+   (2026-11-02) made the default ``source_minus_speaker``: the
+   source frame with the speaker REMOVED via the SAM mask
+   (diffusion fill from the frame's own surroundings), graded
+   and slowly drifting - the room stays a real, sharp, legible
+   set. The founder's eye rejected that too: the diffusion fill
+   reads as a grey ghost/shadow of the speaker standing in the
+   room. Since fix round 3 (2026-11-02) the shipped default is
+   ``studio_procedural``: a code-rendered studio canvas (brand
+   near-black gradient, two soft brand glows, fine grain,
+   vignette, Ken Burns drift) with a grounding shadow drawn
+   under the placed speaker - no source pixels at all, so no
+   ghost can exist. ``source_minus_speaker`` and treated blur
+   remain selectable; brand gradient and naive scale-blur stay
+   selectable. See ``studio_backdrop`` and
+   ``speaker_removed_backdrop``.
 2. **Graphics plane** (optional, flag-gated, 2026-10-30) - the
    context graphics layer's timed cards/images, sitting on the
    backdrop and under everything else: they are occluded by the
@@ -48,6 +59,7 @@ Written fresh in-repo on 2026-10-29.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
@@ -59,7 +71,9 @@ CANVAS_W = 1080
 CANVAS_H = 1920
 DEFAULT_CANVAS = (CANVAS_W, CANVAS_H)
 DEFAULT_BLUR_RADIUS = 36
-DEFAULT_BACKDROP = "treated"
+BACKDROP_SOURCE_MINUS_SPEAKER = "source_minus_speaker"
+BACKDROP_STUDIO = "studio_procedural"
+DEFAULT_BACKDROP = BACKDROP_STUDIO
 TREATED_BLUR_RADIUS = 90
 TREATED_BRIGHTNESS = 0.55
 TREATED_SATURATION = 0.30
@@ -164,10 +178,17 @@ def make_backdrop(
 ) -> np.ndarray:
     """Dispatch on the backdrop treatment name.
 
-    ``treated`` (default) = heavy blur + grade of the source;
-    ``brand`` = near-black brand gradient (frame ignored);
-    ``naive`` = the original scale + blur (kept for comparison -
-    it is the treatment that ghosted).
+    ``treated`` = heavy blur + grade of the source (the historic
+    default; now the maskless-frame fallback); ``brand`` =
+    near-black brand gradient (frame ignored); ``naive`` = the
+    original scale + blur (kept for comparison - it is the
+    treatment that ghosted). The modes that need more than the
+    frame - ``source_minus_speaker`` (the frame's speaker alpha)
+    and the current default ``studio_procedural`` (a seed, the
+    drift progress and the placed speaker alpha for its
+    grounding shadow) - are served by composite_frame /
+    _canvas_backdrop; asking make_backdrop for them raises
+    rather than silently substituting another treatment.
     """
     if backdrop == "treated":
         return treated_background_layer(frame_rgb, canvas)
@@ -178,10 +199,353 @@ def make_backdrop(
     raise ValueError(f"unknown backdrop treatment: {backdrop!r}")
 
 
+def _paste_placed(
+    fg_canvas: np.ndarray,
+    a_canvas: np.ndarray,
+    fg: Image.Image,
+    a: Image.Image,
+    ox: int,
+    oy: int,
+    alpha_scale: float = 1.0,
+) -> None:
+    """Paste a resized (fg, alpha) pair at (ox, oy), clipped to the
+    canvas. Shared by the legacy fit placement and explicit layout
+    placements so both paths round and clip identically."""
+    cw, ch = a_canvas.shape[1], a_canvas.shape[0]
+    nw, nh = fg.size
+    sx0, sy0 = max(0, -ox), max(0, -oy)
+    dx0, dy0 = max(0, ox), max(0, oy)
+    dx1, dy1 = min(cw, ox + nw), min(ch, oy + nh)
+    if dx1 <= dx0 or dy1 <= dy0:
+        return
+    fg_np = np.asarray(fg)
+    a_np = np.asarray(a).astype(np.float64) / 255.0 * alpha_scale
+    fg_canvas[dy0:dy1, dx0:dx1] = fg_np[sy0:sy0 + (dy1 - dy0),
+                                       sx0:sx0 + (dx1 - dx0)]
+    a_canvas[dy0:dy1, dx0:dx1] = a_np[sy0:sy0 + (dy1 - dy0),
+                                      sx0:sx0 + (dx1 - dx0)]
+
+
+# Canvas backdrop treatment (fix round 2, Fix B revised,
+# 2026-11-02): the DEFAULT canvas backdrop is the window's own
+# source frame with the speaker REMOVED - the SAM mask region is
+# filled by multi-scale diffusion from the frame's own
+# surroundings (plain signal processing, no model), so no
+# silhouette or person edge survives, while everything outside
+# the mask stays SHARP: the room/set remains a real, legible
+# backdrop behind the enlarged cutout. The filled frame is graded
+# (brightness x0.6, saturation x0.55) and drifts with the same Ken
+# Burns window math as the graphics backdrop spans (zoom
+# 1.00 -> 1.12, slow pan). The historic whole-frame blur
+# ("treated") remains only as the per-frame fallback for frames
+# carrying no speaker mask, and the receipt declares the mode
+# honestly ("source_minus_speaker" vs "blur").
+BACKDROP_GRADE_BRIGHTNESS = 0.6
+BACKDROP_GRADE_SATURATION = 0.55
+BACKDROP_FILL = "diffusion"
+BACKDROP_KEN_BURNS_MAX_ZOOM = 1.12
+_BACKDROP_FILL_DOWNSCALE = 6
+_BACKDROP_FILL_ITERATIONS = 300
+
+
+def _diffusion_fill(frame_rgb: np.ndarray,
+                    known: np.ndarray) -> np.ndarray:
+    """Fill the unknown region by smooth diffusion of the known.
+
+    Solved at 1/6 resolution (iterated 4-neighbour averaging with
+    known pixels pinned) and upscaled: the fill is a smooth
+    interpolation of the surroundings BY CONSTRUCTION - it cannot
+    contain a person edge or any high-frequency silhouette.
+    """
+    h, w = known.shape
+    sh = max(8, h // _BACKDROP_FILL_DOWNSCALE)
+    sw = max(8, w // _BACKDROP_FILL_DOWNSCALE)
+    img = Image.fromarray(frame_rgb).resize((sw, sh), Image.BILINEAR)
+    small = np.asarray(img).astype(np.float64)
+    kimg = Image.fromarray(
+        (known * 255).astype(np.uint8)).resize((sw, sh), Image.BILINEAR)
+    k = (np.asarray(kimg).astype(np.float64) / 255.0) >= 0.999
+    if not k.any():
+        fill_mean = small.reshape(-1, 3).mean(axis=0)
+        filled = np.tile(fill_mean, (sh, sw, 1))
+    else:
+        filled = small.copy()
+        mean = small[k].mean(axis=0)
+        filled[~k] = mean
+        for _ in range(_BACKDROP_FILL_ITERATIONS):
+            acc = filled.copy()
+            acc[1:, :] += filled[:-1, :]
+            acc[:-1, :] += filled[1:, :]
+            acc[:, 1:] += filled[:, :-1]
+            acc[:, :-1] += filled[:, 1:]
+            # border handling: divide by the true neighbour count
+            cnt = np.full((sh, sw), 4.0)
+            cnt[0, :] -= 1
+            cnt[-1, :] -= 1
+            cnt[:, 0] -= 1
+            cnt[:, -1] -= 1
+            avg = acc / (cnt[..., None] + 1.0)  # +1: acc seeds itself
+            filled = np.where(k[..., None], small, avg)
+    up = Image.fromarray(
+        np.clip(filled, 0, 255).astype(np.uint8)).resize(
+        (w, h), Image.BILINEAR)
+    return np.asarray(up).astype(np.float64)
+
+
+def speaker_removed_backdrop(
+    frame_rgb: np.ndarray,
+    alpha: np.ndarray,
+    canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    progress: float = 0.0,
+) -> np.ndarray:
+    """The source frame minus the speaker, graded, drifting.
+
+    ``alpha`` is the frame's finished SAM alpha (source space).
+    The mask (> 0.5, dilated past the matte edge) is diffusion-
+    filled from the frame's own surroundings; outside the mask
+    the frame stays sharp. Then grade + Ken Burns cover window.
+    Returns a float64 canvas-sized RGB array like make_backdrop.
+    """
+    from PIL import ImageEnhance, ImageFilter
+
+    h, w = alpha.shape
+    mask = alpha > 0.5
+    src = frame_rgb.astype(np.float64)
+    if mask.any():
+        dilate = max(2, int(round(0.008 * max(w, h))))
+        m_img = Image.fromarray((mask * 255).astype(np.uint8)).filter(
+            ImageFilter.MaxFilter(2 * dilate + 1))
+        m = np.asarray(m_img).astype(np.float64) / 255.0 > 0.0
+        fill = _diffusion_fill(frame_rgb, ~m)
+        feather = np.asarray(
+            Image.fromarray((m * 255).astype(np.uint8)).filter(
+                ImageFilter.GaussianBlur(2))).astype(np.float64) / 255.0
+        out = src * (1.0 - feather[..., None]) \
+            + fill * feather[..., None]
+    else:
+        out = src
+    img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+    img = ImageEnhance.Brightness(img).enhance(BACKDROP_GRADE_BRIGHTNESS)
+    img = ImageEnhance.Color(img).enhance(BACKDROP_GRADE_SATURATION)
+    # Cover-fit with drift slack, then the Ken Burns window (the
+    # same window math as graphics_layer.prepare_backdrop).
+    cw, ch = canvas
+    slack = BACKDROP_KEN_BURNS_MAX_ZOOM
+    scale = max(cw * slack / img.width, ch * slack / img.height)
+    base = img.resize(
+        (max(cw, round(img.width * scale)),
+         max(ch, round(img.height * scale))), Image.BILINEAR)
+    zoom = 1.0 + (BACKDROP_KEN_BURNS_MAX_ZOOM - 1.0) * progress
+    zw = int(base.width / zoom)
+    zh = int(base.height / zoom)
+    pan_x = 0.20 + (0.65 - 0.20) * progress
+    pan_y = 0.20 + (0.60 - 0.20) * progress
+    x0 = int((base.width - zw) * pan_x)
+    y0 = int((base.height - zh) * pan_y)
+    win = base.crop((x0, y0, x0 + zw, y0 + zh)).resize(
+        (cw, ch), Image.BILINEAR)
+    return np.asarray(win).astype(np.float64)
+
+
+# Studio procedural backdrop (fix round 3, 2026-11-02): the
+# founder rejected the minus-speaker diffusion fill on sight -
+# the filled region reads as a grey ghost/shadow of the speaker
+# standing in the original room. His direction: solve it, and
+# if the source background cannot be made clean, REPLACE the
+# background entirely. The new default therefore uses NO source
+# pixels at all: a code-rendered studio canvas - vertical
+# gradient in the brand near-blacks, two soft radial glows
+# (Forge Blue upper-left, Viral Pink lower-right, low alpha so
+# it reads as a lit studio, not wallpaper), fine deterministic
+# grain, a gentle vignette - drifting with the same Ken Burns
+# window math as the other canvas backdrops. A soft elliptical
+# grounding shadow is drawn on the backdrop plane under the
+# PLACED speaker (derived per frame from the placed mask's
+# bottom rows), so the cutout sits IN the scene instead of
+# floating over it. The seed is derived deterministically from
+# the run/window identity (studio_seed) and declared on the
+# receipt; same seed -> byte-identical canvas. Zero model
+# calls, plain numpy/PIL.
+STUDIO_TOP = (16, 16, 20)        # #101014
+STUDIO_BOTTOM = (11, 11, 12)     # #0B0B0C - the brand near-black
+STUDIO_GLOW_BLUE = (46, 124, 246)    # Forge Blue #2E7CF6
+STUDIO_GLOW_PINK = (255, 61, 126)    # Viral Pink #FF3D7E
+STUDIO_GLOW_BLUE_PEAK = 0.17
+STUDIO_GLOW_PINK_PEAK = 0.13
+STUDIO_GRAIN_SIGMA = 2.0
+STUDIO_VIGNETTE_STRENGTH = 0.26
+STUDIO_SHADOW_STRENGTH = 0.42
+STUDIO_DEFAULT_SEED = 0
+_STUDIO_BASE_CACHE: dict[tuple[tuple[int, int], int], np.ndarray] = {}
+
+
+def studio_seed(identity: str) -> int:
+    """The deterministic backdrop seed for a run/window identity.
+
+    SHA-256 of the identity string, first 8 bytes as an int -
+    stable across processes and machines, so the receipt's
+    declared seed fully determines the rendered canvas.
+    """
+    digest = hashlib.sha256(identity.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
+def _studio_base(canvas: tuple[int, int], seed: int) -> np.ndarray:
+    """The oversize studio canvas (Ken Burns slack included).
+
+    Built once per (canvas, seed) and cached: gradient + glows
+    + vignette + seeded grain at BACKDROP_KEN_BURNS_MAX_ZOOM
+    scale, so the drift window can pan/zoom inside it exactly
+    like the source-derived backdrops.
+    """
+    key = (canvas, seed)
+    base = _STUDIO_BASE_CACHE.get(key)
+    if base is not None:
+        return base
+    cw, ch = canvas
+    slack = BACKDROP_KEN_BURNS_MAX_ZOOM
+    bw = max(cw, round(cw * slack))
+    bh = max(ch, round(ch * slack))
+    top = np.array(STUDIO_TOP, dtype=np.float64)
+    bottom = np.array(STUDIO_BOTTOM, dtype=np.float64)
+    t = np.linspace(0.0, 1.0, bh, dtype=np.float64)[:, None, None]
+    img = np.repeat(top[None, None, :] * (1.0 - t)
+                    + bottom[None, None, :] * t, bw, axis=1)
+    xs = np.linspace(0.0, 1.0, bw, dtype=np.float64)[None, :]
+    ys = np.linspace(0.0, 1.0, bh, dtype=np.float64)[:, None]
+
+    def _glow(cx: float, cy: float, radius: float, peak: float,
+              colour: tuple[int, int, int]) -> None:
+        d2 = ((xs - cx) * (bw / bh)) ** 2 + (ys - cy) ** 2
+        fall = np.exp(-d2 / (2.0 * radius * radius))
+        img[...] += fall[..., None] * peak \
+            * np.array(colour, dtype=np.float64)[None, None, :]
+
+    _glow(0.20, 0.13, 0.42, STUDIO_GLOW_BLUE_PEAK, STUDIO_GLOW_BLUE)
+    _glow(0.84, 0.88, 0.38, STUDIO_GLOW_PINK_PEAK, STUDIO_GLOW_PINK)
+    nx = np.linspace(-1.0, 1.0, bw, dtype=np.float64)[None, :]
+    ny = np.linspace(-1.0, 1.0, bh, dtype=np.float64)[:, None]
+    r2 = np.clip((nx ** 2 + ny ** 2) / 2.0, 0.0, 1.0)
+    img *= (1.0 - STUDIO_VIGNETTE_STRENGTH * r2 ** 1.2)[..., None]
+    rng = np.random.default_rng(seed)
+    img += rng.normal(0.0, STUDIO_GRAIN_SIGMA, (bh, bw, 1))
+    base = np.clip(img, 0, 255)
+    if len(_STUDIO_BASE_CACHE) > 4:
+        _STUDIO_BASE_CACHE.clear()
+    _STUDIO_BASE_CACHE[key] = base
+    return base
+
+
+def _grounding_shadow(bg: np.ndarray,
+                      placed_alpha: np.ndarray) -> np.ndarray:
+    """Darken a soft ellipse under the placed speaker's base.
+
+    Position and width come from the placed mask itself: the
+    ellipse centres on the horizontal extent of the mask's
+    bottom band, tucked slightly under the mask's last row, so
+    the visible rim reads as the shadow the cutout casts on the
+    studio floor. Backdrop plane only - the speaker layer is
+    composited over it unchanged. No mask -> no shadow.
+    """
+    ch, cw = bg.shape[:2]
+    mask = placed_alpha > 0.5
+    if not mask.any():
+        return bg
+    rows = np.flatnonzero(mask.any(axis=1))
+    base_y = int(rows[-1])
+    band_top = max(0, base_y - max(8, int(0.10 * ch)))
+    cols = np.flatnonzero(mask[band_top:base_y + 1].any(axis=0))
+    if cols.size == 0:
+        return bg
+    x0, x1 = int(cols[0]), int(cols[-1])
+    base_w = x1 - x0 + 1
+    if base_w < 8:
+        return bg
+    cx = (x0 + x1) / 2.0
+    rx = max(60.0, 0.62 * base_w)
+    ry = max(26.0, 0.028 * ch)
+    cy = base_y - 0.35 * ry
+    xa = max(0, int(cx - 2.2 * rx))
+    xb = min(cw, int(cx + 2.2 * rx) + 1)
+    ya = max(0, int(cy - 2.6 * ry))
+    yb = min(ch, int(cy + 2.6 * ry) + 1)
+    yy, xx = np.mgrid[ya:yb, xa:xb]
+    d2 = ((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2
+    fall = np.exp(-2.2 * d2)
+    out = bg.copy()
+    out[ya:yb, xa:xb] *= (1.0 - STUDIO_SHADOW_STRENGTH * fall)[..., None]
+    return out
+
+
+def studio_backdrop(canvas: tuple[int, int] = DEFAULT_CANVAS,
+                    *,
+                    progress: float = 0.0,
+                    seed: int | None = None,
+                    shadow_alpha: np.ndarray | None = None,
+                    ) -> np.ndarray:
+    """The procedural studio canvas at drift ``progress``.
+
+    Returns a float64 canvas-sized RGB array like the other
+    canvas backdrops. ``seed`` None uses STUDIO_DEFAULT_SEED.
+    ``shadow_alpha`` is the PLACED (canvas-space) speaker alpha
+    for this frame; when given, the grounding shadow is drawn
+    under the speaker's base. The frame's own pixels are never
+    consulted - that is the point of the mode.
+    """
+    if seed is None:
+        seed = STUDIO_DEFAULT_SEED
+    base = _studio_base(canvas, seed)
+    cw, ch = canvas
+    zoom = 1.0 + (BACKDROP_KEN_BURNS_MAX_ZOOM - 1.0) * progress
+    zw = int(base.shape[1] / zoom)
+    zh = int(base.shape[0] / zoom)
+    pan_x = 0.20 + (0.65 - 0.20) * progress
+    pan_y = 0.20 + (0.60 - 0.20) * progress
+    x0 = int((base.shape[1] - zw) * pan_x)
+    y0 = int((base.shape[0] - zh) * pan_y)
+    img = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8))
+    win = img.crop((x0, y0, x0 + zw, y0 + zh)).resize(
+        (cw, ch), Image.BILINEAR)
+    out = np.asarray(win).astype(np.float64)
+    if shadow_alpha is not None:
+        out = _grounding_shadow(out, shadow_alpha)
+    return out
+
+
+def _canvas_backdrop(frame_rgb: np.ndarray, alpha: np.ndarray,
+                     canvas: tuple[int, int], backdrop: str,
+                     progress: float,
+                     blur_radius: int = DEFAULT_BLUR_RADIUS,
+                     seed: int | None = None,
+                     placed_alpha: np.ndarray | None = None,
+                     ) -> np.ndarray:
+    """Dispatch the canvas backdrop for one frame.
+
+    The studio default ignores the frame entirely (its shadow
+    comes from the PLACED alpha when the caller supplies it).
+    The minus-speaker mode needs the frame's alpha; a frame
+    with no speaker mask falls back to the treated blur for
+    that frame (recorded by the pipeline as a maskless frame).
+    """
+    if backdrop == BACKDROP_STUDIO:
+        return studio_backdrop(canvas, progress=progress, seed=seed,
+                               shadow_alpha=placed_alpha)
+    if backdrop == BACKDROP_SOURCE_MINUS_SPEAKER:
+        if alpha is not None and bool((alpha > 0.5).any()):
+            return speaker_removed_backdrop(
+                frame_rgb, alpha, canvas, progress=progress)
+        return treated_background_layer(frame_rgb, canvas)
+    return make_backdrop(frame_rgb, canvas, backdrop=backdrop,
+                         blur_radius=blur_radius)
+
+
 def speaker_layer(
     frame_rgb: np.ndarray,
     alpha: np.ndarray,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
+    *,
+    placement: object | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Scale the speaker to fit the canvas width, bottom-anchored.
 
@@ -191,8 +555,43 @@ def speaker_layer(
     anchored to the bottom edge (talking-head framing). Returns the
     full-canvas (fg_rgb uint8, alpha float) pair; alpha is 0 wherever
     the speaker does not reach.
+
+    ``placement`` (layout-states extension, 2026-11-01) is an
+    explicit placement object (see layout_states.SpeakerPlacement:
+    optional crop rect, scale, canvas origin, alpha scale). When
+    given, the (cropped) frame is scaled by ``placement.scale`` and
+    pasted at ``(placement.ox, placement.oy)`` instead of the fit
+    placement - this is how Spotlight's PiP, Split's bottom band
+    and Cutaway's absence render through the same layer function
+    the verifier's geometry path (layout_law.to_canvas_alpha)
+    uses, so measured geometry is rendered geometry. None keeps
+    the historic fit placement byte-for-byte.
     """
     cw, ch = canvas
+    if placement is not None:
+        crop = getattr(placement, "crop", None)
+        if crop is not None:
+            cx0 = int(round(crop[0]))
+            cy0 = int(round(crop[1]))
+            cwd = int(round(crop[2]))
+            cht = int(round(crop[3]))
+            frame_rgb = frame_rgb[cy0:cy0 + cht, cx0:cx0 + cwd]
+            alpha = alpha[cy0:cy0 + cht, cx0:cx0 + cwd]
+        scale = float(placement.scale)
+        nw = max(1, round(alpha.shape[1] * scale))
+        nh = max(1, round(alpha.shape[0] * scale))
+        fg = Image.fromarray(frame_rgb).resize((nw, nh),
+                                               Image.BILINEAR)
+        a = Image.fromarray(
+            (np.clip(alpha, 0.0, 1.0) * 255).astype(np.uint8)
+        ).resize((nw, nh), Image.BILINEAR)
+        fg_canvas = np.zeros((ch, cw, 3), dtype=np.uint8)
+        a_canvas = np.zeros((ch, cw), dtype=np.float64)
+        _paste_placed(fg_canvas, a_canvas, fg, a,
+                      int(round(placement.ox)),
+                      int(round(placement.oy)),
+                      float(getattr(placement, "alpha_scale", 1.0)))
+        return fg_canvas, a_canvas
     sh, sw = alpha.shape
     scale = min(cw / sw, ch / sh)
     nw, nh = max(1, round(sw * scale)), max(1, round(sh * scale))
@@ -219,6 +618,9 @@ def hook_layer(
     max_width_frac: float = 0.92,
     start_size: int = 170,
     fill: tuple[int, int, int, int] = (255, 255, 255, 255),
+    accent_index: int | None = None,
+    accent_fill: tuple[int, int, int, int] = (255, 61, 126, 255),
+    only_word_index: int | None = None,
 ) -> np.ndarray:
     """Render hook text as a transparent RGBA layer at canvas size.
 
@@ -228,7 +630,15 @@ def hook_layer(
     ``y_center_frac`` of the canvas height - in the composite it
     sits behind the speaker's head/shoulders, visible at the sides,
     which is the intended occlusion effect. A dark stroke keeps the
-    letterforms legible over the blurred background.
+    letterforms legible over the backdrop.
+
+    Fix round 2 (Fix E): two-tone type - ``accent_index`` paints
+    ONE word (the hook's strongest content word, selected in
+    layout_law) in Viral Pink; everything else stays white with
+    the dark stroke. ``only_word_index`` renders a single word and
+    leaves the rest transparent: the per-word layers the
+    stagger-pop entry animation composes. With neither set the
+    historic single-draw path runs byte-for-byte.
     """
     cw, ch = canvas
     img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
@@ -259,18 +669,126 @@ def hook_layer(
     line_h = int(size * 1.12)
     block_h = line_h * len(lines)
     y = int(ch * y_center_frac) - block_h // 2
+    styled = accent_index is not None or only_word_index is not None
+
+    def fill_for(idx: int) -> tuple[int, int, int, int]:
+        if only_word_index is not None and idx != only_word_index:
+            return (0, 0, 0, 0)
+        if accent_index is not None and idx == accent_index:
+            return accent_fill
+        return fill
+
+    word_index = 0
     for line in lines:
         w = draw.textlength(line, font=font)
-        draw.text(
-            ((cw - w) / 2, y),
-            line,
-            font=font,
-            fill=fill,
-            stroke_width=max(2, size // 16),
-            stroke_fill=(10, 10, 12, 255),
-        )
+        if not styled:
+            draw.text(
+                ((cw - w) / 2, y),
+                line,
+                font=font,
+                fill=fill,
+                stroke_width=max(2, size // 16),
+                stroke_fill=(10, 10, 12, 255),
+            )
+            word_index += len(line.split())
+        else:
+            x = (cw - w) / 2
+            space_w = draw.textlength(" ", font=font)
+            for wtok in line.split():
+                f = fill_for(word_index)
+                # A fully transparent word (a non-selected word
+                # of a per-word entry layer) is not drawn at all:
+                # PIL would still paint its opaque stroke,
+                # ghosting the whole text into every word layer.
+                if f[3] > 0:
+                    draw.text(
+                        (x, y),
+                        wtok,
+                        font=font,
+                        fill=f,
+                        stroke_width=max(2, size // 16),
+                        stroke_fill=(10, 10, 12, 255),
+                    )
+                x += draw.textlength(wtok, font=font) + space_w
+                word_index += 1
         y += line_h
     return np.asarray(img)
+
+
+# Hook entry animation (fix round 2, Fix E): word-stagger pop-in.
+# Word 0 is at full opacity from the window's first frame (F1's
+# frame-0 leg measures the declared layer at full opacity - the
+# resting layer - and the render honours it for word 0 too); the
+# remaining words pop in across ~0.36s, each fading over 0.05s and
+# settling from 1.16x to 1.0x over 0.22s. After HOOK_ENTRY_S the
+# renderer uses the resting layer directly.
+HOOK_ENTRY_S = 0.65
+_HOOK_ENTRY_STAGGER_SPAN_S = 0.36
+_HOOK_ENTRY_FADE_S = 0.05
+_HOOK_ENTRY_SETTLE_S = 0.22
+_HOOK_ENTRY_POP_SCALE = 1.16
+
+
+def hook_entry_layer(word_layers: Sequence[np.ndarray],
+                     t_rel: float) -> np.ndarray:
+    """The hook layer ``t_rel`` seconds into the stagger entry.
+
+    ``word_layers`` are the per-word canvas layers (word i's ink
+    only, at its resting position). Deterministic in t_rel.
+    """
+    canvas_shape = word_layers[0].shape
+    acc_rgb = np.zeros(canvas_shape[:2] + (3,), dtype=np.float64)
+    acc_a = np.zeros(canvas_shape[:2] + (1,), dtype=np.float64)
+    n = len(word_layers)
+    step = (_HOOK_ENTRY_STAGGER_SPAN_S / (n - 1)) if n > 1 else 0.0
+    step = min(step, 0.09)
+    for i, layer in enumerate(word_layers):
+        if i == 0:
+            piece = layer
+        else:
+            local = t_rel - i * step
+            if local <= 0.0:
+                continue
+            alpha_f = min(1.0, local / _HOOK_ENTRY_FADE_S)
+            p = min(1.0, local / _HOOK_ENTRY_SETTLE_S)
+            scale = 1.0 + (_HOOK_ENTRY_POP_SCALE - 1.0) * (1.0 - p) ** 2
+            if alpha_f >= 1.0 and abs(scale - 1.0) < 1e-3:
+                piece = layer
+            else:
+                ys, xs = np.nonzero(layer[..., 3] > 0)
+                if ys.size == 0:
+                    continue
+                x0, x1 = int(xs.min()), int(xs.max()) + 1
+                y0, y1 = int(ys.min()), int(ys.max()) + 1
+                crop = Image.fromarray(layer[y0:y1, x0:x1])
+                if abs(scale - 1.0) >= 1e-3:
+                    crop = crop.resize(
+                        (max(1, round(crop.width * scale)),
+                         max(1, round(crop.height * scale))),
+                        Image.BILINEAR)
+                if alpha_f < 1.0:
+                    arr = np.asarray(crop).astype(np.float64)
+                    arr[..., 3] *= alpha_f
+                    crop = Image.fromarray(
+                        np.clip(arr, 0, 255).astype(np.uint8))
+                cx = (x0 + x1) / 2.0
+                cy = (y0 + y1) / 2.0
+                nx = int(round(cx - crop.width / 2.0))
+                ny = int(round(cy - crop.height / 2.0))
+                piece = np.zeros(canvas_shape, dtype=np.uint8)
+                sx0, sy0 = max(0, -nx), max(0, -ny)
+                dx0, dy0 = max(0, nx), max(0, ny)
+                dx1 = min(canvas_shape[1], nx + crop.width)
+                dy1 = min(canvas_shape[0], ny + crop.height)
+                if dx1 > dx0 and dy1 > dy0:
+                    piece[dy0:dy1, dx0:dx1] = np.asarray(crop)[
+                        sy0:sy0 + (dy1 - dy0), sx0:sx0 + (dx1 - dx0)]
+        la = piece[..., 3:4].astype(np.float64) / 255.0
+        acc_rgb = piece[..., :3].astype(np.float64) * la \
+            + acc_rgb * (1.0 - la)
+        acc_a = la + acc_a * (1.0 - la)
+    out = np.concatenate([acc_rgb, acc_a * 255.0], axis=2)
+    return np.clip(out, 0, 255).astype(np.uint8)
 
 
 # ---------------------------------------------------------------- stack
@@ -312,6 +830,9 @@ def composite_frame(
     backdrop: str = DEFAULT_BACKDROP,
     graphics_rgba: np.ndarray | None = None,
     backdrop_rgb: np.ndarray | None = None,
+    speaker_placement: object | None = None,
+    backdrop_progress: float = 0.0,
+    backdrop_seed: int | None = None,
 ) -> np.ndarray:
     """One composited frame from a source frame + finished alpha.
 
@@ -319,12 +840,28 @@ def composite_frame(
     layer wholesale for this frame - a generated scene treated in
     graphics_layer.prepare_backdrop. It sits exactly where the
     treated source backdrop sits: behind graphics, hook and
-    speaker. None = the historic make_backdrop treatment.
+    speaker. None = the canvas backdrop treatment named by
+    ``backdrop`` (the default is the procedural studio canvas,
+    fix round 3; ``backdrop_progress`` drives its drift and
+    ``backdrop_seed`` its deterministic grain). The speaker layer
+    is built first because the studio backdrop's grounding
+    shadow is derived from the PLACED speaker alpha.
+    ``speaker_placement`` (layout states) forwards an explicit
+    placement to ``speaker_layer``; None is the historic fit.
     """
-    bg = backdrop_rgb if backdrop_rgb is not None else \
-        make_backdrop(frame_rgb, canvas, backdrop=backdrop,
-                      blur_radius=blur_radius)
-    fg, a = speaker_layer(frame_rgb, alpha, canvas)
+    fg, a = speaker_layer(frame_rgb, alpha, canvas,
+                          placement=speaker_placement)
+    if backdrop_rgb is not None:
+        bg = backdrop_rgb
+    elif backdrop == BACKDROP_STUDIO:
+        bg = studio_backdrop(canvas, progress=backdrop_progress,
+                             seed=backdrop_seed, shadow_alpha=a)
+    elif backdrop == BACKDROP_SOURCE_MINUS_SPEAKER:
+        bg = _canvas_backdrop(frame_rgb, alpha, canvas, backdrop,
+                              backdrop_progress)
+    else:
+        bg = make_backdrop(frame_rgb, canvas, backdrop=backdrop,
+                           blur_radius=blur_radius)
     return composite_from_layers(bg, hook_rgba, fg, a,
                                  graphics_rgba=graphics_rgba)
 
@@ -468,11 +1005,16 @@ def xray_frame(
     what separates is the genuine layers, not a redraw.
     """
     cw, ch = canvas
-    bg = make_backdrop(frame_rgb, canvas, backdrop=backdrop,
-                       blur_radius=blur_radius)
     fg, a = speaker_layer(frame_rgb, alpha, canvas)
+    bg_f = _canvas_backdrop(frame_rgb, alpha, canvas, backdrop, 0.0,
+                            blur_radius=blur_radius, placed_alpha=a)
     if separation <= 0.0:
-        return composite_from_layers(bg, hook_rgba, fg, a)
+        # Byte-identical to composite_frame: the float backdrop
+        # goes in unclipped (the uint8 clip below is only for
+        # the fanned card path, and it costs ±1 against the
+        # composite's float blend).
+        return composite_from_layers(bg_f, hook_rgba, fg, a)
+    bg = np.clip(bg_f, 0, 255).astype(np.uint8)
 
     d = int(130 * separation * (cw / CANVAS_W))
     ground = Image.new("RGB", (cw, ch), XRAY_GROUND)
@@ -575,6 +1117,8 @@ def render_composite_video(
     blur_radius: int = DEFAULT_BLUR_RADIUS,
     backdrop: str = DEFAULT_BACKDROP,
     graphics: Sequence[GraphicEntry] | None = None,
+    speaker_placements: Sequence[object | None] | None = None,
+    backdrop_seed: int | None = None,
 ) -> None:
     """Render the composite over a whole clip.
 
@@ -583,9 +1127,17 @@ def render_composite_video(
     appears only inside ``hook_window`` seconds. ``graphics`` (the
     context graphics plane) defaults to None: no graphics entries,
     the original stack, byte-identical output.
+    ``speaker_placements`` (layout states) is an optional per-frame
+    sequence of explicit speaker placements aligned with the
+    frames; entries may be None (historic fit). None for the whole
+    argument = the original render, byte-identical.
     """
     if len(source_frames) != len(alphas):
         raise ValueError("source_frames and alphas must align 1:1")
+    if speaker_placements is not None \
+            and len(speaker_placements) != len(source_frames):
+        raise ValueError("speaker_placements must align 1:1 with "
+                         "the frames")
 
     def gen() -> Iterator[np.ndarray]:
         for i, (frame, alpha) in enumerate(zip(source_frames, alphas)):
@@ -596,7 +1148,13 @@ def render_composite_video(
                 if graphics else None
             yield composite_frame(
                 frame, alpha, hook, canvas, blur_radius=blur_radius,
-                backdrop=backdrop, graphics_rgba=plane)
+                backdrop=backdrop, graphics_rgba=plane,
+                backdrop_progress=(i / len(source_frames))
+                if source_frames else 0.0,
+                backdrop_seed=backdrop_seed,
+                speaker_placement=(speaker_placements[i]
+                                   if speaker_placements is not None
+                                   else None))
 
     _encode_video(gen(), out_path, fps=fps, canvas=canvas,
                   audio_from=audio_from)

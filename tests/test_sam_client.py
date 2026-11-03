@@ -60,6 +60,49 @@ class SamClientTests(unittest.TestCase):
             self.assertEqual(result.cost_usd, 0.12)
             self.assertEqual(ledger.total_usd(), 0.12)
 
+    def test_payload_too_large_retries_with_store_false(self):
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append(json.loads(body.decode("utf-8")))
+            if len(calls) == 1:
+                return 413, {"error": {"code": "payload_too_large",
+                                       "message": "request too large"}}
+            return 200, {"id": "resp_retry", "output": [],
+                         "usage": {"video_frames_processed": 600}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = SpendLedger(Path(tmp) / "l.jsonl", cap_usd=145.0)
+            client = sam_client.SamClient(
+                api_key="test-key", ledger=ledger, transport=transport)
+            result = client.segment_video(
+                file_id="file_big", n_frames=600, ts="2026-11-03")
+            self.assertEqual(result.billed_frames, 600)
+            self.assertEqual(len(calls), 2)
+            self.assertNotIn("store", calls[0])
+            self.assertIs(calls[1]["store"], False)
+            # Only the successful call is billed.
+            self.assertEqual(ledger.total_usd(), 0.12)
+
+    def test_payload_too_large_raised_by_transport_also_retries(self):
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append(json.loads(body.decode("utf-8")))
+            if len(calls) == 1:
+                raise sam_client.SamClientError(
+                    'SAM API HTTP 413: {"error":{"code":'
+                    '"payload_too_large"}}')
+            return 200, {"id": "resp_retry2", "output": [],
+                         "usage": {"video_frames_processed": 600}}
+
+        client = sam_client.SamClient(
+            api_key="test-key", transport=transport)
+        result = client.segment_video(file_id="file_big", n_frames=600)
+        self.assertEqual(result.billed_frames, 600)
+        self.assertEqual(len(calls), 2)
+        self.assertIs(calls[1]["store"], False)
+
     def test_ledger_cap_blocks_before_transport_is_called(self):
         captured = {}
         with tempfile.TemporaryDirectory() as tmp:

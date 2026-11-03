@@ -850,6 +850,223 @@ def loud_video(path: Path, volume: float, duration: int = 4) -> Path:
     return path
 
 
+# ---------------------------------------------------- F8 layout legs
+
+
+def layout_alphas(kind_spans, n=F8_N):
+    """Canvas alphas for a layout fixture: the speaker() block at
+    Stage, moved into the declared box during spotlight/split
+    spans, faded (alpha 0.4, below the face threshold) at a
+    cutaway's entry frames and absent for its interior."""
+    alphas = speaker(n=n)
+    for kind, (s, e), box in kind_spans:
+        for i in range(n):
+            t = i / FPS
+            if not (s <= t < e):
+                continue
+            a = np.zeros((CANVAS[1], CANVAS[0]), dtype=np.float32)
+            if kind == "cutaway":
+                if t < s + 0.5:  # the eased fade at the boundary
+                    a = alphas[i] * 0.4
+            else:
+                x0, y0, x1, y1 = box
+                a[y0 + 80:y1, x0 + 60:x1 - 60] = 1.0
+            alphas[i] = a
+    return alphas
+
+
+def layout_inputs(video, graphics, alphas, layout_spans):
+    inputs = f8_inputs(video, graphics)
+    inputs.canvas_alphas = alphas
+    inputs.layout_spans = layout_spans
+    return inputs
+
+
+PIP_BOX = (90, 300, 520, 791)
+SPOT_BOX = (600, 300, 900, 560)
+CUT_BOX = (0, 718, 1080, 1201)
+
+
+def spot_decl(**overrides):
+    d = {"span": [3.5, 5.5], "layout": "spotlight",
+         "speaker_box": list(PIP_BOX),
+         "graphic_box": list(SPOT_BOX), "feasible": True}
+    d.update(overrides)
+    return d
+
+
+def cut_decl(**overrides):
+    d = {"span": [8.0, 10.0], "layout": "cutaway",
+         "speaker_box": [0, 936, 1080, 1920],
+         "graphic_box": list(CUT_BOX), "feasible": True}
+    d.update(overrides)
+    return d
+
+
+class LayoutLegsTests(unittest.TestCase):
+    def _run(self, td, specs, alphas, decls):
+        entries = [(g.layer_at, g.start_s, g.end_s) for g in specs]
+        video = render_graphics_video(Path(td) / "render.mp4",
+                                      entries)
+        return verify(layout_inputs(video, specs, alphas, decls),
+                      wonder=FakeWonder(), ts="2026-11-01")
+
+    def _spot_cut_specs(self):
+        spot = solid_spec(SPOT_BOX, 3.5, 5.5)
+        spot.layout = "spotlight"
+        cut = solid_spec(CUT_BOX, 8.0, 10.0, color=(60, 120, 200))
+        cut.layout = "cutaway"
+        return [spot, cut]
+
+    def test_spotlight_and_cutaway_pass_all_legs(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = self._spot_cut_specs()
+            alphas = layout_alphas([
+                ("spotlight", (3.5, 5.5), PIP_BOX),
+                ("cutaway", (8.0, 10.0), None)])
+            receipt = self._run(td, specs, alphas,
+                                [spot_decl(), cut_decl()])
+            self.assertEqual(receipt.failed, [],
+                             msg=receipt.to_json())
+            f8 = check(receipt, "F8")
+            legs = {r["layout"]: r
+                    for r in f8.measured["layout_spans"]}
+            self.assertEqual(legs["spotlight"]["speaker_in_box_frac"],
+                             1.0)
+            self.assertEqual(
+                legs["spotlight"]["graphic_in_box_frac"], 1.0)
+            self.assertEqual(
+                legs["cutaway"]["speaker_alpha_max_mid_span"], 0.0)
+            self.assertTrue(
+                legs["cutaway"]["speaker_present_outside"])
+            f3 = check(receipt, "F3")
+            self.assertEqual(
+                f3.measured["layout_spans"][0]["in_declared_box"],
+                True)
+            data = json.loads(receipt.to_json())
+            self.assertEqual(data["receipt_version"], 1)
+            self.assertEqual(len(data["layout_spans"]), 2)
+            self.assertEqual(
+                data["graphics_coverage"]["graphics_s"], 4.0)
+
+    def test_split_passes_with_its_declared_caption_rect(self):
+        with tempfile.TemporaryDirectory() as td:
+            band = (95, 1248, 985, 1920)
+            spec = solid_spec((208, 472, 856, 793), 3.5, 5.5)
+            spec.layout = "split"
+            alphas = layout_alphas([("split", (3.5, 5.5), band)])
+            decl = {"span": [3.5, 5.5], "layout": "split",
+                    "speaker_box": list(band),
+                    "graphic_box": [208, 472, 856, 793],
+                    "caption_rect": [60, 1700, 980, 1840],
+                    "feasible": True}
+            receipt = self._run(td, [spec], alphas, [decl])
+            self.assertEqual(receipt.failed, [],
+                             msg=receipt.to_json())
+            leg = check(receipt, "F8").measured["layout_spans"][0]
+            self.assertEqual(leg["speaker_in_box_frac"], 1.0)
+
+    def test_misdeclared_speaker_box_fails_f8_and_f3(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = self._spot_cut_specs()
+            alphas = layout_alphas([
+                ("spotlight", (3.5, 5.5), PIP_BOX),
+                ("cutaway", (8.0, 10.0), None)])
+            wrong = spot_decl(speaker_box=[600, 900, 1030, 1400])
+            receipt = self._run(td, specs, alphas,
+                                [wrong, cut_decl()])
+            self.assertIn("F8", receipt.failed)
+            self.assertIn("F3", receipt.failed)
+            f8 = check(receipt, "F8")
+            self.assertEqual(f8.measured["offending_layout_indices"],
+                             [0])
+            self.assertEqual(
+                f8.measured["layout_spans"][0]
+                ["speaker_in_box_frac"], 0.0)
+
+    def test_misdeclared_graphic_box_fails_f8_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = self._spot_cut_specs()
+            alphas = layout_alphas([
+                ("spotlight", (3.5, 5.5), PIP_BOX),
+                ("cutaway", (8.0, 10.0), None)])
+            wrong = spot_decl(graphic_box=[0, 0, 100, 100])
+            receipt = self._run(td, specs, alphas,
+                                [wrong, cut_decl()])
+            self.assertEqual(receipt.failed, ["F8"],
+                             msg=receipt.to_json())
+            leg = check(receipt, "F8").measured["layout_spans"][0]
+            self.assertEqual(leg["graphic_in_box_frac"], 0.0)
+
+    def test_speaker_present_in_cutaway_fails_the_absence_leg(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = self._spot_cut_specs()
+            # No cutaway applied to the alphas: the speaker stays
+            # at Stage through the declared cutaway span.
+            alphas = layout_alphas([
+                ("spotlight", (3.5, 5.5), PIP_BOX)])
+            receipt = self._run(td, specs, alphas,
+                                [spot_decl(), cut_decl()])
+            self.assertIn("F8", receipt.failed)
+            leg = check(receipt, "F8").measured["layout_spans"][1]
+            self.assertEqual(leg["layout"], "cutaway")
+            self.assertEqual(leg["speaker_alpha_max_mid_span"], 1.0)
+            self.assertFalse(leg["ok"])
+
+    def test_cutaway_fade_frames_do_not_trip_the_face_leg(self):
+        with tempfile.TemporaryDirectory() as td:
+            specs = self._spot_cut_specs()
+            alphas = layout_alphas([
+                ("spotlight", (3.5, 5.5), PIP_BOX),
+                ("cutaway", (8.0, 10.0), None)])
+            # The real track's boundary-centred fade crosses the
+            # face threshold at the span's first frame: the
+            # speaker is still measurable, at Stage, under the
+            # full-frame card. (layout_alphas' 0.4 fade stays
+            # below the threshold; the 0.8 frame is the S1 proof
+            # render's measured case - 10888 px of face overlap
+            # there without the exemption.)
+            alphas[int(8.0 * FPS)] = (
+                speaker(n=F8_N)[int(8.0 * FPS)] * 0.8)
+            receipt = self._run(td, specs, alphas,
+                                [spot_decl(), cut_decl()])
+            self.assertEqual(receipt.failed, [],
+                             msg=receipt.to_json())
+            f8 = check(receipt, "F8")
+            self.assertEqual(
+                f8.measured["graphics"][1]["face_overlap_exempt"],
+                "declared_cutaway")
+            # Control: the SAME render with no declarations -
+            # the baseline face leg reads the fade frame and
+            # fails F8. The exemption lives in the declaration,
+            # not in the geometry.
+            entries = [(g.layer_at, g.start_s, g.end_s)
+                       for g in specs]
+            video = render_graphics_video(
+                Path(td) / "render2.mp4", entries)
+            bare = verify(f8_inputs(video, specs),
+                          wonder=FakeWonder(), ts="2026-11-01")
+            self.assertIn("F8", bare.failed)
+            self.assertGreater(
+                check(bare, "F8").measured["graphics"][1]
+                ["face_overlap_px"], 0)
+
+    def test_no_layout_declarations_no_layout_section(self):
+        receipt = verify(good_inputs(self._dummy()),
+                         wonder=FakeWonder())
+        data = json.loads(receipt.to_json())
+        self.assertNotIn("layout_spans", data)
+        self.assertNotIn("graphics_coverage", data)
+
+    @classmethod
+    def _dummy(cls):
+        if not hasattr(cls, "_dummy_path"):
+            td = tempfile.TemporaryDirectory()
+            cls._dummy_td = td
+            cls._dummy_path = make_video(Path(td.name) / "render.mp4")
+        return cls._dummy_path
+
+
 class LoudnessF9Tests(unittest.TestCase):
     def test_compliant_render_passes_f9_with_measurement_recorded(self):
         with tempfile.TemporaryDirectory() as td:
