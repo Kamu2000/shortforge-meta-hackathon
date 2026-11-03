@@ -1,0 +1,803 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/hero-run7/short-1/draft2-normalize-loudness.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "PASSED_AFTER_REPAIR",
+  "repair": {
+    "status": "executed",
+    "menu_id": "NORMALIZE_LOUDNESS",
+    "target_check": "F9",
+    "spark_reason": "Raises F9 integrated_lufs from -17.79 to -14 LUFS and lowers true_peak to <=-1 dBTP",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0029,
+      "request_id": "chatcmpl-01a1a032-95c0-7766-9285-74f19a0110da"
+    },
+    "extra_calls": [],
+    "detail": "two-pass loudnorm (dynamic) of the final mix + measured corrections (gain +0.30 dB; limiter (ceiling -4.69 dB, buying headroom); gain +1.99 dB; limiter (ceiling -5.95 dB, buying headroom); gain +3.25 dB): integrated -17.79 -> -14.25 LUFS, true peak -0.65 -> -2.21 dBTP (target -14 LUFS / -1 dBTP); video stream copied untouched; speech stem unmodified"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/hero-run7/short-1/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -18.78,
+            "first_speech_onset_s": 0.94
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1128,
+            "glyph_occlusion_max": 0.1862,
+            "glyph_occlusion_alpha_weighted_mean": 0.1169,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                541.3,
+                932.6
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 689,
+            "frames_with_speaker": 420,
+            "frames_total": 420
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.22,
+            "first_speech_onset_s": 0.94,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.741,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man speaks to the camera posing a hypothetical scenario. The hook is the on-screen text \"WHAT IF SUN ROSE 16 TIMES?\" about having 16 separate mornings today.",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "WHAT IF SUN ROSE 16 TIMES?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "WHAT IF SUN ROSE 16 TIMES?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "What if the sun rose 16 times today?"
+              },
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "What if the sun rose 16 times today?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0268,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9952
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "count_up",
+                "path": "approach",
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.967,
+                "absence_match_max": 0.018,
+                "path_match": 0.897,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 2,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 14.0
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -17.79,
+            "true_peak_dbtp": -0.65,
+            "lra_lu": 20.7,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0168,
+          "request_id": "resp_6ae985b1afb62a64e0b44bb1"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "244a160e2f459aa7c8912506d5741095406c4cb51355cd56ceb55221011b62c0",
+        "sam_response": "35318c1fed8d2123f4d1cb14c7760aa183adb7d8fd39aca34242162a04ff04e4",
+        "captions": "e07d199ad7e7face23acdee5e5a7c441aae1d5ad3909ec54d83446bce56e3add"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.113 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            0.86,
+            10.92
+          ],
+          "box": [
+            216,
+            213,
+            864,
+            587
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "What if the sun rose 16 times today? Before lunch, before dinner, 16 separate mornings.",
+          "headline": "16 times today",
+          "facts": "16 separate mornings",
+          "path": "approach"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 0.86,
+          "recipe": "whoosh",
+          "gain_db": -25.29,
+          "graphic_index": 0,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 1.76,
+          "recipe": "ding",
+          "gain_db": -22.21,
+          "graphic_index": 0,
+          "anchor": "land"
+        }
+      ],
+      "backdrops": [],
+      "layout_spans": [
+        {
+          "span": [
+            0.86,
+            10.92
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            560,
+            338,
+            990,
+            864
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              290.0,
+              355.0
+            ],
+            "scale": 1.4828,
+            "origin": [
+              560.0,
+              337.6
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            776.3,
+            470.0
+          ],
+          "head_top_min": 373,
+          "feasible": false,
+          "note": "PiP right 430px wide at (560, 338): centroid (776, 470), head-top min 373px, face bottom 541 above caption top 1460; both PiP corners collide with the span's graphic box - Stage kept",
+          "graphic_box": [
+            216,
+            213,
+            864,
+            587
+          ],
+          "anchor_quality": "high",
+          "downgraded_to": "stage"
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 10.06,
+        "short_s": 14.0,
+        "coverage_frac": 0.7186
+      },
+      "caption_timing_source": "dsp",
+      "stage_geometry": {
+        "feasible": true,
+        "identity": false,
+        "scale": 2.207,
+        "crop": [
+          154,
+          9,
+          290,
+          351
+        ],
+        "pad_bottom_px": 4,
+        "centroid_target": [
+          540.0,
+          930.0
+        ],
+        "placed_centroid": [
+          539.7,
+          931.5
+        ],
+        "head_top_min": 687,
+        "mask_height_frac": 0.617,
+        "note": "stage zoom x2.21: crop (154, 9, 290, 351) pad 4; placed centroid (540,932), mask height frac 0.617",
+        "reframe_pad_bottom_px": 0,
+        "effect_pad_bottom_px": 0
+      },
+      "backdrop": {
+        "mode": "studio_procedural",
+        "seed": 16105158121860636995,
+        "drift": "ken_burns_1.12",
+        "shadow": "mask_base_ellipse",
+        "maskless_frames": 0
+      },
+      "hook_style": {
+        "tone": "two_tone",
+        "accent_word": "16",
+        "accent_index": 4,
+        "accent_rgb": [
+          255,
+          61,
+          126
+        ],
+        "entry": "stagger_pop",
+        "text_size": 170
+      },
+      "caption_style": {
+        "chunk_max_words": 4,
+        "word_states": {
+          "upcoming": "white_alpha_140",
+          "active": "viral_pink_scale_1.10",
+          "spoken": "white_full_alpha",
+          "spoken_emphasis": "viral_pink"
+        }
+      },
+      "caption_snap": {
+        "applied": true,
+        "method": "energy_valley_snap",
+        "window_s": 0.15,
+        "hop_s": 0.005,
+        "smooth_hops": 3,
+        "words": 15,
+        "words_snapped": 0,
+        "mean_abs_shift_ms": 0.0,
+        "max_abs_shift_ms": 0.0,
+        "snap_sources": [
+          "mms"
+        ],
+        "words_eligible": 0
+      },
+      "caption_cue_sources": [
+        "dsp_phrase",
+        "dsp_phrase"
+      ],
+      "caption_timing_gate": [
+        {
+          "cue_index": 0,
+          "action": "dsp_fallback",
+          "reason": "aligner failed on the activity-bounded slice [0.71, 6.13]: MMS aligner cannot represent the word '16' in its dictionary (romanised letters only) - refusing to invent its timing"
+        },
+        {
+          "cue_index": 1,
+          "action": "dsp_fallback",
+          "reason": "aligner failed on the activity-bounded slice [5.65, 10.87]: MMS aligner cannot represent the word '16' in its dictionary (romanised letters only) - refusing to invent its timing"
+        }
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/hero-run7/short-1/draft2-normalize-loudness.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "PASSED_AFTER_REPAIR",
+      "failed_checks": [],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -14.05,
+            "first_speech_onset_s": 0.18
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1128,
+            "glyph_occlusion_max": 0.1862,
+            "glyph_occlusion_alpha_weighted_mean": 0.1169,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                541.3,
+                932.6
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 689,
+            "frames_with_speaker": 420,
+            "frames_total": 420
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.22,
+            "first_speech_onset_s": 0.94,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.741,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A presenter explores a hypothetical scenario, with the hook being the on-screen text \"WHAT IF SUN ROSE 16 TIMES?\" illustrated by a counter for 16 separate mornings in one day.",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "WHAT IF SUN ROSE 16 TIMES?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "WHAT IF SUN ROSE 16 TIMES?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "What if the sun rose 16 times today?"
+              },
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "What if the sun rose 16 times today?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0268,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9952
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "count_up",
+                "path": "approach",
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.967,
+                "absence_match_max": 0.018,
+                "path_match": 0.897,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 2,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 14.0
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": true,
+          "measured": {
+            "integrated_lufs": -14.25,
+            "true_peak_dbtp": -2.21,
+            "lra_lu": 15.2,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0147,
+          "request_id": "resp_6ae9867730723a52aaf54247"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "7de81d537c62a141da2bb937db8eeb503a643ae136998c0b04e5c37229797538",
+        "sam_response": "35318c1fed8d2123f4d1cb14c7760aa183adb7d8fd39aca34242162a04ff04e4",
+        "captions": "e07d199ad7e7face23acdee5e5a7c441aae1d5ad3909ec54d83446bce56e3add"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.113 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            0.86,
+            10.92
+          ],
+          "box": [
+            216,
+            213,
+            864,
+            587
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "What if the sun rose 16 times today? Before lunch, before dinner, 16 separate mornings.",
+          "headline": "16 times today",
+          "facts": "16 separate mornings",
+          "path": "approach"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 0.86,
+          "recipe": "whoosh",
+          "graphic_index": 0,
+          "anchor": "enter"
+        },
+        {
+          "t_s": 1.76,
+          "recipe": "ding",
+          "graphic_index": 0,
+          "anchor": "land"
+        }
+      ],
+      "backdrops": [],
+      "layout_spans": [
+        {
+          "span": [
+            0.86,
+            10.92
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            560,
+            338,
+            990,
+            864
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              290.0,
+              355.0
+            ],
+            "scale": 1.4828,
+            "origin": [
+              560.0,
+              337.6
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            776.3,
+            470.0
+          ],
+          "head_top_min": 373,
+          "feasible": false,
+          "note": "PiP right 430px wide at (560, 338): centroid (776, 470), head-top min 373px, face bottom 541 above caption top 1460; both PiP corners collide with the span's graphic box - Stage kept",
+          "graphic_box": [
+            216,
+            213,
+            864,
+            587
+          ],
+          "anchor_quality": "high",
+          "downgraded_to": "stage"
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 10.06,
+        "short_s": 14.0,
+        "coverage_frac": 0.7186
+      }
+    }
+  ]
+}

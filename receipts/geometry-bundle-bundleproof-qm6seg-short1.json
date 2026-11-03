@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "drafts": {
+    "1": {
+      "stage_geometry": {
+        "feasible": true,
+        "identity": false,
+        "scale": 2.735,
+        "crop": [
+          208,
+          67,
+          234,
+          293
+        ],
+        "pad_bottom_px": 4,
+        "centroid_target": [
+          540.0,
+          930.0
+        ],
+        "placed_centroid": [
+          540.8,
+          928.1
+        ],
+        "head_top_min": 660,
+        "mask_height_frac": 0.615,
+        "note": "stage zoom x2.74: crop (208, 67, 234, 293) pad 4; placed centroid (541,928), mask height frac 0.615",
+        "reframe_pad_bottom_px": 0,
+        "effect_pad_bottom_px": 0
+      },
+      "alpha_recipe": {
+        "src_frame_size": [
+          360,
+          640
+        ],
+        "stage_zoom": {
+          "applied": true,
+          "crop": [
+            208,
+            67,
+            234,
+            293
+          ],
+          "pad_bottom_px": 4
+        },
+        "effect_pad_bottom_px": 0,
+        "speaker_forward": [
+          {
+            "span": [
+              11.128,
+              13.29
+            ],
+            "scale": 1.18,
+            "placed_centroid": [
+              539.2,
+              866.3
+            ],
+            "placed_head_top_min": 595,
+            "crop": [
+              14,
+              4,
+              198,
+              252
+            ],
+            "pad_bottom_px": 11
+          }
+        ]
+      },
+      "hook": {
+        "text": "WHY SPACEWALK SMELLS LIKE HAMBURGER?",
+        "window": [
+          0.0,
+          6.0
+        ],
+        "y_center_frac": 0.39,
+        "layout_rendered": true,
+        "accent_index": 4,
+        "text_size": 170,
+        "slide": null,
+        "variant": "stage"
+      },
+      "caption_rect": [
+        60,
+        1460,
+        980,
+        1600
+      ],
+      "layout_spans": null,
+      "hook_slide_px_s": 0.0,
+      "inputs_hash": "9acd3189ccc58ab6052dc67d8966a8f608ed2168790259378e390d5480892a1b"
+    }
+  }
+}

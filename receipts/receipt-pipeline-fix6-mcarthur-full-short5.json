@@ -1,0 +1,1338 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-mcarthur-full/short-5/draft2-reposition-hook.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "FAIL",
+  "repair": {
+    "status": "executed",
+    "menu_id": "REPOSITION_HOOK",
+    "target_check": "F2",
+    "spark_reason": "lowers caption_face_overlap_max_px from 12286px vs 0 threshold by re-planning hook band and caption block placement",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0112,
+      "request_id": "chatcmpl-01a1a0e5-891d-77d1-abbe-af20d5fa3068"
+    },
+    "extra_calls": [],
+    "detail": "hook band 0.42 -> 0.43 (predicted occlusion 0.109 at the stricter 0.125 target)"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-mcarthur-full/short-5/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F2",
+        "F8",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -22.57,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": false,
+          "measured": {
+            "glyph_occlusion_mean": 0.0934,
+            "glyph_occlusion_max": 0.216,
+            "glyph_occlusion_alpha_weighted_mean": 0.0948,
+            "caption_face_overlap_max_px": 12286
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                547.2,
+                934.6
+              ]
+            },
+            "face_centroid_in_central_band": true,
+            "layout_spans": [
+              {
+                "layout": "spotlight",
+                "span": [
+                  3.608,
+                  6.989
+                ],
+                "median_centroid": [
+                  572.0,
+                  993.4
+                ],
+                "in_declared_box": true,
+                "ok": true
+              }
+            ]
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 0.9817,
+            "head_margin_min_px": 378,
+            "frames_with_speaker": 645,
+            "frames_total": 657,
+            "layout": {
+              "frames_excluded_declared": 0,
+              "frames_denominator": 657
+            }
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.16,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.999,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A NASA astronaut floating in space explains the living area of space stations, comparing the International Space Station's 1,174 square feet to a much larger figure. The hook is the on-screen question \"6,000 SQUARE FEET UP HERE?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "6,000 SQUARE FEET UP HERE?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "6,000 SQUARE FEET UP HERE?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "the first one we talked about already is [first, one]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.8227,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9795
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": false,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "count_up",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.966,
+                "absence_match_max": 0.005,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [
+              {
+                "index": 0,
+                "kind": "backdrop",
+                "motion": "ken_burns",
+                "presence_match": 0.999,
+                "absence_match_max": 0.518,
+                "ok": false
+              }
+            ],
+            "offending_backdrop_indices": [
+              0
+            ],
+            "layout_spans": [
+              {
+                "index": 0,
+                "layout": "spotlight",
+                "span": [
+                  3.608,
+                  6.989
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 83,
+                "median_centroid": [
+                  572.0,
+                  993.4
+                ],
+                "ok": true
+              }
+            ],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 7,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 21.922
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -22.31,
+            "true_peak_dbtp": -0.09,
+            "lra_lu": 2.1,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0281,
+          "request_id": "resp_6ae9b37210a01857e4e54034"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "ae90c979452011350fb47e7e27f3f0c9a3c89f4b2c0c5551010b38658f4e95c0",
+        "sam_response": "9c63f518d2a4a4704ff5337c7e515014c6205a2c6f8138c4253eb84a5f0c1651",
+        "captions": "da0a8931e368635f2c6fbb06deda3764dc53fe78c362c1ab5e65769e71188469"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.093 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            3.608,
+            6.989
+          ],
+          "box": [
+            109,
+            100,
+            971,
+            570
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "it's like 6,000 square feet up here in the International International Space Station.",
+          "headline": "6,000 square feet",
+          "facts": "International Space Station",
+          "layout": "spotlight",
+          "anchor_quality": "low"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 3.668,
+          "recipe": "tick",
+          "gain_db": -26.16,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 4.155,
+          "recipe": "tick",
+          "gain_db": -26.96,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 4.642,
+          "recipe": "tick",
+          "gain_db": -29.18,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 5.129,
+          "recipe": "tick",
+          "gain_db": -25.98,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 5.615,
+          "recipe": "tick",
+          "gain_db": -28.27,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 6.102,
+          "recipe": "tick",
+          "gain_db": -27.35,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 6.38,
+          "recipe": "ding",
+          "gain_db": -28.0,
+          "graphic_index": 0,
+          "anchor": "count_complete"
+        }
+      ],
+      "backdrops": [
+        {
+          "kind": "backdrop",
+          "start_s": 8.423,
+          "end_s": 13.797,
+          "motion": "ken_burns",
+          "prompt": "Empty space station interior looking through connected modules stretching into distance. - no text, no letters, no numbers, no words",
+          "source_quote": "I could be in a module, and I can see right now three modules, and I don't see any other people,",
+          "cost_usd": 0.01
+        }
+      ],
+      "speaker_forward": [
+        {
+          "span": {
+            "start_s": 18.77,
+            "end_s": 20.604
+          },
+          "scale": 1.18,
+          "centroid_target": [
+            540.0,
+            864.0
+          ],
+          "placed_centroid": [
+            541.1,
+            865.1
+          ],
+          "placed_head_top_min": 660,
+          "note": "emphasis x1.18: crop (22, 63, 246, 351) + pad -24; centroid (145,150) -> (541,865) canvas, head-top min 660px >= 150px plan floor"
+        }
+      ],
+      "layout_spans": [
+        {
+          "span": [
+            3.608,
+            6.989
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            264,
+            781,
+            816,
+            1456
+          ],
+          "speaker_placement": {
+            "crop": [
+              53.3,
+              67.7,
+              163.4,
+              200.2
+            ],
+            "scale": 3.3755,
+            "origin": [
+              264.2,
+              780.7
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            565.7,
+            1039.0
+          ],
+          "head_top_min": 873,
+          "feasible": true,
+          "note": "PiP below hero (face crop) 552x676px at (264, 781) in band [618, 1460]: centroid (566, 1039), head-top min 873px, placed face height 307px",
+          "graphic_box": [
+            109,
+            100,
+            971,
+            570
+          ],
+          "anchor_quality": "low",
+          "spotlight_hero": {
+            "from_box": [
+              216,
+              317,
+              864,
+              691
+            ],
+            "to_box": [
+              109,
+              100,
+              971,
+              570
+            ],
+            "strategy": "hero_first",
+            "pip_box": [
+              264,
+              781,
+              816,
+              1456
+            ],
+            "fit": "native_aspect",
+            "band": [
+              618,
+              1460
+            ],
+            "group": {
+              "top_px": 100,
+              "gap_px": 48,
+              "hero_width_frac_cap": 0.85,
+              "hero_min_width_frac": 0.74
+            }
+          }
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 3.381,
+        "short_s": 21.922,
+        "coverage_frac": 0.1542
+      },
+      "caption_timing_source": "mms+dsp",
+      "cue_repairs": [
+        {
+          "cue_index": 0,
+          "action": "expanded",
+          "before": [
+            0.04,
+            0.269
+          ],
+          "after": [
+            0.029,
+            0.269
+          ],
+          "reason": "span 0.229s < plausible minimum 0.240s for 1 words"
+        }
+      ],
+      "stage_geometry": {
+        "feasible": true,
+        "identity": false,
+        "scale": 2.207,
+        "crop": [
+          186,
+          0,
+          290,
+          360
+        ],
+        "pad_bottom_px": 54,
+        "centroid_target": [
+          540.0,
+          930.0
+        ],
+        "placed_centroid": [
+          541.5,
+          931.8
+        ],
+        "head_top_min": 378,
+        "mask_height_frac": 0.491,
+        "note": "stage zoom x2.21: crop (186, 0, 290, 360) pad 54; placed centroid (541,932), mask height frac 0.491 - closest feasible step to the 0.58-0.66 design band",
+        "reframe_pad_bottom_px": 0,
+        "effect_pad_bottom_px": 0
+      },
+      "backdrop": {
+        "mode": "studio_procedural",
+        "seed": 17301101451769629684,
+        "drift": "ken_burns_1.12",
+        "shadow": "mask_base_ellipse",
+        "maskless_frames": 12
+      },
+      "hook_style": {
+        "tone": "two_tone",
+        "accent_word": "6,000",
+        "accent_index": 0,
+        "accent_rgb": [
+          255,
+          61,
+          126
+        ],
+        "entry": "stagger_pop",
+        "text_size": 170
+      },
+      "caption_style": {
+        "chunk_max_words": 4,
+        "word_states": {
+          "upcoming": "white_alpha_140",
+          "active": "viral_pink_scale_1.10",
+          "spoken": "white_full_alpha",
+          "spoken_emphasis": "viral_pink"
+        }
+      },
+      "caption_snap": {
+        "applied": true,
+        "method": "energy_valley_snap",
+        "window_s": 0.15,
+        "hop_s": 0.005,
+        "smooth_hops": 3,
+        "words": 95,
+        "words_snapped": 59,
+        "mean_abs_shift_ms": 87.3,
+        "max_abs_shift_ms": 420.0,
+        "snap_sources": [
+          "mms"
+        ],
+        "words_eligible": 63
+      },
+      "caption_cue_sources": [
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "mms"
+      ],
+      "caption_timing_gate": [
+        {
+          "cue_index": 4,
+          "action": "pace_gate_rejected",
+          "slice": [
+            2.33,
+            3.97
+          ],
+          "reason": "sustained pace 6.68 words/s over the aligned extent 0.75s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 4,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 10.22 words/s over the aligned extent 0.49s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 5,
+          "action": "dsp_fallback",
+          "reason": "aligner failed on the activity-bounded slice [3.47, 5.81]: MMS aligner cannot represent the word '6,000' in its dictionary (romanised letters only) - refusing to invent its timing"
+        },
+        {
+          "cue_index": 11,
+          "action": "pace_gate_rejected",
+          "slice": [
+            13.25,
+            15.57
+          ],
+          "reason": "sustained pace 4.61 words/s over the aligned extent 1.73s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 11,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 4.65 words/s over the aligned extent 1.72s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 14,
+          "action": "pace_gate_rejected",
+          "slice": [
+            16.47,
+            18.35
+          ],
+          "reason": "sustained pace 5.12 words/s over the aligned extent 1.17s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 14,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 5.80 words/s over the aligned extent 1.04s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 17,
+          "action": "pace_gate_rejected",
+          "slice": [
+            20.37,
+            22.01
+          ],
+          "reason": "sustained pace 4.57 words/s over the aligned extent 1.09s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 17,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 5.34 words/s over the aligned extent 0.94s exceeds the 4.5 words/s sanity ceiling"
+        }
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-mcarthur-full/short-5/draft2-reposition-hook.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F2",
+        "F8",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 6,
+            "audio_rms_db_0_2s": -22.57,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": false,
+          "measured": {
+            "glyph_occlusion_mean": 0.1094,
+            "glyph_occlusion_max": 0.2245,
+            "glyph_occlusion_alpha_weighted_mean": 0.111,
+            "caption_face_overlap_max_px": 12286
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                547.2,
+                934.6
+              ]
+            },
+            "face_centroid_in_central_band": true,
+            "layout_spans": [
+              {
+                "layout": "spotlight",
+                "span": [
+                  3.608,
+                  6.989
+                ],
+                "median_centroid": [
+                  572.0,
+                  993.4
+                ],
+                "in_declared_box": true,
+                "ok": true
+              }
+            ]
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 0.9817,
+            "head_margin_min_px": 378,
+            "frames_with_speaker": 645,
+            "frames_total": 657,
+            "layout": {
+              "frames_excluded_declared": 0,
+              "frames_denominator": 657
+            }
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.16,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.999,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A NASA astronaut floating in a red polo explains the amount of living space up in orbit, starting with the International Space Station's 1,174 square feet. The hook is the on-screen question \"6,000 SQUARE FEET UP HERE?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "number",
+                "source": "hook",
+                "evidence": "6,000 SQUARE FEET UP HERE?"
+              },
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "6,000 SQUARE FEET UP HERE?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "the first one we talked about already is [first, one]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.8227,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9795
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": false,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "count_up",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.966,
+                "absence_match_max": 0.005,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [
+              {
+                "index": 0,
+                "kind": "backdrop",
+                "motion": "ken_burns",
+                "presence_match": 0.999,
+                "absence_match_max": 0.518,
+                "ok": false
+              }
+            ],
+            "offending_backdrop_indices": [
+              0
+            ],
+            "layout_spans": [
+              {
+                "index": 0,
+                "layout": "spotlight",
+                "span": [
+                  3.608,
+                  6.989
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 83,
+                "median_centroid": [
+                  572.0,
+                  993.4
+                ],
+                "ok": true
+              }
+            ],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 7,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 21.922
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -22.31,
+            "true_peak_dbtp": -0.09,
+            "lra_lu": 2.1,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0203,
+          "request_id": "resp_6ae9b619581af6a3671149ba"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "3f3f3a02975b4b7324de04f2d55671855690635feb8ec29d6917686245458f8b",
+        "sam_response": "9c63f518d2a4a4704ff5337c7e515014c6205a2c6f8138c4253eb84a5f0c1651",
+        "captions": "da0a8931e368635f2c6fbb06deda3764dc53fe78c362c1ab5e65769e71188469"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.109 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            3.608,
+            6.989
+          ],
+          "box": [
+            109,
+            100,
+            971,
+            570
+          ],
+          "motion": "count_up",
+          "cost_usd": 0.0,
+          "source_quote": "it's like 6,000 square feet up here in the International International Space Station.",
+          "headline": "6,000 square feet",
+          "facts": "International Space Station",
+          "layout": "spotlight",
+          "anchor_quality": "low"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 3.668,
+          "recipe": "tick",
+          "gain_db": -26.16,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 4.155,
+          "recipe": "tick",
+          "gain_db": -26.96,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 4.642,
+          "recipe": "tick",
+          "gain_db": -29.18,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 5.129,
+          "recipe": "tick",
+          "gain_db": -25.98,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 5.615,
+          "recipe": "tick",
+          "gain_db": -28.27,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 6.102,
+          "recipe": "tick",
+          "gain_db": -27.35,
+          "graphic_index": 0,
+          "anchor": "count"
+        },
+        {
+          "t_s": 6.38,
+          "recipe": "ding",
+          "gain_db": -28.0,
+          "graphic_index": 0,
+          "anchor": "count_complete"
+        }
+      ],
+      "backdrops": [
+        {
+          "kind": "backdrop",
+          "start_s": 8.423,
+          "end_s": 13.797,
+          "motion": "ken_burns",
+          "prompt": "Empty space station interior looking through connected modules stretching into distance. - no text, no letters, no numbers, no words",
+          "source_quote": "I could be in a module, and I can see right now three modules, and I don't see any other people,",
+          "cost_usd": 0.01
+        }
+      ],
+      "speaker_forward": [
+        {
+          "span": {
+            "start_s": 18.77,
+            "end_s": 20.604
+          },
+          "scale": 1.18,
+          "centroid_target": [
+            540.0,
+            864.0
+          ],
+          "placed_centroid": [
+            541.1,
+            865.1
+          ],
+          "placed_head_top_min": 660,
+          "note": "emphasis x1.18: crop (22, 63, 246, 351) + pad -24; centroid (145,150) -> (541,865) canvas, head-top min 660px >= 150px plan floor"
+        }
+      ],
+      "layout_spans": [
+        {
+          "span": [
+            3.608,
+            6.989
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            264,
+            781,
+            816,
+            1456
+          ],
+          "speaker_placement": {
+            "crop": [
+              53.3,
+              67.7,
+              163.4,
+              200.2
+            ],
+            "scale": 3.3755,
+            "origin": [
+              264.2,
+              780.7
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            565.7,
+            1039.0
+          ],
+          "head_top_min": 873,
+          "feasible": true,
+          "note": "PiP below hero (face crop) 552x676px at (264, 781) in band [618, 1460]: centroid (566, 1039), head-top min 873px, placed face height 307px",
+          "graphic_box": [
+            109,
+            100,
+            971,
+            570
+          ],
+          "anchor_quality": "low",
+          "spotlight_hero": {
+            "from_box": [
+              216,
+              317,
+              864,
+              691
+            ],
+            "to_box": [
+              109,
+              100,
+              971,
+              570
+            ],
+            "strategy": "hero_first",
+            "pip_box": [
+              264,
+              781,
+              816,
+              1456
+            ],
+            "fit": "native_aspect",
+            "band": [
+              618,
+              1460
+            ],
+            "group": {
+              "top_px": 100,
+              "gap_px": 48,
+              "hero_width_frac_cap": 0.85,
+              "hero_min_width_frac": 0.74
+            }
+          }
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 3.381,
+        "short_s": 21.922,
+        "coverage_frac": 0.1542
+      },
+      "caption_timing_source": "mms+dsp",
+      "cue_repairs": [
+        {
+          "cue_index": 0,
+          "action": "expanded",
+          "before": [
+            0.04,
+            0.269
+          ],
+          "after": [
+            0.029,
+            0.269
+          ],
+          "reason": "span 0.229s < plausible minimum 0.240s for 1 words"
+        }
+      ],
+      "stage_geometry": {
+        "feasible": true,
+        "identity": false,
+        "scale": 2.207,
+        "crop": [
+          186,
+          0,
+          290,
+          360
+        ],
+        "pad_bottom_px": 54,
+        "centroid_target": [
+          540.0,
+          930.0
+        ],
+        "placed_centroid": [
+          541.5,
+          931.8
+        ],
+        "head_top_min": 378,
+        "mask_height_frac": 0.491,
+        "note": "stage zoom x2.21: crop (186, 0, 290, 360) pad 54; placed centroid (541,932), mask height frac 0.491 - closest feasible step to the 0.58-0.66 design band",
+        "reframe_pad_bottom_px": 0,
+        "effect_pad_bottom_px": 0
+      },
+      "backdrop": {
+        "mode": "studio_procedural",
+        "seed": 17301101451769629684,
+        "drift": "ken_burns_1.12",
+        "shadow": "mask_base_ellipse",
+        "maskless_frames": 12
+      },
+      "hook_style": {
+        "tone": "two_tone",
+        "accent_word": "6,000",
+        "accent_index": 0,
+        "accent_rgb": [
+          255,
+          61,
+          126
+        ],
+        "entry": "stagger_pop",
+        "text_size": 170
+      },
+      "caption_style": {
+        "chunk_max_words": 4,
+        "word_states": {
+          "upcoming": "white_alpha_140",
+          "active": "viral_pink_scale_1.10",
+          "spoken": "white_full_alpha",
+          "spoken_emphasis": "viral_pink"
+        }
+      },
+      "caption_snap": {
+        "applied": true,
+        "method": "energy_valley_snap",
+        "window_s": 0.15,
+        "hop_s": 0.005,
+        "smooth_hops": 3,
+        "words": 95,
+        "words_snapped": 59,
+        "mean_abs_shift_ms": 87.3,
+        "max_abs_shift_ms": 420.0,
+        "snap_sources": [
+          "mms"
+        ],
+        "words_eligible": 63
+      },
+      "caption_cue_sources": [
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "dsp_phrase",
+        "mms"
+      ],
+      "caption_timing_gate": [
+        {
+          "cue_index": 4,
+          "action": "pace_gate_rejected",
+          "slice": [
+            2.33,
+            3.97
+          ],
+          "reason": "sustained pace 6.68 words/s over the aligned extent 0.75s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 4,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 10.22 words/s over the aligned extent 0.49s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 5,
+          "action": "dsp_fallback",
+          "reason": "aligner failed on the activity-bounded slice [3.47, 5.81]: MMS aligner cannot represent the word '6,000' in its dictionary (romanised letters only) - refusing to invent its timing"
+        },
+        {
+          "cue_index": 11,
+          "action": "pace_gate_rejected",
+          "slice": [
+            13.25,
+            15.57
+          ],
+          "reason": "sustained pace 4.61 words/s over the aligned extent 1.73s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 11,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 4.65 words/s over the aligned extent 1.72s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 14,
+          "action": "pace_gate_rejected",
+          "slice": [
+            16.47,
+            18.35
+          ],
+          "reason": "sustained pace 5.12 words/s over the aligned extent 1.17s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 14,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 5.80 words/s over the aligned extent 1.04s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 17,
+          "action": "pace_gate_rejected",
+          "slice": [
+            20.37,
+            22.01
+          ],
+          "reason": "sustained pace 4.57 words/s over the aligned extent 1.09s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 17,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 5.34 words/s over the aligned extent 0.94s exceeds the 4.5 words/s sanity ceiling"
+        }
+      ]
+    }
+  ]
+}

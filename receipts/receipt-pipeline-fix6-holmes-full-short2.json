@@ -1,0 +1,1264 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-holmes-full/short-2/draft2-normalize-loudness.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "FAIL",
+  "repair": {
+    "status": "executed",
+    "menu_id": "NORMALIZE_LOUDNESS",
+    "target_check": "F9",
+    "spark_reason": "raises integrated_lufs from -21.46 to -14 target to meet -15 to -13 band",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0057,
+      "request_id": "chatcmpl-01a1a151-a03f-7297-bf74-6edab4cf2913"
+    },
+    "extra_calls": [],
+    "detail": "two-pass loudnorm (dynamic) of the final mix + measured corrections (gain +0.30 dB; limiter (ceiling -5.20 dB, buying headroom); gain +2.50 dB): integrated -21.46 -> -14.6 LUFS, true peak -1.3 -> -1.65 dBTP (target -14 LUFS / -1 dBTP); video stream copied untouched; speech stem unmodified"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-holmes-full/short-2/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -20.69,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1995,
+            "glyph_occlusion_max": 0.4632,
+            "glyph_occlusion_alpha_weighted_mean": 0.2025,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                552.5,
+                931.2
+              ]
+            },
+            "face_centroid_in_central_band": true,
+            "layout_spans": [
+              {
+                "layout": "spotlight",
+                "span": [
+                  3.42,
+                  7.38
+                ],
+                "median_centroid": [
+                  306.0,
+                  470.0
+                ],
+                "in_declared_box": true,
+                "ok": true
+              },
+              {
+                "layout": "spotlight",
+                "span": [
+                  10.38,
+                  13.74
+                ],
+                "median_centroid": [
+                  309.1,
+                  470.0
+                ],
+                "in_declared_box": true,
+                "ok": true
+              }
+            ]
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 377,
+            "frames_with_speaker": 415,
+            "frames_total": 415,
+            "layout": {
+              "frames_excluded_declared": 0,
+              "frames_denominator": 415
+            }
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.1,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.896,
+            "wonder_can_summarize_muted_hook": false,
+            "wonder_summary": "",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "Is playing out."
+              },
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "Dan Orlovsky, what are your thoughts?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0093,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9959
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "reveal",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.965,
+                "absence_match_max": 0.087,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "reveal",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.96,
+                "absence_match_max": 0.004,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.954,
+                "absence_match_max": 0.032,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [
+              {
+                "index": 0,
+                "layout": "spotlight",
+                "span": [
+                  3.42,
+                  7.38
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 101,
+                "median_centroid": [
+                  306.0,
+                  470.0
+                ],
+                "ok": true
+              },
+              {
+                "index": 1,
+                "layout": "spotlight",
+                "span": [
+                  10.38,
+                  13.74
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 82,
+                "median_centroid": [
+                  309.1,
+                  470.0
+                ],
+                "ok": true
+              }
+            ],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 3,
+              "gap_events_checked": 1,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 13.847
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -21.46,
+            "true_peak_dbtp": -1.3,
+            "lra_lu": 5.0,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0331,
+          "request_id": "resp_6ae9cf15f6bc5222d99a4302"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "f005530438149db23afe91f27515060cee5d3330a652950fde3735b55c928e7a",
+        "sam_response": "6ea5a05a31e4552e1b4385f00b7db0b1cb44ed0b01854335f900ec2dfe985829",
+        "captions": "04070aaad152c2f66d5b2f7038ffbe9f256c62a7d7afca50b05514efa6650041"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.200 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            3.42,
+            7.38
+          ],
+          "box": [
+            216,
+            904,
+            864,
+            1197
+          ],
+          "motion": "reveal",
+          "cost_usd": 0.0,
+          "source_quote": "So the Cowboys have put their whole season,",
+          "headline": "Cowboys",
+          "facts": "have put their whole season",
+          "layout": "spotlight",
+          "layout_assist": {
+            "span": [
+              3.42,
+              7.38
+            ],
+            "requested": "spotlight"
+          }
+        },
+        {
+          "kind": "card",
+          "span": [
+            6.98,
+            10.78
+          ],
+          "box": [
+            360,
+            16,
+            696,
+            222
+          ],
+          "motion": "reveal",
+          "cost_usd": 0.0,
+          "source_quote": "the future of Dak Prescott as a Cowboy.",
+          "headline": "Dak Prescott",
+          "facts": "as a Cowboy"
+        },
+        {
+          "kind": "card",
+          "span": [
+            10.38,
+            13.74
+          ],
+          "box": [
+            744,
+            552,
+            1029,
+            766
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "And the future of Mike McCarthy as their head coach.",
+          "headline": "Mike McCarthy",
+          "facts": "as their head coach",
+          "layout": "spotlight",
+          "layout_assist": {
+            "span": [
+              10.38,
+              13.74
+            ],
+            "requested": "spotlight"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 3.54,
+          "recipe": "ding",
+          "gain_db": -24.63,
+          "graphic_index": 0,
+          "anchor": "reveal"
+        },
+        {
+          "t_s": 7.1,
+          "recipe": "ding",
+          "gain_db": -41.67,
+          "graphic_index": 1,
+          "anchor": "reveal"
+        },
+        {
+          "t_s": 10.38,
+          "recipe": "pop",
+          "gain_db": -19.55,
+          "graphic_index": 2,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": [],
+      "layout_spans": [
+        {
+          "span": [
+            3.42,
+            7.38
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            90,
+            339,
+            520,
+            864
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              248.0,
+              303.0
+            ],
+            "scale": 1.7339,
+            "origin": [
+              90.0,
+              338.8
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            305.8,
+            470.0
+          ],
+          "head_top_min": 384,
+          "feasible": true,
+          "note": "PiP left 430px wide at (90, 339): centroid (306, 470), head-top min 384px, face bottom 535 above caption top 1460",
+          "graphic_box": [
+            216,
+            904,
+            864,
+            1197
+          ],
+          "anchor_quality": "high",
+          "spotlight_refit": {
+            "from_box": [
+              216,
+              245,
+              864,
+              538
+            ],
+            "to_box": [
+              216,
+              904,
+              864,
+              1197
+            ],
+            "strategy": "below_pip_full_size",
+            "pip_box": [
+              90,
+              339,
+              520,
+              864
+            ]
+          },
+          "layout_assist": {
+            "span": [
+              3.42,
+              7.38
+            ],
+            "requested": "spotlight",
+            "applied": "spotlight"
+          }
+        },
+        {
+          "span": [
+            10.38,
+            13.74
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            90,
+            335,
+            520,
+            861
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              248.0,
+              303.0
+            ],
+            "scale": 1.7339,
+            "origin": [
+              90.0,
+              335.3
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            300.9,
+            470.0
+          ],
+          "head_top_min": 377,
+          "feasible": true,
+          "note": "PiP left 430px wide at (90, 335): centroid (301, 470), head-top min 377px, face bottom 540 above caption top 1460",
+          "graphic_box": [
+            744,
+            552,
+            1029,
+            766
+          ],
+          "anchor_quality": "high",
+          "layout_assist": {
+            "span": [
+              10.38,
+              13.74
+            ],
+            "requested": "spotlight",
+            "applied": "spotlight"
+          }
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 10.32,
+        "short_s": 13.847,
+        "coverage_frac": 0.7453
+      },
+      "caption_timing_source": "mms+dsp",
+      "stage_geometry": {
+        "feasible": true,
+        "identity": false,
+        "scale": 2.581,
+        "crop": [
+          103,
+          65,
+          248,
+          295
+        ],
+        "pad_bottom_px": 8,
+        "centroid_target": [
+          540.0,
+          930.0
+        ],
+        "placed_centroid": [
+          542.1,
+          930.6
+        ],
+        "head_top_min": 705,
+        "mask_height_frac": 0.608,
+        "note": "stage zoom x2.58: crop (103, 65, 248, 295) pad 8; placed centroid (542,931), mask height frac 0.608",
+        "reframe_pad_bottom_px": 0,
+        "effect_pad_bottom_px": 0
+      },
+      "backdrop": {
+        "mode": "studio_procedural",
+        "seed": 16077705402095782695,
+        "drift": "ken_burns_1.12",
+        "shadow": "mask_base_ellipse",
+        "maskless_frames": 0
+      },
+      "hook_style": {
+        "tone": "two_tone",
+        "accent_word": "MOMENT",
+        "accent_index": 2,
+        "accent_rgb": [
+          255,
+          61,
+          126
+        ],
+        "entry": "stagger_pop",
+        "text_size": 170
+      },
+      "caption_style": {
+        "chunk_max_words": 4,
+        "word_states": {
+          "upcoming": "white_alpha_140",
+          "active": "viral_pink_scale_1.10",
+          "spoken": "white_full_alpha",
+          "spoken_emphasis": "viral_pink"
+        }
+      },
+      "caption_snap": {
+        "applied": true,
+        "method": "energy_valley_snap",
+        "window_s": 0.15,
+        "hop_s": 0.005,
+        "smooth_hops": 3,
+        "words": 36,
+        "words_snapped": 26,
+        "mean_abs_shift_ms": 68.6,
+        "max_abs_shift_ms": 144.5,
+        "snap_sources": [
+          "mms"
+        ],
+        "words_eligible": 27
+      },
+      "caption_cue_sources": [
+        "dsp_phrase",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms"
+      ],
+      "caption_timing_gate": [
+        {
+          "cue_index": 0,
+          "action": "pace_gate_rejected",
+          "slice": [
+            0.0,
+            1.01
+          ],
+          "reason": "sustained pace 4.79 words/s over the aligned extent 0.63s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 0,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 4.87 words/s over the aligned extent 0.62s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 1,
+          "action": "pace_gate_rejected",
+          "slice": [
+            0.51,
+            2.47
+          ],
+          "reason": "sustained pace 4.57 words/s over the aligned extent 1.31s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 1,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 4.77 words/s over the aligned extent 1.26s exceeds the 4.5 words/s sanity ceiling"
+        }
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-holmes-full/short-2/draft2-normalize-loudness.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 3,
+            "audio_rms_db_0_2s": -12.84,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1995,
+            "glyph_occlusion_max": 0.4632,
+            "glyph_occlusion_alpha_weighted_mean": 0.2025,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                552.5,
+                931.2
+              ]
+            },
+            "face_centroid_in_central_band": true,
+            "layout_spans": [
+              {
+                "layout": "spotlight",
+                "span": [
+                  3.42,
+                  7.38
+                ],
+                "median_centroid": [
+                  306.0,
+                  470.0
+                ],
+                "in_declared_box": true,
+                "ok": true
+              },
+              {
+                "layout": "spotlight",
+                "span": [
+                  10.38,
+                  13.74
+                ],
+                "median_centroid": [
+                  309.1,
+                  470.0
+                ],
+                "in_declared_box": true,
+                "ok": true
+              }
+            ]
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 377,
+            "frames_with_speaker": 415,
+            "frames_total": 415,
+            "layout": {
+              "frames_excluded_declared": 0,
+              "frames_denominator": 415
+            }
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.1,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.896,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "The clip is about the Dallas Cowboys, with on-screen text asking Dan Orlovsky for his thoughts on a situation playing out. The hook is \"WATCH THIS MOMENT,\" teasing Orlovsky's reaction to the Cowboys.",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "Is playing out."
+              },
+              {
+                "pattern": "question",
+                "source": "caption",
+                "evidence": "Dan Orlovsky, what are your thoughts?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0093,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9959
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 3,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "card",
+                "motion": "reveal",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.965,
+                "absence_match_max": 0.087,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 1,
+                "kind": "card",
+                "motion": "reveal",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.96,
+                "absence_match_max": 0.004,
+                "path_match": null,
+                "ok": true
+              },
+              {
+                "index": 2,
+                "kind": "card",
+                "motion": "static",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.954,
+                "absence_match_max": 0.032,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [
+              {
+                "index": 0,
+                "layout": "spotlight",
+                "span": [
+                  3.42,
+                  7.38
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 101,
+                "median_centroid": [
+                  306.0,
+                  470.0
+                ],
+                "ok": true
+              },
+              {
+                "index": 1,
+                "layout": "spotlight",
+                "span": [
+                  10.38,
+                  13.74
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 82,
+                "median_centroid": [
+                  309.1,
+                  470.0
+                ],
+                "ok": true
+              }
+            ],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 3,
+              "gap_events_checked": 1,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 13.847
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": true,
+          "measured": {
+            "integrated_lufs": -14.6,
+            "true_peak_dbtp": -1.65,
+            "lra_lu": 1.4,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0171,
+          "request_id": "resp_6ae9cfbdc929eed3b7da4e8d"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "408f77d60c78ea481c44c482159e0eecb0174019027b72cb3ca17abf48552ddc",
+        "sam_response": "6ea5a05a31e4552e1b4385f00b7db0b1cb44ed0b01854335f900ec2dfe985829",
+        "captions": "04070aaad152c2f66d5b2f7038ffbe9f256c62a7d7afca50b05514efa6650041"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.200 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "card",
+          "span": [
+            3.42,
+            7.38
+          ],
+          "box": [
+            216,
+            904,
+            864,
+            1197
+          ],
+          "motion": "reveal",
+          "cost_usd": 0.0,
+          "source_quote": "So the Cowboys have put their whole season,",
+          "headline": "Cowboys",
+          "facts": "have put their whole season",
+          "layout": "spotlight",
+          "layout_assist": {
+            "span": [
+              3.42,
+              7.38
+            ],
+            "requested": "spotlight"
+          }
+        },
+        {
+          "kind": "card",
+          "span": [
+            6.98,
+            10.78
+          ],
+          "box": [
+            360,
+            16,
+            696,
+            222
+          ],
+          "motion": "reveal",
+          "cost_usd": 0.0,
+          "source_quote": "the future of Dak Prescott as a Cowboy.",
+          "headline": "Dak Prescott",
+          "facts": "as a Cowboy"
+        },
+        {
+          "kind": "card",
+          "span": [
+            10.38,
+            13.74
+          ],
+          "box": [
+            744,
+            552,
+            1029,
+            766
+          ],
+          "motion": "static",
+          "cost_usd": 0.0,
+          "source_quote": "And the future of Mike McCarthy as their head coach.",
+          "headline": "Mike McCarthy",
+          "facts": "as their head coach",
+          "layout": "spotlight",
+          "layout_assist": {
+            "span": [
+              10.38,
+              13.74
+            ],
+            "requested": "spotlight"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 3.54,
+          "recipe": "ding",
+          "graphic_index": 0,
+          "anchor": "reveal"
+        },
+        {
+          "t_s": 7.1,
+          "recipe": "ding",
+          "graphic_index": 1,
+          "anchor": "reveal"
+        },
+        {
+          "t_s": 10.38,
+          "recipe": "pop",
+          "graphic_index": 2,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": [],
+      "layout_spans": [
+        {
+          "span": [
+            3.42,
+            7.38
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            90,
+            339,
+            520,
+            864
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              248.0,
+              303.0
+            ],
+            "scale": 1.7339,
+            "origin": [
+              90.0,
+              338.8
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            305.8,
+            470.0
+          ],
+          "head_top_min": 384,
+          "feasible": true,
+          "note": "PiP left 430px wide at (90, 339): centroid (306, 470), head-top min 384px, face bottom 535 above caption top 1460",
+          "graphic_box": [
+            216,
+            904,
+            864,
+            1197
+          ],
+          "anchor_quality": "high",
+          "spotlight_refit": {
+            "from_box": [
+              216,
+              245,
+              864,
+              538
+            ],
+            "to_box": [
+              216,
+              904,
+              864,
+              1197
+            ],
+            "strategy": "below_pip_full_size",
+            "pip_box": [
+              90,
+              339,
+              520,
+              864
+            ]
+          },
+          "layout_assist": {
+            "span": [
+              3.42,
+              7.38
+            ],
+            "requested": "spotlight",
+            "applied": "spotlight"
+          }
+        },
+        {
+          "span": [
+            10.38,
+            13.74
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            90,
+            335,
+            520,
+            861
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              248.0,
+              303.0
+            ],
+            "scale": 1.7339,
+            "origin": [
+              90.0,
+              335.3
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            300.9,
+            470.0
+          ],
+          "head_top_min": 377,
+          "feasible": true,
+          "note": "PiP left 430px wide at (90, 335): centroid (301, 470), head-top min 377px, face bottom 540 above caption top 1460",
+          "graphic_box": [
+            744,
+            552,
+            1029,
+            766
+          ],
+          "anchor_quality": "high",
+          "layout_assist": {
+            "span": [
+              10.38,
+              13.74
+            ],
+            "requested": "spotlight",
+            "applied": "spotlight"
+          }
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 10.32,
+        "short_s": 13.847,
+        "coverage_frac": 0.7453
+      }
+    }
+  ]
+}

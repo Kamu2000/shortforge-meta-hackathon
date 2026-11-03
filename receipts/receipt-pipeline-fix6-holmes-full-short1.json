@@ -1,0 +1,670 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-holmes-full/short-1/draft2-normalize-loudness.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "FAIL",
+  "repair": {
+    "status": "executed",
+    "menu_id": "NORMALIZE_LOUDNESS",
+    "target_check": "F9",
+    "spark_reason": "raises integrated_lufs from -20.54 to -14 target band while keeping true peak <= -1 dBTP",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0093,
+      "request_id": "chatcmpl-01a1a180-cdbe-7438-8f6b-2fede0986d39"
+    },
+    "extra_calls": [],
+    "detail": "two-pass loudnorm (dynamic) of the final mix + measured corrections (gain +0.30 dB): integrated -20.54 -> -14.54 LUFS, true peak -1.93 -> -1.78 dBTP (target -14 LUFS / -1 dBTP); video stream copied untouched; speech stem unmodified"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-holmes-full/short-1/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5",
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -18.48,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1378,
+            "glyph_occlusion_max": 0.1641,
+            "glyph_occlusion_alpha_weighted_mean": 0.14,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                554.1,
+                924.3
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 590,
+            "frames_with_speaker": 658,
+            "frames_total": 658
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.46,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A man speaks to camera questioning whether to believe Dan and another named person because so many different stories have been heard. The hook is the bold on-screen text asking \"SHOULD WE BELIEVE DAN AND...?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "SHOULD WE BELIEVE DAN AND CREW?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0118,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9957
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 0,
+            "graphics": [],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 0,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 21.955
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -20.54,
+            "true_peak_dbtp": -1.93,
+            "lra_lu": 7.4,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.02,
+          "request_id": "resp_6ae9db3b64160b40102e415b"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "33cac9308de274ca8f6f4423c125ebc9dfea9d5a8a181c2046ff2cd1c0112b5b",
+        "sam_response": "10fea186b0cd75ed1ab4442023c979a975f5491c29cb3cbc452024e287cd876d",
+        "captions": "8074c0977007d8f04b8cead56ac910d07973ccec2d79dfcc15aae77d5e11d89a"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.138 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [],
+      "sfx": [],
+      "backdrops": [],
+      "speaker_forward": [
+        {
+          "span": {
+            "start_s": 15.216,
+            "end_s": 18.888
+          },
+          "scale": 1.18,
+          "centroid_target": [
+            540.0,
+            864.0
+          ],
+          "placed_centroid": [
+            538.3,
+            865.4
+          ],
+          "placed_head_top_min": 583,
+          "note": "emphasis x1.18: crop (5, 20, 210, 271) + pad 9; centroid (110,95) -> (538,865) canvas, head-top min 583px >= 150px plan floor"
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 0.0,
+        "short_s": 21.955,
+        "coverage_frac": 0.0
+      },
+      "caption_timing_source": "mms+dsp",
+      "stage_geometry": {
+        "feasible": true,
+        "identity": false,
+        "scale": 2.581,
+        "crop": [
+          94,
+          42,
+          248,
+          318
+        ],
+        "pad_bottom_px": 2,
+        "centroid_target": [
+          540.0,
+          930.0
+        ],
+        "placed_centroid": [
+          538.1,
+          929.5
+        ],
+        "head_top_min": 631,
+        "mask_height_frac": 0.621,
+        "note": "stage zoom x2.58: crop (94, 42, 248, 318) pad 2; placed centroid (538,930), mask height frac 0.621",
+        "reframe_pad_bottom_px": 0,
+        "effect_pad_bottom_px": 0
+      },
+      "backdrop": {
+        "mode": "studio_procedural",
+        "seed": 95210158590944601,
+        "drift": "ken_burns_1.12",
+        "shadow": "mask_base_ellipse",
+        "maskless_frames": 0
+      },
+      "hook_style": {
+        "tone": "two_tone",
+        "accent_word": "BELIEVE",
+        "accent_index": 2,
+        "accent_rgb": [
+          255,
+          61,
+          126
+        ],
+        "entry": "stagger_pop",
+        "text_size": 170
+      },
+      "caption_style": {
+        "chunk_max_words": 4,
+        "word_states": {
+          "upcoming": "white_alpha_140",
+          "active": "viral_pink_scale_1.10",
+          "spoken": "white_full_alpha",
+          "spoken_emphasis": "viral_pink"
+        }
+      },
+      "caption_snap": {
+        "applied": true,
+        "method": "energy_valley_snap",
+        "window_s": 0.15,
+        "hop_s": 0.005,
+        "smooth_hops": 3,
+        "words": 55,
+        "words_snapped": 37,
+        "mean_abs_shift_ms": 82.9,
+        "max_abs_shift_ms": 359.0,
+        "snap_sources": [
+          "mms"
+        ],
+        "words_eligible": 39
+      },
+      "caption_cue_sources": [
+        "mms",
+        "dsp_phrase",
+        "dsp_phrase",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms"
+      ],
+      "caption_timing_gate": [
+        {
+          "cue_index": 1,
+          "action": "pace_gate_rejected",
+          "slice": [
+            2.15,
+            5.61
+          ],
+          "reason": "sustained pace 4.57 words/s over the aligned extent 1.75s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 1,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 4.67 words/s over the aligned extent 1.71s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 2,
+          "action": "pace_gate_rejected",
+          "slice": [
+            6.03,
+            8.77
+          ],
+          "reason": "sustained pace 5.09 words/s over the aligned extent 1.57s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 2,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 4.66 words/s over the aligned extent 1.72s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 8,
+          "action": "pace_gate_rejected",
+          "slice": [
+            18.71,
+            22.012
+          ],
+          "reason": "aligned extent 1.77s covers less than 60% of the DSP speech-activity span 3.04s"
+        },
+        {
+          "cue_index": 8,
+          "action": "realigned_on_dsp_span",
+          "slice": [
+            18.96,
+            22.0
+          ]
+        }
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-holmes-full/short-1/draft2-normalize-loudness.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F5"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -12.89,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1378,
+            "glyph_occlusion_max": 0.1641,
+            "glyph_occlusion_alpha_weighted_mean": 0.14,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                554.1,
+                924.3
+              ]
+            },
+            "face_centroid_in_central_band": true
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 590,
+            "frames_with_speaker": 658,
+            "frames_total": 658
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": false,
+          "measured": {
+            "max_silence_gap_s": 1.46,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 1.0,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A podcast-style speaker questions whether to trust what Dan and another person named on screen say, explaining he doesn't know if we should believe what we hear because they've heard so many different versions. The hook is the on-screen question \"SHOULD WE BELIEVE DAN AND...?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "SHOULD WE BELIEVE DAN AND CREW?"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": 0.0118,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9957
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 0,
+            "graphics": [],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 0,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 21.955
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": true,
+          "measured": {
+            "integrated_lufs": -14.54,
+            "true_peak_dbtp": -1.78,
+            "lra_lu": 3.4,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0792,
+          "request_id": "resp_6ae9dc169803d659c319473d"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "cc6023069bc9dfb7e0a86dd0d72cf15df89750c196f0eb552c9167a3733c8b72",
+        "sam_response": "10fea186b0cd75ed1ab4442023c979a975f5491c29cb3cbc452024e287cd876d",
+        "captions": "8074c0977007d8f04b8cead56ac910d07973ccec2d79dfcc15aae77d5e11d89a"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.138 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [],
+      "sfx": [],
+      "backdrops": [],
+      "speaker_forward": [
+        {
+          "span": {
+            "start_s": 15.216,
+            "end_s": 18.888
+          },
+          "scale": 1.18,
+          "centroid_target": [
+            540.0,
+            864.0
+          ],
+          "placed_centroid": [
+            538.3,
+            865.4
+          ],
+          "placed_head_top_min": 583,
+          "note": "emphasis x1.18: crop (5, 20, 210, 271) + pad 9; centroid (110,95) -> (538,865) canvas, head-top min 583px >= 150px plan floor"
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 0.0,
+        "short_s": 21.955,
+        "coverage_frac": 0.0
+      }
+    }
+  ]
+}

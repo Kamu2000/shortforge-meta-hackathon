@@ -1,0 +1,914 @@
+{
+  "chain_version": 1,
+  "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-qm6test/short-1/draft2-normalize-loudness.mp4",
+  "created": "2026-10-29",
+  "final_verdict": "PASSED_AFTER_REPAIR",
+  "repair": {
+    "status": "executed",
+    "menu_id": "NORMALIZE_LOUDNESS",
+    "target_check": "F9",
+    "spark_reason": "Raises F9 integrated_lufs from -22.67 to -14 LUFS and lowers true_peak from -0.05 to <=-1 dBTP via two-pass loudnorm",
+    "spark_call": {
+      "model": "muse-spark-1.3",
+      "purpose": "rescue-repair-planner",
+      "cost_usd": 0.0026,
+      "request_id": "chatcmpl-01a19fec-6913-704f-bb41-f40740231045"
+    },
+    "extra_calls": [],
+    "detail": "two-pass loudnorm (dynamic) of the final mix + measured corrections (gain +0.30 dB; limiter (ceiling -5.37 dB, buying headroom); gain +2.67 dB; limiter (ceiling -6.32 dB, buying headroom); gain +2.88 dB; post-encode limiter (ceiling -4.93 dB, measured encode overshoot 3.13 dB)): integrated -22.67 -> -14.99 LUFS, true peak -0.05 -> -3.61 dBTP (target -14 LUFS / -1 dBTP); video stream copied untouched; speech stem unmodified"
+  },
+  "drafts": [
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-qm6test/short-1/draft-1.mp4",
+      "created": "2026-10-29",
+      "draft": 1,
+      "verdict": "FAIL",
+      "failed_checks": [
+        "F9"
+      ],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -23.15,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1286,
+            "glyph_occlusion_max": 0.1963,
+            "glyph_occlusion_alpha_weighted_mean": 0.1316,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                540.6,
+                934.7
+              ]
+            },
+            "face_centroid_in_central_band": true,
+            "layout_spans": [
+              {
+                "layout": "spotlight",
+                "span": [
+                  7.508,
+                  11.929
+                ],
+                "median_centroid": [
+                  541.9,
+                  946.3
+                ],
+                "in_declared_box": true,
+                "ok": true
+              }
+            ]
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 669,
+            "frames_with_speaker": 417,
+            "frames_total": 417,
+            "layout": {
+              "frames_excluded_declared": 0,
+              "frames_denominator": 417
+            }
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.16,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.971,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "A NASA astronaut speaking in zero gravity describes what she noticed during spacewalks on her previous flights. The hook is the on-screen text asking whether a spacewalk smells like cooking hamburger.",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "SPACEWALK SMELLS LIKE COOKING HAMBURGER?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "but the the one thing that that I [one]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0657,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9898
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "image",
+                "motion": "ken_burns",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.987,
+                "absence_match_max": 0.168,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [
+              {
+                "index": 0,
+                "layout": "spotlight",
+                "span": [
+                  7.508,
+                  11.929
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 114,
+                "median_centroid": [
+                  541.9,
+                  946.3
+                ],
+                "ok": true
+              }
+            ],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 1,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 13.914
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": false,
+          "measured": {
+            "integrated_lufs": -22.67,
+            "true_peak_dbtp": -0.05,
+            "lra_lu": 1.8,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0234,
+          "request_id": "resp_6ae973bdbb3922e312b14b2f"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "551c0982bebd7db587b3585ab57fa3cb4444752a1ec6ff0e2ed5c3277281f02a",
+        "sam_response": "3cd6628f34d5a975f78dc13458d40532117e893c8596e954faea1e3954653427",
+        "captions": "79847265f5aebe7d4ad7dc13c32162db9eb68a2508d8ee85794bb3184765c853"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.129 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "image",
+          "span": [
+            7.508,
+            11.929
+          ],
+          "box": [
+            135,
+            100,
+            945,
+            708
+          ],
+          "motion": "ken_burns",
+          "cost_usd": 0.01,
+          "source_quote": "I smelled the smell of of cooking meat. It smelled like hamburger to me,",
+          "prompt": "Close-up of a sizzling hamburger patty on a grill with rising steam. - no text, no letters, no numbers, no words",
+          "layout": "spotlight",
+          "anchor_quality": "low"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 7.508,
+          "recipe": "whoosh",
+          "gain_db": -26.71,
+          "graphic_index": 0,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": [],
+      "layout_spans": [
+        {
+          "span": [
+            7.508,
+            11.929
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            261,
+            756,
+            819,
+            1460
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              234.0,
+              295.0
+            ],
+            "scale": 2.3864,
+            "origin": [
+              260.8,
+              756.0
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            541.2,
+            945.7
+          ],
+          "head_top_min": 813,
+          "feasible": true,
+          "note": "PiP below hero (full frame) 558x704px at (261, 756) in band [756, 1460]: centroid (541, 946), head-top min 813px, placed face height 231px",
+          "graphic_box": [
+            135,
+            100,
+            945,
+            708
+          ],
+          "anchor_quality": "low",
+          "spotlight_hero": {
+            "from_box": [
+              16,
+              448,
+              301,
+              804
+            ],
+            "to_box": [
+              135,
+              100,
+              945,
+              708
+            ],
+            "strategy": "hero_first",
+            "pip_box": [
+              261,
+              756,
+              819,
+              1460
+            ],
+            "fit": "cover",
+            "band": [
+              756,
+              1460
+            ],
+            "group": {
+              "top_px": 100,
+              "gap_px": 48,
+              "hero_width_frac_cap": 0.85,
+              "hero_min_width_frac": 0.74
+            }
+          }
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 4.421,
+        "short_s": 13.914,
+        "coverage_frac": 0.3177
+      },
+      "caption_timing_source": "mms+dsp",
+      "stage_geometry": {
+        "feasible": true,
+        "identity": false,
+        "scale": 2.735,
+        "crop": [
+          208,
+          68,
+          234,
+          292
+        ],
+        "pad_bottom_px": 3,
+        "centroid_target": [
+          540.0,
+          930.0
+        ],
+        "placed_centroid": [
+          540.8,
+          932.3
+        ],
+        "head_top_min": 669,
+        "mask_height_frac": 0.615,
+        "note": "stage zoom x2.74: crop (208, 68, 234, 292) pad 3; placed centroid (541,932), mask height frac 0.615",
+        "reframe_pad_bottom_px": 0,
+        "effect_pad_bottom_px": 0
+      },
+      "backdrop": {
+        "mode": "studio_procedural",
+        "seed": 14173503913128403486,
+        "drift": "ken_burns_1.12",
+        "shadow": "mask_base_ellipse",
+        "maskless_frames": 0
+      },
+      "hook_style": {
+        "tone": "two_tone",
+        "accent_word": "HAMBURGER?",
+        "accent_index": 4,
+        "accent_rgb": [
+          255,
+          61,
+          126
+        ],
+        "entry": "stagger_pop",
+        "text_size": 170
+      },
+      "caption_style": {
+        "chunk_max_words": 4,
+        "word_states": {
+          "upcoming": "white_alpha_140",
+          "active": "viral_pink_scale_1.10",
+          "spoken": "white_full_alpha",
+          "spoken_emphasis": "viral_pink"
+        }
+      },
+      "caption_snap": {
+        "applied": true,
+        "method": "energy_valley_snap",
+        "window_s": 0.15,
+        "hop_s": 0.005,
+        "smooth_hops": 3,
+        "words": 48,
+        "words_snapped": 37,
+        "mean_abs_shift_ms": 71.1,
+        "max_abs_shift_ms": 149.5,
+        "snap_sources": [
+          "mms"
+        ],
+        "words_eligible": 41
+      },
+      "caption_cue_sources": [
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "mms",
+        "dsp_phrase"
+      ],
+      "caption_timing_gate": [
+        {
+          "cue_index": 7,
+          "action": "pace_gate_rejected",
+          "slice": [
+            11.39,
+            13.81
+          ],
+          "reason": "sustained pace 4.51 words/s over the aligned extent 1.55s exceeds the 4.5 words/s sanity ceiling"
+        },
+        {
+          "cue_index": 7,
+          "action": "dsp_fallback",
+          "reason": "re-slice still fails the pace gate: sustained pace 5.41 words/s over the aligned extent 1.29s exceeds the 4.5 words/s sanity ceiling"
+        }
+      ]
+    },
+    {
+      "receipt_version": 1,
+      "artifact": "/home/hatch/workspace/meta-hackathon/pipeline-run-fix6-qm6test/short-1/draft2-normalize-loudness.mp4",
+      "created": "2026-10-29",
+      "draft": 2,
+      "verdict": "PASSED_AFTER_REPAIR",
+      "failed_checks": [],
+      "checks": [
+        {
+          "id": "F1",
+          "name": "hook in frame 1",
+          "pass": true,
+          "measured": {
+            "hook_present_at_frame_0": true,
+            "hook_present_by_1s": true,
+            "hook_opacity": 1.0,
+            "content_words": 5,
+            "audio_rms_db_0_2s": -15.46,
+            "first_speech_onset_s": 0.0
+          },
+          "threshold": {
+            "opacity_min": 0.9,
+            "content_words_min": 3,
+            "audio_rms_db_min": -32.0,
+            "first_speech_onset_max_s": 2.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F2",
+          "name": "face/mouth obstruction",
+          "pass": true,
+          "measured": {
+            "glyph_occlusion_mean": 0.1286,
+            "glyph_occlusion_max": 0.1963,
+            "glyph_occlusion_alpha_weighted_mean": 0.1316,
+            "caption_face_overlap_max_px": 0
+          },
+          "threshold": {
+            "glyph_occlusion_mean_max": 0.25,
+            "caption_face_overlap_max_px": 0
+          },
+          "note": ""
+        },
+        {
+          "id": "F3",
+          "name": "safe zone",
+          "pass": true,
+          "measured": {
+            "violations": {
+              "hook_px_outside_central_band": {
+                "left": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0
+              },
+              "caption_px_outside_lower_zone": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "face_centroid_median": [
+                540.6,
+                934.7
+              ]
+            },
+            "face_centroid_in_central_band": true,
+            "layout_spans": [
+              {
+                "layout": "spotlight",
+                "span": [
+                  7.508,
+                  11.929
+                ],
+                "median_centroid": [
+                  541.9,
+                  946.3
+                ],
+                "in_declared_box": true,
+                "ok": true
+              }
+            ]
+          },
+          "threshold": {
+            "central_band": [
+              60,
+              288,
+              980,
+              1440
+            ],
+            "caption_bottom_max": 1600
+          },
+          "note": ""
+        },
+        {
+          "id": "F4",
+          "name": "subject containment",
+          "pass": true,
+          "measured": {
+            "frames_contained_frac": 1.0,
+            "head_margin_min_px": 669,
+            "frames_with_speaker": 417,
+            "frames_total": 417,
+            "layout": {
+              "frames_excluded_declared": 0,
+              "frames_denominator": 417
+            }
+          },
+          "threshold": {
+            "frames_contained_min_frac": 0.98,
+            "head_margin_min_px": 90
+          },
+          "note": "containment is measured on the head region (the research taxonomy's face-clipping notion): shoulders and the frame bottom are normal talking-head framing and are not counted as exits."
+        },
+        {
+          "id": "F5",
+          "name": "dead air / mute comprehension",
+          "pass": true,
+          "measured": {
+            "max_silence_gap_s": 0.16,
+            "first_speech_onset_s": 0.0,
+            "captions_present": true,
+            "caption_coverage_of_speech": 0.971,
+            "wonder_can_summarize_muted_hook": true,
+            "wonder_summary": "An astronaut in a red NASA shirt speaking into a microphone describes something she noticed on her previous flights. The hook is the on-screen text asking \"SPACEWALK SMELLS LIKE COOKING HAMBURGER?\"",
+            "measured_on": "speech_stem"
+          },
+          "threshold": {
+            "max_silence_gap_max_s": 0.45,
+            "first_speech_onset_max_s": 2.0,
+            "caption_coverage_min": 0.5,
+            "wonder_must_summarize": true
+          },
+          "note": ""
+        },
+        {
+          "id": "F6",
+          "name": "open loop by 3s",
+          "pass": true,
+          "measured": {
+            "patterns_fired": [
+              {
+                "pattern": "question",
+                "source": "hook",
+                "evidence": "SPACEWALK SMELLS LIKE COOKING HAMBURGER?"
+              },
+              {
+                "pattern": "number",
+                "source": "caption",
+                "evidence": "but the the one thing that that I [one]"
+              }
+            ]
+          },
+          "threshold": {
+            "any_of": [
+              "conflict",
+              "number",
+              "question"
+            ],
+            "by_s": 3.0
+          },
+          "note": ""
+        },
+        {
+          "id": "F7",
+          "name": "static opening",
+          "pass": true,
+          "measured": {
+            "speaker_scale_change_0_1p5s": -0.0657,
+            "hook_slide_px_s": 0.0,
+            "mean_mask_iou_0_3s": 0.9898
+          },
+          "threshold": {
+            "zoom_min_frac": 0.06,
+            "slide_min_px_s": 120.0,
+            "motion_iou_ceiling": 0.999
+          },
+          "note": "pass = a designed motion signal (zoom or card slide) OR measured inter-frame motion clearly above frozen (the research taxonomy fails only a truly static opening); all three measurements are reported."
+        },
+        {
+          "id": "F8",
+          "name": "context graphics integrity",
+          "pass": true,
+          "measured": {
+            "count": 1,
+            "graphics": [
+              {
+                "index": 0,
+                "kind": "image",
+                "motion": "ken_burns",
+                "path": null,
+                "face_overlap_px": 0,
+                "caption_overlap_px": 0,
+                "caption_zone_overlap_px": 0,
+                "hook_glyph_overlap_px": 0,
+                "presence_match_min": 0.987,
+                "absence_match_max": 0.168,
+                "path_match": null,
+                "ok": true
+              }
+            ],
+            "offending_indices": [],
+            "collision_violations": [],
+            "backdrops": [],
+            "offending_backdrop_indices": [],
+            "layout_spans": [
+              {
+                "index": 0,
+                "layout": "spotlight",
+                "span": [
+                  7.508,
+                  11.929
+                ],
+                "graphic_in_box_frac": 1.0,
+                "speaker_in_box_frac": 1.0,
+                "speaker_frames_present": 114,
+                "median_centroid": [
+                  541.9,
+                  946.3
+                ],
+                "ok": true
+              }
+            ],
+            "offending_layout_indices": [],
+            "sfx": {
+              "declared": 1,
+              "gap_events_checked": 0,
+              "stem_supplied": true,
+              "violations": []
+            },
+            "duration_s": 13.914
+          },
+          "threshold": {
+            "face_overlap_max_px": 0,
+            "caption_overlap_max_px": 0,
+            "hook_glyph_overlap_max_px": 0,
+            "colliding_pairs_max": 0,
+            "presence_match_min": 0.75,
+            "absence_match_max": 0.5,
+            "span_tolerance_s": 0.5,
+            "path_match_min": 0.75,
+            "path_travel_s": 0.9,
+            "sfx_gap_lift_min_db": 6.0,
+            "sfx_gap_floor_db": -50.0,
+            "layout_speaker_in_box_min_frac": 0.75,
+            "layout_graphic_in_box_min_frac": 0.99,
+            "layout_cutaway_alpha_max": 0.5
+          },
+          "note": "the count is uncapped by design and the timing is free (2026-10-31 ruling, reversing 2026-10-30): graphics may start at 0s and run back-to-back; the semantic bar limits the number, and F8 certifies collision-freedom (face + margin, captions, hook glyphs, each other), presence and absence of whatever was placed. Presence is measured on the render's pixels against each graphic's deterministic layer_at(t) state."
+        },
+        {
+          "id": "F9",
+          "name": "platform loudness",
+          "pass": true,
+          "measured": {
+            "integrated_lufs": -14.99,
+            "true_peak_dbtp": -3.61,
+            "lra_lu": 1.0,
+            "measurement_error": null
+          },
+          "threshold": {
+            "integrated_target_lufs": -14.0,
+            "integrated_min_lufs": -15.0,
+            "integrated_max_lufs": -13.0,
+            "true_peak_max_dbtp": -1.0
+          },
+          "note": ""
+        }
+      ],
+      "meta_calls": [
+        {
+          "model": "muse-wonder-1.0",
+          "purpose": "verifier-f5-muted-hook",
+          "cost_usd": 0.0183,
+          "request_id": "resp_6ae97438017ebc1737ec4948"
+        }
+      ],
+      "inputs_sha256": {
+        "video": "08b259baa76018ba8c1681612a26f867c8dc8083fd4f594f226d373896878e0c",
+        "sam_response": "3cd6628f34d5a975f78dc13458d40532117e893c8596e954faea1e3954653427",
+        "captions": "79847265f5aebe7d4ad7dc13c32162db9eb68a2508d8ee85794bb3184765c853"
+      },
+      "notes": [
+        "effect: measured hook occlusion 0.129 is inside the 0.08-0.20 depth-effect band - the speaker visibly crosses the hook text."
+      ],
+      "graphics": [
+        {
+          "kind": "image",
+          "span": [
+            7.508,
+            11.929
+          ],
+          "box": [
+            135,
+            100,
+            945,
+            708
+          ],
+          "motion": "ken_burns",
+          "cost_usd": 0.01,
+          "source_quote": "I smelled the smell of of cooking meat. It smelled like hamburger to me,",
+          "prompt": "Close-up of a sizzling hamburger patty on a grill with rising steam. - no text, no letters, no numbers, no words",
+          "layout": "spotlight",
+          "anchor_quality": "low"
+        }
+      ],
+      "sfx": [
+        {
+          "t_s": 7.508,
+          "recipe": "whoosh",
+          "graphic_index": 0,
+          "anchor": "enter"
+        }
+      ],
+      "backdrops": [],
+      "layout_spans": [
+        {
+          "span": [
+            7.508,
+            11.929
+          ],
+          "layout": "spotlight",
+          "speaker_box": [
+            261,
+            756,
+            819,
+            1460
+          ],
+          "speaker_placement": {
+            "crop": [
+              0.0,
+              0.0,
+              234.0,
+              295.0
+            ],
+            "scale": 2.3864,
+            "origin": [
+              260.8,
+              756.0
+            ],
+            "alpha_scale": 1.0
+          },
+          "placed_centroid": [
+            541.2,
+            945.7
+          ],
+          "head_top_min": 813,
+          "feasible": true,
+          "note": "PiP below hero (full frame) 558x704px at (261, 756) in band [756, 1460]: centroid (541, 946), head-top min 813px, placed face height 231px",
+          "graphic_box": [
+            135,
+            100,
+            945,
+            708
+          ],
+          "anchor_quality": "low",
+          "spotlight_hero": {
+            "from_box": [
+              16,
+              448,
+              301,
+              804
+            ],
+            "to_box": [
+              135,
+              100,
+              945,
+              708
+            ],
+            "strategy": "hero_first",
+            "pip_box": [
+              261,
+              756,
+              819,
+              1460
+            ],
+            "fit": "cover",
+            "band": [
+              756,
+              1460
+            ],
+            "group": {
+              "top_px": 100,
+              "gap_px": 48,
+              "hero_width_frac_cap": 0.85,
+              "hero_min_width_frac": 0.74
+            }
+          }
+        }
+      ],
+      "graphics_coverage": {
+        "graphics_s": 4.421,
+        "short_s": 13.914,
+        "coverage_frac": 0.3177
+      }
+    }
+  ]
+}
