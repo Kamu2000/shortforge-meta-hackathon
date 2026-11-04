@@ -4,7 +4,7 @@ Team **ShortForge**'s entry to the **Meta Global AI Developer Hackathon** (Meta 
 
 - **Track:** Startup Track
 - **Problem statement:** Build for Your World
-- **Demo (3 min):** https://www.youtube.com/watch?v=HZq1gNyresg
+- **Demo (3 min):** https://www.youtube.com/watch?v=1HRk4joXOSs
 
 ## What this is
 
